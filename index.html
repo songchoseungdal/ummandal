@@ -61,7 +61,7 @@
     <div class="card" id="homePrep" style="display:none">
       <p class="prep-title">준비가 끝났어요</p>
       <div class="prep-status" id="prepStatus"></div>
-      <div class="wish-hint">★ 쉬고 싶은 날이 있나요? 아래 표에서 <b>이름 옆 칸을 눌러 ★로 표시</b>해두면 그날은 꼭 쉬게 만들어 드려요. 없으면 그냥 만들어도 돼요.</div>
+      <div class="wish-hint">★ 쉬고 싶은 날은 칸을 눌러 <b>★</b>로, 연차·대휴·교육이나 미리 정해진 근무는 칸을 눌러 <b>직접 골라</b> 두세요(📌 고정). 아래 🎌 칸에 공휴일도 적어두면 그날은 주말 인원으로 계산해요. 준비가 끝나면 만들기!</div>
       <button class="btn big xl" onclick="generate()">🪄 자동으로 만들기</button>
       <p class="prep-caption">1분 안에 초안이 나와요 · 나중에 얼마든지 고칠 수 있어요</p>
     </div>
@@ -77,12 +77,20 @@
       </div>
       <div id="genProgress"><div class="lbl"><span id="genProgLbl"></span><span>화면은 멈추지 않아요</span></div><div class="track"><div class="bar" id="genProgBar"></div></div></div>
       <div id="banner"></div>
+      <div class="holirow">🎌 이번 달 공휴일:
+        <input type="text" id="holidayInput" placeholder="예: 3, 6" onchange="saveHolidays()">
+        <span class="hint">날짜만 쉼표로 적으세요 — 그날은 주말 인원으로 계산해요</span>
+      </div>
       <div class="legend">
         <span class="lg-d">D 데이</span>
+        <span class="lg-md">MD 미들</span>
         <span class="lg-e">E 이브닝</span>
+        <span class="lg-e2">E2 이브닝2</span>
         <span class="lg-n">N 나이트</span>
         <span class="lg-o">－ 오프</span>
-        <span class="lg-w">★ 희망 오프</span>
+        <span class="lg-v">휴·대·교 휴가</span>
+        <span class="lg-w">★ 희망</span>
+        <span class="lg-pin">📌 직접 고정한 칸</span>
       </div>
       <p class="hint" id="gridHint"></p>
       <h1 id="printTitle"></h1>
@@ -97,6 +105,10 @@
       <h2>우리 병동 사람들</h2>
       <div class="staffrow addrow">
         <input type="text" id="newName" placeholder="이름" style="width:150px" onkeydown="if(event.key==='Enter')addStaff()">
+        <select id="newGroup" title="직군">
+          <option value="RN">간호사</option>
+          <option value="NA">조무사</option>
+        </select>
         <select id="newType">
           <option value="three">3교대 (D/E/N)</option>
           <option value="night">나이트 전담</option>
@@ -110,15 +122,7 @@
     <div class="card">
       <details id="rulesBox">
         <summary><h2 style="display:inline">근무 규칙</h2> <span class="hint">— 그대로 두셔도 됩니다 (바꾸면 바로 저장돼요)</span></summary>
-        <div class="rulerow"><span class="lbl">평일에 필요한 인원</span>
-          데이 <input type="number" id="r_wd_D" min="0"> 이브닝 <input type="number" id="r_wd_E" min="0"> 나이트 <input type="number" id="r_wd_N" min="0"></div>
-        <div class="rulerow"><span class="lbl">주말·공휴일에 필요한 인원</span>
-          데이 <input type="number" id="r_we_D" min="0"> 이브닝 <input type="number" id="r_we_E" min="0"> 나이트 <input type="number" id="r_we_N" min="0"></div>
-        <div class="rulerow"><span class="lbl">연속으로 일할 수 있는 최대 일수</span><input type="number" id="r_maxWork" min="1" max="7"></div>
-        <div class="rulerow"><span class="lbl">연속으로 설 수 있는 나이트 최대 개수</span><input type="number" id="r_maxN" min="1" max="5"></div>
-        <div class="rulerow"><span class="lbl">나이트가 끝나면 쉬는 날 수</span><input type="number" id="r_offAfterN" min="0" max="3"></div>
-        <div class="rulerow"><span class="lbl">이브닝 다음날 데이 금지 (역행 금지)</span>
-          <select id="r_backward"><option value="1">금지</option><option value="0">허용</option></select></div>
+        <div id="rulesArea"></div>
       </details>
     </div>
   </div>
@@ -151,6 +155,7 @@
 <div id="toast"></div>
 
 <script src="js/engine.js"></script>
+<script src="js/engine2.js"></script>
 <script src="js/store.js"></script>
 <script src="js/vendor/supabase.js"></script>
 <script src="js/config.js"></script>

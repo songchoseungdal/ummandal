@@ -105,11 +105,17 @@ td.cell { font-size: 17px; font-weight: 800; cursor: pointer; height: 44px; min-
           text-align: center; border-radius: 11px; background: #faf9f5; }
 td.cell:hover { outline: 2.5px solid var(--brand); }
 td.cell.D { background: var(--d); color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12); }
+td.cell.MD { background: #66a80f; color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12); font-size: 13px; }
 td.cell.E { background: var(--e); color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12); }
+td.cell.E2 { background: #f08c00; color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12); font-size: 13px; }
 td.cell.N { background: var(--n); color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
 td.cell.O { background: var(--o-bg); color: var(--o-tx); font-weight: 700; }
+td.cell.V, td.cell.CO, td.cell.EDU { background: #fde9c8; color: #9a6700; font-weight: 800; }
 td.cell.Wm { background: var(--moon-soft); color: #8a6d00; }
+td.cell.pin { outline: 2px solid #6a4bc4; outline-offset: -2px; }
 td.cell.viol { box-shadow: inset 0 0 0 3px var(--danger); }
+tr.grouprow td { text-align: left; font-size: 14px; font-weight: 800; color: var(--brand);
+  background: #f1edfb; border-radius: 8px; padding: 5px 10px; }
 tr.cntrow td { text-align: center; font-size: 14.5px; font-weight: 700; border-radius: 8px; padding: 4px 0; }
 tr.cntrow td.lbl { text-align: left; font-size: 14px; position: sticky; left: 0; background: var(--card);
                    z-index: 2; color: var(--sub); }
@@ -167,6 +173,14 @@ footer { text-align: center; color: var(--faint); padding: 26px; font-size: 14.5
 #picker .pk-D { background: var(--d); color: #fff; } #picker .pk-E { background: var(--e); color: #fff; }
 #picker .pk-N { background: var(--n); color: #fff; } #picker .pk-O { background: var(--o-bg); color: #5c5668; }
 #picker .pk-W { background: var(--moon-soft); color: #8a6d00; } #picker .pk-X { background: #fff; color: var(--faint); border: 1.5px dashed var(--line); }
+#picker .pk-V { background: #fde9c8; color: #9a6700; }
+#picker .row + .row { margin-top: 6px; }
+.rulegroup h3 { margin: 14px 0 2px; font-size: 16.5px; color: var(--brand); }
+.rulerow input[type="number"] { width: 58px; }
+.holirow { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; font-size: 15.5px; font-weight: 600; }
+.holirow input { width: 140px; font-size: 17px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 10px; font-family: inherit; }
+.lg-md { background: #66a80f; color: #fff; } .lg-e2 { background: #f08c00; color: #fff; }
+.lg-v { background: #fde9c8; color: #9a6700; } .lg-pin { background: #f1edfb; color: #6a4bc4; }
 
 /* 진행바 */
 #genProgress { display: none; margin: 4px 0 14px; }

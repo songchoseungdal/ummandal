@@ -1,10 +1,22 @@
-/* ===== 엄만달 웹앱 v3 — 화면 로직 ===== */
-var E = window.UmmandalEngine;
+/* ===== 엄만달 웹앱 v4 — 화면 로직 (배정 엔진 v2 통합) ===== */
+var E = window.UmmandalEngine2;
 var db = Store.load();
 var now = new Date();
 var curYM = db.currentMonth || (now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0'));
 var undoStack = [];
 var typeNames = { three: '3교대', night: '나이트 전담', day: '평일 상근' };
+var groupNames = { RN: '간호사', NA: '조무사' };
+var prefNames = { '': '자동', D: '데이 위주', E: '이브닝 위주' };
+/* 셀 표시: 근무 5종 + 휴무 4종 */
+var codeDisp = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', CO: '대', EDU: '교' };
+var codeLabels = { D: '데이', MD: '미들데이', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육' };
+function staffGroup(p) { return p.group === 'NA' ? 'NA' : 'RN'; }
+function groupsPresent() {
+  var has = { RN: false, NA: false };
+  staffList().forEach(function (p) { has[staffGroup(p)] = true; });
+  return ['RN', 'NA'].filter(function (g) { return has[g]; });
+}
+function groupStaff(g) { return staffList().filter(function (p) { return staffGroup(p) === g; }); }
 
 function save() {
   db.currentMonth = curYM;
@@ -31,16 +43,37 @@ function prevYM(ym, back) {
 function month(ym) {
   db.months = db.months || {};
   if (!db.months[ym]) db.months[ym] = { codes: {}, wish: {} };
-  return db.months[ym];
+  var m = db.months[ym];
+  m.wish = m.wish || {};
+  m.codes = m.codes || {};
+  m.pins = m.pins || {};          // 선입력(사용자가 손으로 찍은 셀) — 재생성에도 불가침
+  m.holidays = m.holidays || [];  // 이 달의 공휴일 일자
+  return m;
 }
-function rules() {
-  if (!db.rules) db.rules = {
-    wd: { D: 3, E: 3, N: 2 }, we: { D: 3, E: 2, N: 2 },
-    maxWork: 5, maxN: 3, offAfterN: 2, backward: 1
-  };
-  return db.rules;
+/* 규칙 v2: 직군별 [최소,최대] 범위. 구 db.rules는 구버전 클라이언트 호환을 위해 남겨둔다(더는 안 씀). */
+function rules2() {
+  if (!db.rules2) {
+    var old = db.rules || { wd: { D: 3, E: 3, N: 2 }, we: { D: 3, E: 2, N: 2 }, maxWork: 5, maxN: 3, offAfterN: 2, backward: 1 };
+    function rr(v) { return [v, v]; }
+    db.rules2 = {
+      groups: {
+        RN: {
+          wd: { D: rr(old.wd.D), E: rr(old.wd.E), N: rr(old.wd.N) },
+          hd: { D: rr(old.we.D), E: rr(old.we.E), N: rr(old.we.N) }
+        },
+        /* NA 기본값: 기초자료_2병동_2026-06.md §9 하한표 */
+        NA: { wd: { D: [1, 2], E: [0, 1], N: [1, 1] }, hd: { D: [1, 1], E: [0, 0], N: [1, 1] } }
+      },
+      maxWork: old.maxWork, maxN: old.maxN, offAfterN: old.offAfterN, backward: old.backward
+    };
+  }
+  return db.rules2;
 }
 function staffList() { db.staff = db.staff || []; return db.staff; }
+function isRestDayApp(d, ym) {
+  var m = month(ym || curYM);
+  return E.isWeekend(d, firstWeekdayYM(ym || curYM)) || m.holidays.indexOf(d) >= 0;
+}
 
 function buildHistory(ym) {
   var hist = {};
@@ -50,28 +83,58 @@ function buildHistory(ym) {
     var rec = (db.months || {})[pm];
     if (!rec || !rec.codes) return;
     var fw = firstWeekdayYM(pm);
+    var hd = rec.holidays || [];
     staffList().forEach(function (p) {
       var codes = rec.codes[p.id];
       if (!codes || !codes.length) return;
       codes.forEach(function (c, i) {
-        if (c === 'N') hist[p.id].n++;
-        if (E.isWeekend(i + 1, fw) && c && c !== 'O') hist[p.id].weekend++;
+        if (E.fam(c) === 'N') hist[p.id].n++;
+        if ((E.isWeekend(i + 1, fw) || hd.indexOf(i + 1) >= 0) && c && E.fam(c)) hist[p.id].weekend++;
       });
       if (back === 1) hist[p.id].lastCodes = codes.slice(-5).map(function (c) { return c || 'O'; });
     });
   });
   return hist;
 }
-function engineConfig(ym) {
-  var r = rules();
-  var wish = {};
+/* 선입력 수집: 손으로 찍은 셀(pins) + 잠근 사람의 전체 행 */
+function collectPre(ym, gStaff) {
   var m = month(ym);
-  staffList().forEach(function (p) { if (m.wish[p.id] && m.wish[p.id].length) wish[p.id] = m.wish[p.id]; });
+  var days = daysInYM(ym);
+  var locks = m.locks || {};
+  var pre = {};
+  gStaff.forEach(function (p) {
+    var row = {};
+    var pins = m.pins[p.id] || {};
+    Object.keys(pins).forEach(function (d) { row[d] = pins[d]; });
+    if (locks[p.id]) {
+      var codes = m.codes[p.id] || [];
+      for (var d = 1; d <= days; d++) if (row[d] === undefined) row[d] = codes[d - 1] || 'O';
+    }
+    if (Object.keys(row).length) pre[p.id] = row;
+  });
+  return pre;
+}
+function engineConfig(ym, g) {
+  var r = rules2();
+  var gr = r.groups[g] || r.groups.RN;
+  var m = month(ym);
+  var gStaff = groupStaff(g);
+  var wish = {};
+  gStaff.forEach(function (p) { if (m.wish[p.id] && m.wish[p.id].length) wish[p.id] = m.wish[p.id]; });
+  var nightCount = gStaff.filter(function (p) { return p.type === 'night'; }).length;
+  var maxNmin = Math.max(gr.wd.N[0], gr.hd.N[0]);
   return {
-    days: daysInYM(ym), firstWeekday: firstWeekdayYM(ym),
-    required: { weekday: { D: r.wd.D, E: r.wd.E, N: r.wd.N }, weekend: { D: r.we.D, E: r.we.E, N: r.we.N } },
+    days: daysInYM(ym), firstWeekday: firstWeekdayYM(ym), holidays: m.holidays.slice(),
+    required: {
+      weekday: { D: gr.wd.D.slice(), E: gr.wd.E.slice(), N: gr.wd.N.slice() },
+      holiday: { D: gr.hd.D.slice(), E: gr.hd.E.slice(), N: gr.hd.N.slice() }
+    },
     maxConsecWork: r.maxWork, maxConsecN: r.maxN, offAfterNights: r.offAfterN,
-    forbidBackward: !!+r.backward, wishOffs: wish, history: buildHistory(ym), maxAttempts: 1500
+    forbidBackward: !!+r.backward,
+    /* 전담이 나이트 수요를 홀로 감당 못 하는 구성(예시 병동 등)이면 3교대도 나이트 허용 */
+    allowGenericNight: nightCount < 2 * maxNmin,
+    wishOffs: wish, history: buildHistory(ym),
+    preAssigned: collectPre(ym, gStaff), maxAttempts: 1500
   };
 }
 
@@ -157,56 +220,81 @@ function renderGrid() {
   var wdNames = ['일', '월', '화', '수', '목', '금', '토'];
   var m = month(curYM);
   var locks = m.locks || {};
+  var r = rules2();
+  var gs = groupsPresent();
+  var multi = gs.length > 1;
   var html = '<table class="duty"><tr><th class="name">이름</th><th class="cntcol">D·E·N·오프</th>';
   for (var d = 1; d <= days; d++) {
     var wd = (fw + d - 1) % 7;
-    var cls = (wd === 0 || wd === 6) ? ' class="wkend"' : '';
-    html += '<th' + cls + '>' + d + '<br>' + wdNames[wd] + '</th>';
+    var cls = isRestDayApp(d) ? ' class="wkend"' : '';
+    html += '<th' + cls + '>' + d + '<br>' + (m.holidays.indexOf(d) >= 0 ? '휴' : wdNames[wd]) + '</th>';
   }
   html += '</tr>';
   var violMap = currentViolMap();
-  var r = rules();
-  var dayCnt = [];
-  for (var d = 0; d <= days; d++) dayCnt.push({ D: 0, E: 0, N: 0 });
-  staff.forEach(function (p) {
-    var cnt = { D: 0, E: 0, N: 0, O: 0 };
-    var cellsHtml = '';
-    for (var d = 1; d <= days; d++) {
-      var c = cellCode(p.id, d);
-      var w = isWish(p.id, d);
-      if (c && dayCnt[d][c] !== undefined) dayCnt[d][c]++;
-      if (c) cnt[c]++;
-      var cls = 'cell';
-      var disp = '';
-      if (c === 'O' || (!c && w)) { cls += w ? ' Wm' : ' O'; disp = w ? '★' : '－'; }
-      else if (c) { cls += ' ' + c; disp = c + (w ? '★' : ''); }
-      if (violMap[p.id + '_' + d]) cls += ' viol';
-      cellsHtml += '<td id="c_' + p.id + '_' + d + '" class="' + cls + '" onclick="tapCell(event,\'' + p.id + '\',' + d + ')">' + disp + '</td>';
-    }
-    var lk = !!locks[p.id];
-    html += '<tr' + (lk ? ' class="locked"' : '') + '><td class="name">' +
-      '<button class="lockbtn" title="잠그면 다시 만들어도 그대로 유지돼요" onclick="toggleLock(event,\'' + p.id + '\')">' + (lk ? '🔒' : '🔓') + '</button>' +
-      '<b>' + esc(p.name) + '</b><br><span class="typebadge">' + typeNames[p.type] + '</span></td>' +
-      '<td class="cntcol"><span style="color:var(--d)">' + cnt.D + '</span> <span style="color:var(--e)">' + cnt.E +
-      '</span> <span style="color:var(--n)">' + cnt.N + '</span> <span style="color:#868e96">' + cnt.O + '</span></td>' +
-      cellsHtml + '</tr>';
-  });
-  if (hasAny()) {
-    [['D', '데이'], ['E', '이브닝'], ['N', '나이트']].forEach(function (pair) {
-      var code = pair[0];
-      html += '<tr class="cntrow"><td class="lbl" colspan="2">' + pair[1] + ' 인원</td>';
+  gs.forEach(function (g) {
+    var gStaff = groupStaff(g);
+    var gr = r.groups[g];
+    var dayCnt = [];
+    for (var d = 0; d <= days; d++) dayCnt.push({ D: 0, E: 0, N: 0 });
+    if (multi) html += '<tr class="grouprow"><td colspan="' + (days + 2) + '">' + groupNames[g] + ' (' + g + ')</td></tr>';
+    gStaff.forEach(function (p) {
+      var cnt = { D: 0, E: 0, N: 0, O: 0 };
+      var pins = m.pins[p.id] || {};
+      var cellsHtml = '';
       for (var d = 1; d <= days; d++) {
-        var needSet = E.isWeekend(d, fw) ? r.we : r.wd;
-        var ok = dayCnt[d][code] === needSet[code];
-        html += '<td class="' + (ok ? 'good' : 'bad2') + '">' + dayCnt[d][code] + '</td>';
+        var c = cellCode(p.id, d);
+        var w = isWish(p.id, d);
+        var f = E.fam(c);
+        if (f) { dayCnt[d][f]++; cnt[f]++; }
+        else if (c) cnt.O++;
+        var cls = 'cell';
+        var disp = '';
+        if (!c) { if (w) { cls += ' Wm'; disp = '★'; } }
+        else if (f) { cls += ' ' + c; disp = codeDisp[c] + (w ? '★' : ''); }
+        else { cls += (c === 'O' && w) ? ' Wm' : ' ' + c; disp = (c === 'O' && w) ? '★' : codeDisp[c]; }
+        if (pins[d]) cls += ' pin';
+        if (violMap[p.id + '_' + d]) cls += ' viol';
+        cellsHtml += '<td id="c_' + p.id + '_' + d + '" class="' + cls + '" onclick="tapCell(event,\'' + p.id + '\',' + d + ')">' + disp + '</td>';
       }
-      html += '</tr>';
+      var lk = !!locks[p.id];
+      html += '<tr' + (lk ? ' class="locked"' : '') + '><td class="name">' +
+        '<button class="lockbtn" title="잠그면 다시 만들어도 그대로 유지돼요" onclick="toggleLock(event,\'' + p.id + '\')">' + (lk ? '🔒' : '🔓') + '</button>' +
+        '<b>' + esc(p.name) + '</b><br><span class="typebadge">' + typeNames[p.type] + (p.pref ? ' · ' + prefNames[p.pref] : '') + '</span></td>' +
+        '<td class="cntcol"><span style="color:var(--d)">' + cnt.D + '</span> <span style="color:var(--e)">' + cnt.E +
+        '</span> <span style="color:var(--n)">' + cnt.N + '</span> <span style="color:#868e96">' + cnt.O + '</span></td>' +
+        cellsHtml + '</tr>';
     });
-  }
+    if (hasAny()) {
+      [['D', '데이'], ['E', '이브닝'], ['N', '나이트']].forEach(function (pair) {
+        var code = pair[0];
+        html += '<tr class="cntrow"><td class="lbl" colspan="2">' + (multi ? g + ' ' : '') + pair[1] + ' 인원</td>';
+        for (var d = 1; d <= days; d++) {
+          var needSet = isRestDayApp(d) ? gr.hd : gr.wd;
+          var range = needSet[code];
+          var ok = dayCnt[d][code] >= range[0] && dayCnt[d][code] <= range[1];
+          html += '<td class="' + (ok ? 'good' : 'bad2') + '">' + dayCnt[d][code] + '</td>';
+        }
+        html += '</tr>';
+      });
+    }
+  });
   html += '</table>';
   area.innerHTML = html;
+  var hi = document.getElementById('holidayInput');
+  if (hi && document.activeElement !== hi) hi.value = m.holidays.join(', ');
   renderStats();
   renderBanner();
+}
+function saveHolidays() {
+  var hi = document.getElementById('holidayInput');
+  var days = daysInYM(curYM);
+  var list = hi.value.split(/[,\s]+/).map(function (s) { return parseInt(s, 10); })
+    .filter(function (n) { return !isNaN(n) && n >= 1 && n <= days; });
+  list = list.filter(function (v, i) { return list.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+  month(curYM).holidays = list;
+  save();
+  toast(list.length ? '공휴일: ' + list.join(', ') + '일 ✓' : '공휴일 없음으로 저장했어요 ✓');
+  renderGrid();
 }
 function toggleLock(ev, pid) {
   ev.stopPropagation();
@@ -221,18 +309,25 @@ function jumpTo(pid, day) {
   el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   el.animate([{ boxShadow: 'inset 0 0 0 3px #e03131' }, { boxShadow: 'inset 0 0 0 3px rgba(224,49,49,0)' }], { duration: 1300, iterations: 2 });
 }
-function currentViols() {
-  var staff = staffList();
-  if (!hasAny()) return [];
+function buildSchedule(gStaff) {
   var m = month(curYM);
   var days = daysInYM(curYM);
   var schedule = {};
-  staff.forEach(function (p) {
+  gStaff.forEach(function (p) {
     var codes = (m.codes[p.id] || []).slice();
     for (var i = 0; i < days; i++) if (!codes[i]) codes[i] = 'O';
     schedule[p.id] = codes.slice(0, days);
   });
-  return E.validate(schedule, staff, engineConfig(curYM));
+  return schedule;
+}
+function currentViols() {
+  if (!hasAny()) return [];
+  var out = [];
+  groupsPresent().forEach(function (g) {
+    var gStaff = groupStaff(g);
+    out = out.concat(E.validate(buildSchedule(gStaff), gStaff, engineConfig(curYM, g)));
+  });
+  return out;
 }
 function currentViolMap() {
   var map = {};
@@ -259,27 +354,22 @@ function renderBanner() {
   }
 }
 function renderStats() {
-  var staff = staffList();
   var el = document.getElementById('statArea');
   if (!hasAny()) { el.innerHTML = ''; return; }
-  var m = month(curYM);
-  var days = daysInYM(curYM);
-  var schedule = {};
-  staff.forEach(function (p) {
-    var codes = (m.codes[p.id] || []).slice();
-    for (var i = 0; i < days; i++) if (!codes[i]) codes[i] = 'O';
-    schedule[p.id] = codes.slice(0, days);
-  });
-  var rep = E.report(schedule, staff, engineConfig(curYM));
   var html = '<h2>공평하게 나눠졌는지 확인 <span class="hint">— 구성원에게 그대로 보여주셔도 됩니다</span></h2>' +
-    '<table class="stats"><tr><th>이름</th><th>데이</th><th>이브닝</th><th>나이트</th><th>오프</th><th>주말 근무</th><th>나이트 (3개월 누적)</th></tr>';
-  rep.forEach(function (r) {
-    html += '<tr><td><b>' + esc(r.name) + '</b></td>' +
-      '<td><span class="pill pd">' + r.D + '</span></td>' +
-      '<td><span class="pill pe">' + r.E + '</span></td>' +
-      '<td><span class="pill pn">' + r.N + '</span></td>' +
-      '<td><span class="pill po">' + r.O + '</span></td>' +
-      '<td>' + r.weekend + '</td><td>' + r.totalN + '</td></tr>';
+    '<table class="stats"><tr><th>이름</th><th>데이</th><th>이브닝</th><th>나이트</th><th>오프</th><th>휴가·교육</th><th>휴일 근무</th><th>나이트 (3개월 누적)</th></tr>';
+  groupsPresent().forEach(function (g) {
+    var gStaff = groupStaff(g);
+    var rep = E.report(buildSchedule(gStaff), gStaff, engineConfig(curYM, g));
+    rep.forEach(function (r) {
+      html += '<tr><td><b>' + esc(r.name) + '</b></td>' +
+        '<td><span class="pill pd">' + r.D + '</span></td>' +
+        '<td><span class="pill pe">' + r.E + '</span></td>' +
+        '<td><span class="pill pn">' + r.N + '</span></td>' +
+        '<td><span class="pill po">' + r.O + '</span></td>' +
+        '<td>' + (r.V + r.CO + r.EDU) + '</td>' +
+        '<td>' + r.weekend + '</td><td>' + r.totalN + '</td></tr>';
+    });
   });
   html += '</table>';
   el.innerHTML = html;
@@ -291,12 +381,18 @@ function tapCell(ev, pid, d) {
   var pk = document.getElementById('picker');
   pickerTarget = { pid: pid, d: d };
   var p = staffList().filter(function (x) { return x.id === pid; })[0];
-  pk.innerHTML = '<div class="who"><b>' + esc(p ? p.name : '') + '</b> · ' + ymParts(curYM).m + '월 ' + d + '일</div>' +
+  pk.innerHTML = '<div class="who"><b>' + esc(p ? p.name : '') + '</b> · ' + ymParts(curYM).m + '월 ' + d + '일 <span class="hint">직접 고른 칸은 📌 고정돼요</span></div>' +
     '<div class="row">' +
     '<button class="pk-D" onclick="pickCode(\'D\')">D<br><span style="font-size:12px">데이</span></button>' +
+    '<button class="pk-D" onclick="pickCode(\'MD\')">MD<br><span style="font-size:12px">미들</span></button>' +
     '<button class="pk-E" onclick="pickCode(\'E\')">E<br><span style="font-size:12px">이브닝</span></button>' +
+    '<button class="pk-E" onclick="pickCode(\'E2\')">E2<br><span style="font-size:12px">이브닝2</span></button>' +
     '<button class="pk-N" onclick="pickCode(\'N\')">N<br><span style="font-size:12px">나이트</span></button>' +
+    '</div><div class="row">' +
     '<button class="pk-O" onclick="pickCode(\'O\')">－<br><span style="font-size:12px">오프</span></button>' +
+    '<button class="pk-V" onclick="pickCode(\'V\')">휴<br><span style="font-size:12px">연차</span></button>' +
+    '<button class="pk-V" onclick="pickCode(\'CO\')">대<br><span style="font-size:12px">대휴</span></button>' +
+    '<button class="pk-V" onclick="pickCode(\'EDU\')">교<br><span style="font-size:12px">교육</span></button>' +
     '<button class="pk-W" onclick="pickCode(\'W\')">★<br><span style="font-size:12px">희망</span></button>' +
     '<button class="pk-X" onclick="pickCode(\'\')">✕<br><span style="font-size:12px">지움</span></button>' +
     '</div>';
@@ -331,7 +427,10 @@ function setCell(pid, d, code) {
   } else {
     m.codes[pid] = m.codes[pid] || [];
     m.codes[pid][d - 1] = code;
-    if (!code) {
+    m.pins[pid] = m.pins[pid] || {};
+    if (code) m.pins[pid][d] = code;      // 손으로 고른 칸 = 선입력(재생성에도 그대로)
+    else {
+      delete m.pins[pid][d];
       var w = m.wish[pid] || [];
       var i = w.indexOf(d);
       if (i >= 0) w.splice(i, 1);
@@ -343,7 +442,7 @@ function setCell(pid, d, code) {
 /* ---- 되돌리기 ---- */
 function pushUndo() {
   var m = month(curYM);
-  undoStack.push(JSON.stringify({ ym: curYM, codes: m.codes, wish: m.wish }));
+  undoStack.push(JSON.stringify({ ym: curYM, codes: m.codes, wish: m.wish, pins: m.pins, holidays: m.holidays }));
   if (undoStack.length > 30) undoStack.shift();
 }
 function undo() {
@@ -352,33 +451,34 @@ function undo() {
   var s = JSON.parse(undoStack.pop());
   var m = month(s.ym);
   m.codes = s.codes; m.wish = s.wish;
+  m.pins = s.pins || {}; m.holidays = s.holidays || [];
   curYM = s.ym;
   save(); renderMonthLabel(); renderHome();
 }
 
-/* ---- 자동 생성 ---- */
-function collectLocked(cfg) {
-  var m = month(curYM);
-  var locks = m.locks || {};
-  var locked = {};
-  staffList().forEach(function (p) {
-    if (!locks[p.id]) return;
-    var codes = (m.codes[p.id] || []).slice();
-    if (!codes.some(function (c) { return c; })) return;
-    for (var i = 0; i < cfg.days; i++) if (!codes[i]) codes[i] = 'O';
-    locked[p.id] = codes.slice(0, cfg.days);
-  });
-  return locked;
-}
+/* ---- 자동 생성 (직군별 순차 배치) ---- */
 function generate() {
   hidePicker();
   var staff = staffList();
   if (!staff.length) { alert('먼저 우리 병동 사람들을 등록해주세요.'); showTab('ward'); return; }
+  var gs = groupsPresent();
+  /* 사전 검사: 선입력·희망오프·규칙 모순은 재시도로 못 고치므로 먼저 사유를 보여준다 */
+  var preIssues = [];
+  var jobs = gs.map(function (g) {
+    var gStaff = groupStaff(g);
+    var cfg = engineConfig(curYM, g);
+    preIssues = preIssues.concat(E.preflight(gStaff, cfg));
+    return { g: g, staff: gStaff, cfg: cfg };
+  });
+  if (preIssues.length) {
+    alert('만들기 전에 먼저 고쳐야 할 것이 있어요:\n\n' +
+      preIssues.slice(0, 6).map(function (v) { return '· ' + v.msg; }).join('\n') +
+      (preIssues.length > 6 ? '\n…외 ' + (preIssues.length - 6) + '건' : ''));
+    return;
+  }
   pushUndo();
-  var cfg = engineConfig(curYM);
-  cfg.locked = collectLocked(cfg);
-  var lockedCount = Object.keys(cfg.locked).length;
-  var maxAtt = 1500, att = 0, best = null, seed = Date.now() % 100000, t0 = Date.now();
+  var perMax = 1500, seed = Date.now() % 100000, t0 = Date.now();
+  var totalMax = perMax * jobs.length;
   var prog = document.getElementById('genProgress');
   var bar = document.getElementById('genProgBar');
   var lbl = document.getElementById('genProgLbl');
@@ -386,32 +486,59 @@ function generate() {
   info.textContent = '';
   prog.className = 'on';
   bar.style.width = '0%';
-  function finish(result) {
+  var ji = 0, att = 0, doneAtt = 0, best = null;
+  var results = {};
+  function accept(r) { return r.violations.length === 0 && (r.nightGap || 0) <= 2; }
+  function failAll(msg) {
     prog.className = '';
-    if (!result) {
-      alert('이 조건으로는 근무표를 만들 수 없었어요.\n규칙에서 필요한 인원 수를 줄이거나, 같은 날짜에 몰린 희망 오프를 나눠보세요.' + (lockedCount ? '\n잠긴 사람을 일부 풀어보셔도 좋아요.' : ''));
-      return;
-    }
+    undoStack.pop();
+    alert(msg);
+  }
+  function finishAll() {
+    prog.className = '';
     var m = month(curYM);
-    staff.forEach(function (p) { m.codes[p.id] = result.schedule[p.id]; });
+    var warn = [];
+    jobs.forEach(function (job) {
+      var r = results[job.g];
+      job.staff.forEach(function (p) { m.codes[p.id] = r.schedule[p.id]; });
+      if (r.violations.length) warn.push(groupNames[job.g] + ' ' + r.violations.length + '건');
+    });
     save();
     renderHome();
     info.textContent = '완성! (' + ((Date.now() - t0) / 1000).toFixed(1) + '초) ' +
-      (lockedCount ? '🔒 잠근 ' + lockedCount + '명은 그대로 두었어요. ' : '') + '맘에 안 들면 「다시 만들기」를 누르세요.';
-    toast('근무표 초안이 완성됐어요 🌙');
+      (warn.length ? '⚠️ 다 지키진 못했어요(' + warn.join(', ') + ') — 빨간 칸을 확인해 주세요. ' : '') +
+      '맘에 안 들면 「다시 만들기」를 누르세요.';
+    toast(warn.length ? '초안이 나왔어요 — 확인이 필요한 곳이 있어요' : '근무표 초안이 완성됐어요 🌙');
   }
   function batch() {
-    var end = Math.min(att + 40, maxAtt);
+    var job = jobs[ji];
+    var end = Math.min(att + 40, perMax);
     for (; att < end; att++) {
-      var r = E.attempt(staff, cfg, seed, att);
-      if (r) {
-        if (r.violations.length === 0) { finish(r); return; }
-        if (!best || r.violations.length < best.violations.length) best = r;
+      var r = E.attempt(job.staff, job.cfg, seed + ji * 7, att);
+      if (r && r.schedule) {
+        if (accept(r)) { results[job.g] = r; break; }
+        var key = r.violations.length * 100 + (r.nightGap || 0);
+        if (!best || key < best.key) best = { r: r, key: key };
       }
     }
-    bar.style.width = Math.round(att / maxAtt * 100) + '%';
-    lbl.textContent = maxAtt.toLocaleString() + '번 중 ' + att.toLocaleString() + '번째 조합을 찾는 중…';
-    if (att < maxAtt) setTimeout(batch, 0); else finish(best);
+    if (results[job.g] || att >= perMax) {
+      if (!results[job.g]) {
+        if (best) { results[job.g] = best.r; }
+        else {
+          failAll('이 조건으로는 ' + groupNames[job.g] + ' 근무표를 만들 수 없었어요.\n' +
+            '규칙의 최소 인원을 줄이거나, 같은 날짜에 몰린 희망 오프·선입력을 나눠보세요.');
+          return;
+        }
+      }
+      doneAtt += att;
+      ji++; att = 0; best = null;
+      if (ji >= jobs.length) { finishAll(); return; }
+    }
+    var cur = doneAtt + att;
+    bar.style.width = Math.round(cur / totalMax * 100) + '%';
+    lbl.textContent = (jobs.length > 1 ? groupNames[jobs[Math.min(ji, jobs.length - 1)].g] + ' — ' : '') +
+      '조합을 찾는 중… (' + cur.toLocaleString() + ')';
+    setTimeout(batch, 0);
   }
   setTimeout(batch, 30);
 }
@@ -422,9 +549,17 @@ function renderStaff() {
   var staff = staffList();
   el.innerHTML = staff.map(function (p, i) {
     return '<div class="staffrow"><span class="nm"><b>' + esc(p.name) + '</b></span>' +
-      '<select onchange="chgType(' + i + ', this.value)">' +
+      '<select onchange="chgGroup(' + i + ', this.value)" title="직군">' +
+      ['RN', 'NA'].map(function (g) {
+        return '<option value="' + g + '"' + (staffGroup(p) === g ? ' selected' : '') + '>' + groupNames[g] + '</option>';
+      }).join('') + '</select>' +
+      '<select onchange="chgType(' + i + ', this.value)" title="근무 형태">' +
       ['three', 'night', 'day'].map(function (t) {
         return '<option value="' + t + '"' + (p.type === t ? ' selected' : '') + '>' + typeNames[t] + '</option>';
+      }).join('') + '</select>' +
+      '<select onchange="chgPref(' + i + ', this.value)" title="선호 근무">' +
+      ['', 'D', 'E'].map(function (v) {
+        return '<option value="' + v + '"' + ((p.pref || '') === v ? ' selected' : '') + '>' + prefNames[v] + '</option>';
       }).join('') + '</select>' +
       '<button class="btn warn" onclick="delStaff(' + i + ')">삭제</button></div>';
   }).join('') || '<p class="hint">아직 등록된 사람이 없어요.</p>';
@@ -433,11 +568,17 @@ function renderStaff() {
 function addStaff() {
   var name = document.getElementById('newName').value.trim();
   if (!name) { alert('이름을 입력해주세요.'); return; }
-  staffList().push({ id: 'p' + Date.now() + Math.floor(Math.random() * 1000), name: name, type: document.getElementById('newType').value });
+  staffList().push({
+    id: 'p' + Date.now() + Math.floor(Math.random() * 1000), name: name,
+    type: document.getElementById('newType').value,
+    group: document.getElementById('newGroup').value, pref: ''
+  });
   document.getElementById('newName').value = '';
   save(); renderStaff();
   toast(name + ' 님을 추가했어요');
 }
+function chgGroup(i, g) { staffList()[i].group = g; save(); renderStaff(); toast('바꿨어요 ✓'); }
+function chgPref(i, v) { staffList()[i].pref = v; save(); renderStaff(); toast('바꿨어요 ✓'); }
 function trySample() {
   var names3 = ['김영희', '이순자', '박미경', '최정숙', '정혜란', '강민지', '조수연', '윤서현'];
   var namesN = ['한나래', '오지은'];
@@ -457,44 +598,62 @@ function delStaff(i) {
   save(); renderStaff();
 }
 
-/* ---- 규칙 (자동 저장) ---- */
-var ruleIds = ['r_wd_D', 'r_wd_E', 'r_wd_N', 'r_we_D', 'r_we_E', 'r_we_N', 'r_maxWork', 'r_maxN', 'r_offAfterN', 'r_backward'];
+/* ---- 규칙 (자동 저장, 직군별 범위) ---- */
+var RULE_KINDS = [['wd', '평일'], ['hd', '주말·공휴일']];
+var RULE_FAMS = [['D', '데이'], ['E', '이브닝'], ['N', '나이트']];
 function renderRules() {
-  var r = rules();
-  document.getElementById('r_wd_D').value = r.wd.D;
-  document.getElementById('r_wd_E').value = r.wd.E;
-  document.getElementById('r_wd_N').value = r.wd.N;
-  document.getElementById('r_we_D').value = r.we.D;
-  document.getElementById('r_we_E').value = r.we.E;
-  document.getElementById('r_we_N').value = r.we.N;
-  document.getElementById('r_maxWork').value = r.maxWork;
-  document.getElementById('r_maxN').value = r.maxN;
-  document.getElementById('r_offAfterN').value = r.offAfterN;
-  document.getElementById('r_backward').value = r.backward;
+  var r = rules2();
+  var gs = groupsPresent();
+  if (!gs.length) gs = ['RN'];
+  var html = gs.map(function (g) {
+    var gr = r.groups[g];
+    return '<div class="rulegroup">' +
+      (gs.length > 1 || g === 'NA' ? '<h3>' + groupNames[g] + '(' + g + ') 하루 인원</h3>' : '<h3>하루 인원</h3>') +
+      RULE_KINDS.map(function (kd) {
+        return '<div class="rulerow"><span class="lbl">' + kd[1] + '</span>' +
+          RULE_FAMS.map(function (fm) {
+            var v = gr[kd[0]][fm[0]];
+            return fm[1] + ' <input type="number" min="0" max="20" id="r2_' + g + '_' + kd[0] + '_' + fm[0] + '_0" value="' + v[0] + '">' +
+              '~<input type="number" min="0" max="20" id="r2_' + g + '_' + kd[0] + '_' + fm[0] + '_1" value="' + v[1] + '">';
+          }).join(' ') + '</div>';
+      }).join('') + '</div>';
+  }).join('') +
+    '<p class="hint">최소~최대 인원이에요. 딱 정해진 수면 두 칸에 같은 숫자를 넣으세요.</p>' +
+    '<div class="rulerow"><span class="lbl">연속으로 일할 수 있는 최대 일수</span><input type="number" id="r_maxWork" min="1" max="7" value="' + r.maxWork + '"></div>' +
+    '<div class="rulerow"><span class="lbl">연속으로 설 수 있는 나이트 최대 개수</span><input type="number" id="r_maxN" min="1" max="5" value="' + r.maxN + '"></div>' +
+    '<div class="rulerow"><span class="lbl">나이트가 끝나면 쉬는 날 수</span><input type="number" id="r_offAfterN" min="0" max="3" value="' + r.offAfterN + '"></div>' +
+    '<div class="rulerow"><span class="lbl">이브닝 다음날 데이 금지 (역행 금지)</span>' +
+    '<select id="r_backward"><option value="1"' + (+r.backward ? ' selected' : '') + '>금지</option><option value="0"' + (+r.backward ? '' : ' selected') + '>허용</option></select></div>';
+  document.getElementById('rulesArea').innerHTML = html;
 }
 function numVal(id, fallback) {
-  var n = parseInt(document.getElementById(id).value, 10);
+  var el = document.getElementById(id);
+  if (!el) return fallback;
+  var n = parseInt(el.value, 10);
   return isNaN(n) ? fallback : n;
 }
 function saveRulesAuto() {
-  var r = rules();
-  r.wd.D = numVal('r_wd_D', r.wd.D);
-  r.wd.E = numVal('r_wd_E', r.wd.E);
-  r.wd.N = numVal('r_wd_N', r.wd.N);
-  r.we.D = numVal('r_we_D', r.we.D);
-  r.we.E = numVal('r_we_E', r.we.E);
-  r.we.N = numVal('r_we_N', r.we.N);
+  var r = rules2();
+  Object.keys(r.groups).forEach(function (g) {
+    RULE_KINDS.forEach(function (kd) {
+      RULE_FAMS.forEach(function (fm) {
+        var v = r.groups[g][kd[0]][fm[0]];
+        v[0] = numVal('r2_' + g + '_' + kd[0] + '_' + fm[0] + '_0', v[0]);
+        v[1] = numVal('r2_' + g + '_' + kd[0] + '_' + fm[0] + '_1', v[1]);
+        if (v[1] < v[0]) v[1] = v[0];
+      });
+    });
+  });
   r.maxWork = numVal('r_maxWork', r.maxWork);
   r.maxN = numVal('r_maxN', r.maxN);
   r.offAfterN = numVal('r_offAfterN', r.offAfterN);
   r.backward = numVal('r_backward', r.backward);
   save();
+  renderRules();
   toast('규칙이 저장됐어요 ✓');
 }
 function bindRules() {
-  ruleIds.forEach(function (id) {
-    document.getElementById(id).addEventListener('change', saveRulesAuto);
-  });
+  document.getElementById('rulesArea').addEventListener('change', saveRulesAuto);
 }
 
 /* ---- 보관함 ---- */
@@ -635,18 +794,21 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 function exportImage() {
-  var staff = staffList();
+  var staff = [];
+  groupsPresent().forEach(function (g) { staff = staff.concat(groupStaff(g)); });
   if (!staff.length || !hasAny()) { alert('먼저 근무표를 만들어주세요.'); return; }
   var days = daysInYM(curYM), fw = firstWeekdayYM(curYM), m = month(curYM), pt = ymParts(curYM);
+  var gs = groupsPresent();
   var wdNames = ['일', '월', '화', '수', '목', '금', '토'];
-  var codeColors = { D: '#2f9e44', E: '#e8590c', N: '#3b5bdb' };
+  var codeColors = { D: '#2f9e44', MD: '#66a80f', E: '#e8590c', E2: '#f08c00', N: '#3b5bdb' };
+  var restDisp = { O: '－', V: '휴', CO: '대', EDU: '교' };
   var FF = '"Malgun Gothic","Apple SD Gothic Neo",sans-serif';
   var S = 2;
   var left = 20, top = 76;
   var nameW = 92, cntW = 122, cellW = 34, cellH = 32, gap = 3, headH = 36, cntRowH = 24;
   var rows = staff.length;
   var W = left * 2 + nameW + gap + days * (cellW + gap) + cntW;
-  var H = top + headH + gap + rows * (cellH + gap) + 10 + 3 * (cntRowH + gap) + 36;
+  var H = top + headH + gap + rows * (cellH + gap) + 10 + gs.length * 3 * (cntRowH + gap) + 36;
   var cv = document.createElement('canvas');
   cv.width = W * S; cv.height = H * S;
   var ctx = cv.getContext('2d');
@@ -660,7 +822,7 @@ function exportImage() {
   ctx.fillText(pt.y + '년 ' + pt.m + '월 근무표', left, 30);
   ctx.fillStyle = '#948e9e';
   ctx.font = '600 13px ' + FF;
-  ctx.fillText('D 데이 · E 이브닝 · N 나이트 · － 오프 · ★ 희망 오프', left, 56);
+  ctx.fillText('D 데이 · MD 미들 · E/E2 이브닝 · N 나이트 · － 오프 · 휴 연차 · 대 대휴 · 교 교육 · ★ 희망', left, 56);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#aaa4bb';
   ctx.font = '700 14px ' + FF;
@@ -671,7 +833,7 @@ function exportImage() {
   ctx.textAlign = 'center';
   for (var d = 1; d <= days; d++) {
     var wd = (fw + d - 1) % 7;
-    var wk = (wd === 0 || wd === 6);
+    var wk = isRestDayApp(d);
     ctx.fillStyle = wk ? '#e03131' : '#7b7590';
     ctx.font = '700 13px ' + FF;
     ctx.fillText(String(d), colX(d) + cellW / 2, top + 10);
@@ -683,11 +845,16 @@ function exportImage() {
   ctx.font = '600 12px ' + FF;
   ctx.fillText('이름', left, top + 18);
   ctx.fillText('D · E · N · 오프', cntX, top + 18);
-  /* 사람별 줄 */
-  var dayCnt = [];
-  for (var d = 0; d <= days; d++) dayCnt.push({ D: 0, E: 0, N: 0 });
+  /* 사람별 줄 (직군 묶음 순서) */
+  var r = rules2();
+  var dayCntG = {};
+  gs.forEach(function (g) {
+    dayCntG[g] = [];
+    for (var d = 0; d <= days; d++) dayCntG[g].push({ D: 0, E: 0, N: 0 });
+  });
   staff.forEach(function (p, i) {
     var y = top + headH + gap + i * (cellH + gap);
+    var g = staffGroup(p);
     ctx.textAlign = 'left';
     ctx.fillStyle = '#322e3c';
     ctx.font = '700 14px ' + FF;
@@ -696,12 +863,16 @@ function exportImage() {
     for (var d = 1; d <= days; d++) {
       var c = cellCode(p.id, d) || 'O';
       var w = isWish(p.id, d);
-      if (dayCnt[d][c] !== undefined) dayCnt[d][c]++;
-      cnt[c]++;
+      var f = E.fam(c);
+      if (f) { dayCntG[g][d][f]++; cnt[f]++; } else cnt.O++;
       var x = colX(d);
       var bg, tx, disp;
-      if (c === 'O') { bg = w ? '#fff3d0' : '#efede7'; tx = w ? '#8a6d00' : '#948e9e'; disp = w ? '★' : '－'; }
-      else { bg = codeColors[c]; tx = '#ffffff'; disp = c; }
+      if (!f) {
+        var isO = c === 'O';
+        bg = (isO && w) ? '#fff3d0' : (isO ? '#efede7' : '#fde9c8');
+        tx = (isO && w) ? '#8a6d00' : (isO ? '#948e9e' : '#9a6700');
+        disp = (isO && w) ? '★' : restDisp[c] || '－';
+      } else { bg = codeColors[c]; tx = '#ffffff'; disp = c; }
       ctx.fillStyle = bg;
       roundRect(ctx, x, y, cellW, cellH, 7);
       ctx.fill();
@@ -720,27 +891,33 @@ function exportImage() {
       cx += 30;
     });
   });
-  /* 날짜별 인원 확인 줄 */
-  var r = rules();
+  /* 날짜별 인원 확인 줄 (직군별) */
   var baseY = top + headH + gap + rows * (cellH + gap) + 10;
-  [['D', '데이 인원'], ['E', '이브닝 인원'], ['N', '나이트 인원']].forEach(function (pair, ri) {
-    var y = baseY + ri * (cntRowH + gap);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#7b7590';
-    ctx.font = '600 12px ' + FF;
-    ctx.fillText(pair[1], left, y + cntRowH / 2);
-    for (var d = 1; d <= days; d++) {
-      var needSet = E.isWeekend(d, fw) ? r.we : r.wd;
-      var ok = dayCnt[d][pair[0]] === needSet[pair[0]];
-      ctx.fillStyle = ok ? '#e9f9ee' : '#ffe3e3';
-      roundRect(ctx, colX(d), y, cellW, cntRowH, 5);
-      ctx.fill();
-      ctx.fillStyle = ok ? '#2b8a3e' : '#c22525';
-      ctx.textAlign = 'center';
-      ctx.font = '700 12px ' + FF;
-      ctx.fillText(String(dayCnt[d][pair[0]]), colX(d) + cellW / 2, y + cntRowH / 2 + 1);
+  var ri = 0;
+  gs.forEach(function (g) {
+    var gr = r.groups[g];
+    [['D', '데이 인원'], ['E', '이브닝 인원'], ['N', '나이트 인원']].forEach(function (pair) {
+      var y = baseY + ri * (cntRowH + gap);
+      ri++;
       ctx.textAlign = 'left';
-    }
+      ctx.fillStyle = '#7b7590';
+      ctx.font = '600 12px ' + FF;
+      ctx.fillText((gs.length > 1 ? g + ' ' : '') + pair[1], left, y + cntRowH / 2);
+      for (var d = 1; d <= days; d++) {
+        var needSet = isRestDayApp(d) ? gr.hd : gr.wd;
+        var range = needSet[pair[0]];
+        var v2 = dayCntG[g][d][pair[0]];
+        var ok = v2 >= range[0] && v2 <= range[1];
+        ctx.fillStyle = ok ? '#e9f9ee' : '#ffe3e3';
+        roundRect(ctx, colX(d), y, cellW, cntRowH, 5);
+        ctx.fill();
+        ctx.fillStyle = ok ? '#2b8a3e' : '#c22525';
+        ctx.textAlign = 'center';
+        ctx.font = '700 12px ' + FF;
+        ctx.fillText(String(v2), colX(d) + cellW / 2, y + cntRowH / 2 + 1);
+        ctx.textAlign = 'left';
+      }
+    });
   });
   ctx.fillStyle = '#aaa4bb';
   ctx.font = '600 12px ' + FF;

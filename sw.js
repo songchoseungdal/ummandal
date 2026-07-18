@@ -1,10 +1,11 @@
 /* 엄만달 서비스 워커 — 전 파일 캐시로 오프라인 동작 */
-var CACHE = 'ummandal-v3-5';
+var CACHE = 'ummandal-v4-1';
 var ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/engine.js',
+  './js/engine2.js',
   './js/store.js',
   './js/vendor/supabase.js',
   './js/config.js',
