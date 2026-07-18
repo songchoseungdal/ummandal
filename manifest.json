@@ -1,0 +1,16 @@
+{
+  "name": "엄만달 — 한 달 근무표를 1분 만에",
+  "short_name": "엄만달",
+  "description": "교대근무 근무표 자동생성 앱. 사람만 넣으면 한 달 근무표가 1분 만에 나와요.",
+  "lang": "ko",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f3ec",
+  "theme_color": "#6a4bc4",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#6a4bc4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="엄만달">
+<title>엄만달 — 한 달 근무표를 1분 만에</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg class="moon" viewBox="0 0 48 48" aria-hidden="true">
+      <defs>
+        <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#ffd43b"/><stop offset="1" stop-color="#f2b705"/>
+        </linearGradient>
+        <mask id="mcut"><rect width="48" height="48" fill="#fff"/><circle cx="33" cy="16" r="16" fill="#000"/></mask>
+      </defs>
+      <circle cx="23" cy="25" r="19" fill="url(#mg)" mask="url(#mcut)"/>
+      <circle cx="38" cy="9" r="2.2" fill="#f2b705"/>
+    </svg>
+    <div class="brandtx">
+      <h1>엄만달</h1>
+      <span class="slogan">엄마의 한 달을 1분 만에</span>
+    </div>
+  </div>
+  <div class="monthnav">
+    <button onclick="moveMonth(-1)" title="지난달">◀</button>
+    <span class="cur" id="curMonth"></span>
+    <button onclick="moveMonth(1)" title="다음달">▶</button>
+  </div>
+</header>
+
+<nav>
+  <button id="tabBtn-home" class="on" onclick="showTab('home')"><span class="ico">📅</span><span class="tlbl">근무표</span></button>
+  <button id="tabBtn-ward" onclick="showTab('ward')"><span class="ico">👥</span><span class="tlbl">우리 병동</span></button>
+  <button id="tabBtn-archive" onclick="showTab('archive')"><span class="ico">📦</span><span class="tlbl">보관함</span></button>
+</nav>
+
+<main>
+  <!-- ===== 근무표(홈) ===== -->
+  <div id="tab-home">
+
+    <!-- 상태 1: 인원 없음 -->
+    <div class="card empty-card" id="homeEmpty" style="display:none">
+      <div class="bigmoon">🌙</div>
+      <h2>엄만달에 오신 것을 환영해요</h2>
+      <p class="empty-msg">우리 병동 사람들만 넣으면,<br>한 달 근무표가 <b>1분 만에</b> 나와요.</p>
+      <button class="btn big" onclick="showTab('ward')">👥 사람 넣으러 가기</button>
+      <p class="hint">먼저 구경해보고 싶으면 → <a class="link" onclick="trySample()">예시 인원 12명으로 연습하기</a></p>
+    </div>
+
+    <!-- 상태 2: 인원 있음 + 이번 달 근무표 없음 -->
+    <div class="card" id="homePrep" style="display:none">
+      <p class="prep-title">준비가 끝났어요</p>
+      <div class="prep-status" id="prepStatus"></div>
+      <div class="wish-hint">★ 쉬고 싶은 날이 있나요? 아래 표에서 <b>이름 옆 칸을 눌러 ★로 표시</b>해두면 그날은 꼭 쉬게 만들어 드려요. 없으면 그냥 만들어도 돼요.</div>
+      <button class="btn big xl" onclick="generate()">🪄 자동으로 만들기</button>
+      <p class="prep-caption">1분 안에 초안이 나와요 · 나중에 얼마든지 고칠 수 있어요</p>
+    </div>
+
+    <!-- 그리드 카드 (상태 2·3 공통) -->
+    <div class="card" id="gridCard" style="display:none">
+      <div class="toolbar" id="homeTools" style="display:none">
+        <button class="btn big" onclick="generate()">🔄 다시 만들기</button>
+        <button class="btn gray" onclick="undo()">↩ 되돌리기</button>
+        <button class="btn share" onclick="exportImage()">📤 이미지로 저장</button>
+        <button class="btn gray" onclick="printSchedule()">🖨 인쇄</button>
+        <span class="hint" id="genInfo"></span>
+      </div>
+      <div id="genProgress"><div class="lbl"><span id="genProgLbl"></span><span>화면은 멈추지 않아요</span></div><div class="track"><div class="bar" id="genProgBar"></div></div></div>
+      <div id="banner"></div>
+      <div class="legend">
+        <span class="lg-d">D 데이</span>
+        <span class="lg-e">E 이브닝</span>
+        <span class="lg-n">N 나이트</span>
+        <span class="lg-o">－ 오프</span>
+        <span class="lg-w">★ 희망 오프</span>
+      </div>
+      <p class="hint" id="gridHint"></p>
+      <h1 id="printTitle"></h1>
+      <div class="gridwrap" id="gridArea"></div>
+      <div class="stat" id="statArea"></div>
+    </div>
+  </div>
+
+  <!-- ===== 우리 병동 ===== -->
+  <div id="tab-ward" style="display:none">
+    <div class="card">
+      <h2>우리 병동 사람들</h2>
+      <div class="staffrow addrow">
+        <input type="text" id="newName" placeholder="이름" style="width:150px" onkeydown="if(event.key==='Enter')addStaff()">
+        <select id="newType">
+          <option value="three">3교대 (D/E/N)</option>
+          <option value="night">나이트 전담</option>
+          <option value="day">평일 상근 (D만)</option>
+        </select>
+        <button class="btn big" onclick="addStaff()">+ 추가</button>
+      </div>
+      <div id="staffList"></div>
+      <p class="hint" id="sampleHint" style="margin-top:12px">처음이라면 <a class="link" onclick="trySample()">예시 인원 12명 넣기</a>로 연습해보세요.</p>
+    </div>
+    <div class="card">
+      <details id="rulesBox">
+        <summary><h2 style="display:inline">근무 규칙</h2> <span class="hint">— 그대로 두셔도 됩니다 (바꾸면 바로 저장돼요)</span></summary>
+        <div class="rulerow"><span class="lbl">평일에 필요한 인원</span>
+          데이 <input type="number" id="r_wd_D" min="0"> 이브닝 <input type="number" id="r_wd_E" min="0"> 나이트 <input type="number" id="r_wd_N" min="0"></div>
+        <div class="rulerow"><span class="lbl">주말·공휴일에 필요한 인원</span>
+          데이 <input type="number" id="r_we_D" min="0"> 이브닝 <input type="number" id="r_we_E" min="0"> 나이트 <input type="number" id="r_we_N" min="0"></div>
+        <div class="rulerow"><span class="lbl">연속으로 일할 수 있는 최대 일수</span><input type="number" id="r_maxWork" min="1" max="7"></div>
+        <div class="rulerow"><span class="lbl">연속으로 설 수 있는 나이트 최대 개수</span><input type="number" id="r_maxN" min="1" max="5"></div>
+        <div class="rulerow"><span class="lbl">나이트가 끝나면 쉬는 날 수</span><input type="number" id="r_offAfterN" min="0" max="3"></div>
+        <div class="rulerow"><span class="lbl">이브닝 다음날 데이 금지 (역행 금지)</span>
+          <select id="r_backward"><option value="1">금지</option><option value="0">허용</option></select></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ===== 보관함 ===== -->
+  <div id="tab-archive" style="display:none">
+    <div class="card" id="cloudCard" style="display:none">
+      <h2>여러 기기에서 함께 쓰기 <span class="hint">— 선택사항이에요</span></h2>
+      <div id="cloudBody"></div>
+    </div>
+    <div class="card">
+      <h2>지난 달 기록</h2>
+      <p class="hint">근무표를 만들면 자동으로 기록됩니다. 지난달·지지난달 기록이 있으면 나이트·주말 횟수를 이어받아 공평하게 만들어 드려요.</p>
+      <div id="histList"></div>
+    </div>
+    <div class="card">
+      <h2>백업</h2>
+      <p>모든 내용은 이 기기에 자동으로 저장됩니다. 파일로도 보관해두면 더 안전해요.</p>
+      <div class="toolbar">
+        <button class="btn big" onclick="exportData()">💾 파일로 백업하기</button>
+        <button class="btn gray" onclick="document.getElementById('importFile').click()">📂 백업 불러오기</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>🌙 엄만달 — 인터넷 연결 없이, 이 기기 안에서만 동작합니다</footer>
+<div id="picker"></div>
+<div id="toast"></div>
+
+<script src="js/engine.js"></script>
+<script src="js/store.js"></script>
+<script src="js/vendor/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/cloud.js"></script>
+<script src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+</script>
+</body>
+</html>
