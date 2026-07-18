@@ -181,6 +181,11 @@ footer { text-align: center; color: var(--faint); padding: 26px; font-size: 14.5
 .holirow input { width: 140px; font-size: 17px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 10px; font-family: inherit; }
 .lg-md { background: #66a80f; color: #fff; } .lg-e2 { background: #f08c00; color: #fff; }
 .lg-v { background: #fde9c8; color: #9a6700; } .lg-pin { background: #f1edfb; color: #6a4bc4; }
+.authtitle { margin: 4px 0 8px; font-size: 19px; }
+.otpinput { width: 150px; font-size: 26px; letter-spacing: 8px; text-align: center; padding: 10px 12px;
+  border: 1.5px solid var(--line); border-radius: 12px; font-family: inherit; }
+input[type="tel"]#authPhone { font-size: 19px; padding: 10px 12px; border: 1.5px solid var(--line);
+  border-radius: 12px; font-family: inherit; }
 
 /* 진행바 */
 #genProgress { display: none; margin: 4px 0 14px; }
