@@ -1,5 +1,5 @@
 /* 엄만달 서비스 워커 — 전 파일 캐시로 오프라인 동작 */
-var CACHE = 'ummandal-v4-8-2';
+var CACHE = 'ummandal-v4-8-4';
 var ASSETS = [
   './',
   './index.html',
@@ -26,6 +26,9 @@ self.addEventListener('activate', function (e) {
       return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
     }).then(function () { return self.clients.claim(); })
   );
+});
+self.addEventListener('message', function (e) {
+  if (e.data === 'GET_VERSION' && e.source) e.source.postMessage({ type: 'VERSION', version: CACHE });
 });
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
