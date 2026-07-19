@@ -932,6 +932,160 @@ function importData(ev) {
   ev.target.value = '';
 }
 
+/* ---- 기존 근무표(엑셀) 불러오기 ---- */
+var _importParse = null;   // parse 결과 보관 (확인 화면 → 적용에서 재사용)
+function importXlsx(ev) {
+  var f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f) return;
+  if (typeof XLSX === 'undefined') { alert('엑셀 읽기 도구를 불러오지 못했어요. 인터넷에 한 번 연결한 뒤 새로고침해주세요.'); return; }
+  var reader = new FileReader();
+  reader.onload = function () {
+    var res;
+    try { res = Importer.parse(reader.result); }
+    catch (e) { alert('엑셀 파일을 읽을 수 없어요. 근무표 엑셀(.xlsx) 파일인지 확인해주세요.'); return; }
+    if (res.error) { alert(res.error + '\n\n날짜(1, 2, 3 …)가 한 줄에 이어진 근무표 엑셀인지 확인해주세요.'); return; }
+    if (!res.rows || !res.rows.length) { alert('사람 이름을 찾지 못했어요. 이름이 한글로 적힌 근무표인지 확인해주세요.'); return; }
+    _importParse = res;
+    renderImportReview(prevYM(curYM, 1));   // 기본값: 지난달
+  };
+  reader.onerror = function () { alert('파일을 읽는 중 문제가 생겼어요. 다시 시도해주세요.'); };
+  reader.readAsArrayBuffer(f);
+}
+function reReviewMonth() {
+  var y = document.getElementById('impYear').value;
+  var mo = document.getElementById('impMonth').value;
+  renderImportReview(y + '-' + String(mo).padStart(2, '0'));
+}
+function closeImportReview() {
+  var h = document.getElementById('importReview');
+  h.className = ''; h.innerHTML = '';
+  _importParse = null;
+}
+function renderImportReview(ym) {
+  var res = _importParse;
+  if (!res) return;
+  var an = Importer.analyze(res.rows, res.days, ym);
+  var pt = ymParts(ym);
+  var nowY = new Date().getFullYear();
+  var yearOpts = '';
+  for (var yy = nowY - 1; yy <= nowY + 1; yy++) yearOpts += '<option value="' + yy + '"' + (yy === pt.y ? ' selected' : '') + '>' + yy + '년</option>';
+  var monOpts = '';
+  for (var mm = 1; mm <= 12; mm++) monOpts += '<option value="' + mm + '"' + (mm === pt.m ? ' selected' : '') + '>' + mm + '월</option>';
+
+  /* 인원 표 */
+  var staffRows = res.rows.map(function (row, i) {
+    var s = an.staff[i];
+    var grpSel = ['RN', 'NA'].map(function (g) {
+      return '<option value="' + g + '"' + (s.group === g ? ' selected' : '') + '>' + groupNames[g] + '</option>';
+    }).join('');
+    var typeSel = ['three', 'night', 'day'].map(function (t) {
+      return '<option value="' + t + '"' + (s.type === t ? ' selected' : '') + '>' + typeNames[t] + '</option>';
+    }).join('');
+    var prefSel = ['', 'D', 'E'].map(function (v) {
+      return '<option value="' + v + '"' + (s.pref === v ? ' selected' : '') + '>' + prefNames[v] + '</option>';
+    }).join('');
+    var exc = s.workDays === 0;   // 근무 없는 사람은 기본 제외
+    return '<tr>' +
+      '<td><b>' + esc(s.name) + '</b>' + (s.note ? ' <span class="hint">(' + s.note + ')</span>' : '') + '</td>' +
+      '<td><select id="impGroup_' + i + '">' + grpSel + '</select></td>' +
+      '<td><select id="impType_' + i + '">' + typeSel + '</select></td>' +
+      '<td><select id="impPref_' + i + '">' + prefSel + '</select></td>' +
+      '<td style="text-align:center"><input type="checkbox" id="impExc_' + i + '"' + (exc ? ' checked' : '') + ' style="width:22px;height:22px"></td>' +
+      '</tr>';
+  }).join('');
+
+  /* 규칙 요약 표 */
+  var ruleRows = '';
+  Object.keys(an.rulesByGroup).forEach(function (g) {
+    var gr = an.rulesByGroup[g];
+    [['wd', '평일'], ['hd', '주말·공휴일']].forEach(function (kd) {
+      var set = gr[kd[0]];
+      function rg(x) { return x[0] === x[1] ? x[0] : (x[0] + '~' + x[1]); }
+      ruleRows += '<tr><td>' + groupNames[g] + ' <span class="hint">' + kd[1] + '</span></td>' +
+        '<td style="text-align:center">' + rg(set.D) + '</td>' +
+        '<td style="text-align:center">' + rg(set.E) + '</td>' +
+        '<td style="text-align:center">' + rg(set.N) + '</td></tr>';
+    });
+  });
+
+  var warn = (res.unknownCodes && res.unknownCodes.length)
+    ? '<div class="imp-warn">알아보지 못한 표시가 있어요: <b>' + res.unknownCodes.map(esc).join(', ') + '</b> — 이 칸은 빈칸으로 들어가요. 불러온 뒤 직접 고쳐주세요.</div>'
+    : '';
+
+  var html =
+    '<div class="imp-card">' +
+    '<h2>불러온 근무표 확인</h2>' +
+    '<p class="hint">몇 년 몇 월 근무표인가요? 아래 내용을 확인하고 <b>이대로 적용</b>을 누르세요.</p>' +
+    '<div style="margin:10px 0 4px"><b>기준 월</b> &nbsp;' +
+    '<select id="impYear" onchange="reReviewMonth()">' + yearOpts + '</select> ' +
+    '<select id="impMonth" onchange="reReviewMonth()">' + monOpts + '</select></div>' +
+    warn +
+    '<h3 style="margin:16px 0 4px">인원 <span class="hint">(' + an.meta.count + '명 — 형태·성향을 확인하고, 뺄 사람은 제외에 체크)</span></h3>' +
+    '<div class="imp-scroll"><table>' +
+    '<tr><th>이름</th><th>직군</th><th>형태</th><th>성향</th><th>제외</th></tr>' +
+    staffRows + '</table></div>' +
+    '<h3 style="margin:16px 0 4px">근무 규칙 <span class="hint">(하루 인원 — 적용 후 「우리 병동 &gt; 근무 규칙」에서 언제든 수정)</span></h3>' +
+    '<table><tr><th>직군</th><th>데이(D)</th><th>이브닝(E)</th><th>나이트(N)</th></tr>' + ruleRows + '</table>' +
+    '<div class="imp-actions">' +
+    '<button class="btn big" onclick="applyImport()">이대로 적용</button>' +
+    '<button class="btn gray" onclick="closeImportReview()">취소</button>' +
+    '</div></div>';
+
+  var host = document.getElementById('importReview');
+  host.innerHTML = html;
+  host.className = 'on';
+}
+function applyImport() {
+  var res = _importParse;
+  if (!res) return;
+  var y = document.getElementById('impYear').value;
+  var mo = document.getElementById('impMonth').value;
+  var ym = y + '-' + String(mo).padStart(2, '0');
+
+  var staff = [], codesById = {};
+  res.rows.forEach(function (row, i) {
+    if (document.getElementById('impExc_' + i).checked) return;
+    var id = 'imp' + Date.now() + '_' + i;
+    staff.push({
+      id: id, name: row.name,
+      group: document.getElementById('impGroup_' + i).value,
+      type: document.getElementById('impType_' + i).value,
+      pref: document.getElementById('impPref_' + i).value
+    });
+    codesById[id] = row.codes.slice();
+  });
+  if (!staff.length) { alert('등록할 사람이 없어요. 제외 체크를 하나 이상 풀어주세요.'); return; }
+  if (staffList().length && !confirm('기존 인원 ' + staffList().length + '명을 지우고 새로 등록합니다. 계속할까요?')) return;
+
+  /* 규칙: 감지된 그룹만 덮고 나머지는 유지, 전역 4개 값 갱신 */
+  var an = Importer.analyze(res.rows, res.days, ym);
+  var r = rules2();
+  Object.keys(an.rulesByGroup).forEach(function (g) { r.groups[g] = an.rulesByGroup[g]; });
+  r.maxWork = an.global.maxWork; r.maxN = an.global.maxN;
+  r.offAfterN = an.global.offAfterN; r.backward = an.global.backward;
+
+  /* 인원 교체 + 선택 월 코드 저장 */
+  db.staff = staff;
+  var dim = daysInYM(ym);
+  var codes = {};
+  staff.forEach(function (p) {
+    var src = codesById[p.id] || [], arr = [];
+    for (var d = 0; d < dim; d++) arr.push(src[d] || '');
+    codes[p.id] = arr;
+  });
+  db.months = db.months || {};
+  db.months[ym] = { codes: codes, wish: {}, pins: {}, holidays: [] };
+  save();
+
+  closeImportReview();
+  renderRules();
+  showTab('home');
+  var msg = '근무표를 불러왔어요 — ' + staff.length + '명 등록 ✓';
+  if (ym !== curYM) msg += ' (이력으로 저장됨 — 다음 달 만들 때 반영)';
+  toast(msg);
+}
+
 /* ---- 이미지로 저장 ---- */
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();

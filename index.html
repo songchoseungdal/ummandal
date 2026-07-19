@@ -65,6 +65,7 @@
       <p class="empty-msg">우리 병동 사람들만 넣으면,<br>한 달 근무표가 <b>1분 만에</b> 나와요.</p>
       <button class="btn big" onclick="showTab('ward')">👥 사람 넣으러 가기</button>
       <p class="hint">먼저 구경해보고 싶으면 → <a class="link" onclick="trySample()">예시 인원 12명으로 연습하기</a></p>
+      <p class="hint">쓰던 근무표가 있다면 → <a class="link" onclick="document.getElementById('importFileXlsx').click()">엑셀 불러오기</a></p>
     </div>
 
     <!-- 상태 2: 인원 있음 + 이번 달 근무표 없음 -->
@@ -113,6 +114,10 @@
   <div id="tab-ward" style="display:none">
     <div class="card">
       <h2>우리 병동 사람들</h2>
+      <div class="toolbar" style="margin-bottom:12px">
+        <button class="btn gray" onclick="document.getElementById('importFileXlsx').click()">📄 기존 근무표(엑셀) 불러오기</button>
+        <input type="file" id="importFileXlsx" accept=".xlsx,.xls,.csv" style="display:none" onchange="importXlsx(event)">
+      </div>
       <div class="staffrow addrow">
         <input type="text" id="newName" placeholder="이름" style="width:150px" onkeydown="if(event.key==='Enter')addStaff()">
         <select id="newGroup" title="직군">
@@ -161,15 +166,18 @@
 </main>
 
 <footer>🌙 엄만달 — 인터넷 연결 없이, 이 기기 안에서만 동작합니다</footer>
+<div id="importReview"></div>
 <div id="picker"></div>
 <div id="toast"></div>
 
+<script src="js/vendor/xlsx.full.min.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/engine2.js"></script>
 <script src="js/store.js"></script>
 <script src="js/vendor/supabase.js"></script>
 <script src="js/config.js"></script>
 <script src="js/cloud.js"></script>
+<script src="js/importer.js"></script>
 <script src="js/app.js"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {

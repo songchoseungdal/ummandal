@@ -246,12 +246,30 @@ footer { text-align: center; color: var(--faint); padding: 26px; font-size: 14.5
   table.duty th { min-width: 44px; }
 }
 
+/* ===== 엑셀 불러오기 확인 화면 ===== */
+#importReview { position: fixed; inset: 0; z-index: 200; display: none;
+  background: rgba(40, 36, 52, .5); padding: 20px; overflow-y: auto; }
+#importReview.on { display: flex; align-items: flex-start; justify-content: center; }
+#importReview .imp-card { background: var(--card); border-radius: 20px; padding: 22px 24px;
+  max-width: 860px; width: 100%; max-height: 85vh; overflow-y: auto; margin: auto;
+  box-shadow: 0 8px 40px rgba(50, 46, 60, .3); }
+#importReview h2 { margin-top: 0; }
+#importReview table { border-collapse: collapse; width: 100%; font-size: 16px; margin: 6px 0; }
+#importReview th, #importReview td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+#importReview th { color: var(--sub); font-size: 14.5px; font-weight: 600; }
+#importReview select { font-size: 16px; padding: 6px 8px; border: 1.5px solid var(--line);
+  border-radius: 10px; font-family: inherit; }
+#importReview .imp-scroll { max-height: 42vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+#importReview .imp-warn { background: var(--moon-soft); color: #8a6d00; border-radius: 12px;
+  padding: 10px 14px; margin: 10px 0; font-size: 15.5px; }
+#importReview .imp-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+
 /* ===== 인쇄 ===== */
 @page { size: A4 landscape; margin: 10mm; }
 @media print {
   body { background: #fff; padding: 0; font-size: 12px; }
   header, nav, footer, .toolbar, #banner, #genProgress, .legend, .hint, .stat,
-  #homePrep, #homeEmpty, #picker, #toast { display: none !important; }
+  #homePrep, #homeEmpty, #picker, #importReview, #toast { display: none !important; }
   main { padding: 0; max-width: none; }
   .card { border: none; box-shadow: none; padding: 0; }
   #printTitle { display: block; font-size: 20px; margin: 0 0 8px; color: #000; }
