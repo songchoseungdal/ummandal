@@ -1010,6 +1010,77 @@ function importXlsx(ev) {
   reader.onerror = function () { alert('파일을 읽는 중 문제가 생겼어요. 다시 시도해주세요.'); };
   reader.readAsArrayBuffer(f);
 }
+/* ---- 사진/PDF AI 가져오기 (2단계) — 서버가 표를 읽고, 분석·확인은 엑셀과 같은 흐름 ---- */
+function aiImportStart() {
+  if (!(window.Cloud && Cloud.enabled() && Cloud.getUser())) {
+    toast('로그인한 뒤에 쓸 수 있어요. 위에서 먼저 로그인해주세요');
+    return;
+  }
+  document.getElementById('aiImportFile').click();
+}
+/* 파일 → base64 (사진은 긴 변 2200px·JPEG로 축소해 용량·비용 절감) */
+function aiFileToB64(file) {
+  return new Promise(function (resolve, reject) {
+    if (file.type === 'application/pdf') {
+      var r = new FileReader();
+      r.onload = function () { resolve({ media_type: 'application/pdf', data: String(r.result).split(',')[1] }); };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+      return;
+    }
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      var scale = Math.min(1, 2200 / Math.max(img.width, img.height));
+      var cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * scale);
+      cv.height = Math.round(img.height * scale);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      resolve({ media_type: 'image/jpeg', data: cv.toDataURL('image/jpeg', 0.85).split(',')[1] });
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('이미지를 읽지 못했어요')); };
+    img.src = url;
+  });
+}
+function aiImport(ev) {
+  var fl = Array.prototype.slice.call(ev.target.files || []);
+  ev.target.value = '';
+  if (!fl.length) return;
+  var pdfCnt = fl.filter(function (f) { return f.type === 'application/pdf'; }).length;
+  if (pdfCnt > 0 && fl.length > 1) { alert('PDF는 한 번에 1개만 올릴 수 있어요.'); return; }
+  if (fl.length > 3) { alert('사진은 한 번에 3장까지 올릴 수 있어요.'); return; }
+  toast('근무표를 읽는 중… 30초쯤 걸려요 ⏳');
+  Promise.all(fl.map(aiFileToB64)).then(function (files) {
+    return Cloud.aiAnalyze(files);
+  }).then(function (res) {
+    if (!res || !res.status) { alert('분석 요청에 실패했어요. 인터넷 연결을 확인해주세요.'); return; }
+    if (res.status !== 200) { alert((res.data && res.data.error) || '분석에 실패했어요. 다시 시도해주세요.'); return; }
+    applyAiResult(res.data);
+  }).catch(function () {
+    alert('분석 중 문제가 생겼어요. 다시 시도해주세요.');
+  });
+}
+/* 서버가 읽어온 표(원문 셀)를 엑셀 가져오기와 같은 형태로 변환 → 기존 확인 창 재사용 */
+function applyAiResult(d) {
+  var days = d.days | 0;
+  if (days < 28 || days > 31) days = 31;
+  var unknown = [];
+  var rows = (d.rows || []).map(function (r) {
+    var cells = (r.cells || []).slice(0, days);
+    while (cells.length < days) cells.push('');
+    return {
+      name: String(r.name || '').trim(),
+      group: r.group === 'NA' ? 'NA' : 'RN',
+      codes: cells.map(function (c) { return Importer._normCode(c, unknown); })
+    };
+  }).filter(function (r) { return /^[가-힣]{2,5}$/.test(r.name); });
+  if (!rows.length) { alert('사람 이름을 찾지 못했어요. 표 전체가 잘 보이게 다시 찍어주세요.'); return; }
+  _importParse = { days: days, rows: rows, unknownCodes: unknown };
+  var ym = /^\d{4}-\d{2}$/.test(d.ym || '') ? d.ym : prevYM(curYM, 1);
+  toast('다 읽었어요! 내용을 확인해주세요 ✓');
+  renderImportReview(ym);
+}
 function reReviewMonth() {
   var y = document.getElementById('impYear').value;
   var mo = document.getElementById('impMonth').value;

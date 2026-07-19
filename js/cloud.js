@@ -72,6 +72,26 @@ var Cloud = (function () {
     return sb.auth.resetPasswordForEmail(email, { redirectTo: to });
   }
 
+  /* 사진/PDF 근무표 AI 분석 — Edge Function 호출 (키는 서버에만 있음, 로그인 필수) */
+  function aiAnalyze(files) {
+    return sb.auth.getSession().then(function (s) {
+      var t = s && s.data && s.data.session && s.data.session.access_token;
+      if (!t) return { status: 401, data: { error: '로그인한 뒤에 쓸 수 있어요.' } };
+      return fetch(CLOUD_CONFIG.url + '/functions/v1/analyze-roster', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + t,
+          'apikey': CLOUD_CONFIG.key
+        },
+        body: JSON.stringify({ files: files })
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; })
+          .then(function (j) { return { status: r.status, data: j }; });
+      });
+    });
+  }
+
   function pull() {
     if (!user) return Promise.resolve({ data: null });
     return sb.from('user_data').select('data, updated_at').eq('user_id', user.id).maybeSingle();
@@ -99,7 +119,7 @@ var Cloud = (function () {
     signUp: signUp, signIn: signIn, signOut: signOut,
     pull: pull, push: push, schedulePush: schedulePush,
     setAuthFlow: setAuthFlow, inAuthFlow: inAuthFlow,
-    oauthProviders: oauthProviders, signInOAuth: signInOAuth,
+    oauthProviders: oauthProviders, signInOAuth: signInOAuth, aiAnalyze: aiAnalyze,
     setPassword: setPassword, signOutOthers: signOutOthers, resetEmail: resetEmail
   };
 })();
