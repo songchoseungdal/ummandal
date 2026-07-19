@@ -48,6 +48,15 @@
   <!-- ===== 근무표(홈) ===== -->
   <div id="tab-home">
 
+    <!-- 상태 0: 처음 열었고 아직 로그인/건너뛰기 안 함 → 로그인 우선 -->
+    <div class="card empty-card" id="homeLoginCard" style="display:none">
+      <div class="bigmoon">🌙</div>
+      <h2>엄만달에 오신 것을 환영해요</h2>
+      <p class="empty-msg">로그인하면 폰·컴퓨터 어디서든<br><b>같은 근무표</b>를 쓸 수 있어요.</p>
+      <div id="homeLoginBody"></div>
+      <p class="hint" style="margin-top:16px"><a class="link" onclick="skipLogin()">로그인 없이 시작하기 <span style="font-weight:400">(이 기기에서만 저장돼요)</span></a></p>
+    </div>
+
     <!-- 상태 1: 인원 없음 -->
     <div class="card empty-card" id="homeEmpty" style="display:none">
       <div class="bigmoon">🌙</div>

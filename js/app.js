@@ -182,12 +182,18 @@ function renderHome() {
   var prep = document.getElementById('homePrep');
   var tools = document.getElementById('homeTools');
   var gridCard = document.getElementById('gridCard');
+  var loginCard = document.getElementById('homeLoginCard');
   if (!staff.length) {
-    empty.style.display = '';
+    /* 처음 연 사람(비로그인·건너뛰기 안 함·Cloud 켜짐)에게는 로그인 카드를 먼저 보여준다 */
+    var showLogin = window.Cloud && Cloud.enabled() && !Cloud.getUser() && !db.loginSkipped;
+    loginCard.style.display = showLogin ? '' : 'none';
+    empty.style.display = showLogin ? 'none' : '';
     prep.style.display = 'none';
     gridCard.style.display = 'none';
+    if (showLogin) { authTarget = 'homeLoginBody'; cloudView = 'main'; renderAuth(); }
     return;
   }
+  loginCard.style.display = 'none';   // 인원이 있으면 로그인 카드는 항상 숨김
   empty.style.display = 'none';
   gridCard.style.display = '';
   var filled = hasAny();
@@ -199,6 +205,8 @@ function renderHome() {
     : '칸을 눌러 ★(쉬고 싶은 날)이나 미리 정해진 근무를 표시해 둘 수 있어요.';
   renderGrid();
 }
+/* 로그인 없이 시작하기 — 이 선택을 저장해 다음부터 로그인 카드가 안 뜨게 한다 */
+function skipLogin() { db.loginSkipped = true; save(); renderHome(); }
 function renderPrep() {
   var staff = staffList();
   var m = month(curYM);
@@ -677,6 +685,7 @@ function cloudErrMsg(err) {
   return '잠시 후 다시 시도해주세요. (' + m + ')';
 }
 var cloudView = 'main';   // main | signup | newpw | emailReset
+var authTarget = 'cloudBody';  // 인증 UI 렌더 대상: 'cloudBody'(보관함 카드) | 'homeLoginBody'(홈 첫 화면 카드)
 var authCtx = { mode: null }; // mode: 'reset' (이메일 비밀번호 재설정 진행 표시)
 /* 소셜 로그인 버튼용 인라인 로고 (외부 요청 없이 정적 웹앱에서 바로 렌더) */
 var GOOGLE_SVG = '<svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">' +
@@ -690,22 +699,15 @@ function pwInput(id, ph) {
   return '<input type="password" id="' + id + '" placeholder="' + ph + '" style="width:170px;font-size:19px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;font-family:inherit">';
 }
 function backLink() { return '<p class="hint" style="margin-top:10px"><a class="link" onclick="cloudGoto(\'main\')">← 처음으로</a></p>'; }
-function renderCloudCard() {
-  var card = document.getElementById('cloudCard');
-  if (!window.Cloud || !Cloud.enabled()) { card.style.display = 'none'; return; }
-  card.style.display = '';
-  var body = document.getElementById('cloudBody');
-  var u = Cloud.getUser();
-  if (u && cloudView !== 'newpw') {
-    var t = Cloud.getLastSync();
-    var who = u.email || (u.user_metadata && (u.user_metadata.name || u.user_metadata.full_name)) || '회원';
-    body.innerHTML =
-      '<p><b>' + esc(who) + '</b> 님으로 로그인되어 있어요.<br>' +
-      '<span class="hint">바뀐 내용은 자동으로 서버에 저장됩니다.' +
-      (t ? ' 마지막 저장: ' + t.getHours() + '시 ' + String(t.getMinutes()).padStart(2, '0') + '분' : '') + '</span></p>' +
-      '<div class="toolbar"><button class="btn gray" onclick="cloudLogout()">로그아웃</button></div>';
-    return;
-  }
+/* 로그아웃 뷰(main·signup·newpw·emailReset)를 현재 authTarget에 렌더한다.
+   홈 로그인 카드(homeLoginBody)와 보관함 카드(cloudBody)에 같은 id 입력칸이 공존하면
+   getElementById가 엉키므로, 렌더 직전에 반대쪽 컨테이너를 반드시 비운다. */
+function renderAuth() {
+  var other = authTarget === 'homeLoginBody' ? 'cloudBody' : 'homeLoginBody';
+  var oe = document.getElementById(other);
+  if (oe) oe.innerHTML = '';
+  var body = document.getElementById(authTarget);
+  if (!body) return;
   if (cloudView === 'signup') {
     body.innerHTML =
       '<h3 class="authtitle">이메일로 가입하기</h3>' +
@@ -741,9 +743,13 @@ function renderCloudCard() {
       socials += '<button class="btn-google" onclick="cloudOAuth(\'google\')">' + GOOGLE_SVG + 'Google로 계속하기</button>';
     if (provs.indexOf('kakao') >= 0)
       socials += '<button class="btn-kakao" onclick="cloudOAuth(\'kakao\')">' + KAKAO_SVG + '카카오로 계속하기</button>';
+    /* 소개 문단은 보관함 카드(cloudBody)일 때만 — 홈 로그인 카드는 카드 자체에 환영 문구가 있다 */
+    var intro = authTarget === 'cloudBody'
+      ? '<p>로그인하면 폰·컴퓨터 어디서든 <b>같은 근무표</b>를 볼 수 있어요.<br>' +
+        '<span class="hint">로그인하지 않아도 이 기기에서는 그대로 쓸 수 있습니다.</span></p>'
+      : '';
     body.innerHTML =
-      '<p>로그인하면 폰·컴퓨터 어디서든 <b>같은 근무표</b>를 볼 수 있어요.<br>' +
-      '<span class="hint">로그인하지 않아도 이 기기에서는 그대로 쓸 수 있습니다.</span></p>' +
+      intro +
       (socials ? '<div class="socialbtns">' + socials + '</div><div class="authdivider">또는 이메일로</div>' : '') +
       '<div class="staffrow" style="border-bottom:none">' +
       '<input type="text" id="cloudEmail" placeholder="이메일" style="width:220px" autocomplete="email">' +
@@ -757,10 +763,31 @@ function renderCloudCard() {
       '<p class="hint">비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a></p>';
   }
 }
+function renderCloudCard() {
+  authTarget = 'cloudBody';   // 보관함 카드가 인증 UI의 기본 자리
+  var card = document.getElementById('cloudCard');
+  if (!window.Cloud || !Cloud.enabled()) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  var u = Cloud.getUser();
+  if (u && cloudView !== 'newpw') {
+    var hb = document.getElementById('homeLoginBody');
+    if (hb) hb.innerHTML = '';   // 홈 로그인 카드와 입력칸 id 충돌 방지
+    var body = document.getElementById('cloudBody');
+    var t = Cloud.getLastSync();
+    var who = u.email || (u.user_metadata && (u.user_metadata.name || u.user_metadata.full_name)) || '회원';
+    body.innerHTML =
+      '<p><b>' + esc(who) + '</b> 님으로 로그인되어 있어요.<br>' +
+      '<span class="hint">바뀐 내용은 자동으로 서버에 저장됩니다.' +
+      (t ? ' 마지막 저장: ' + t.getHours() + '시 ' + String(t.getMinutes()).padStart(2, '0') + '분' : '') + '</span></p>' +
+      '<div class="toolbar"><button class="btn gray" onclick="cloudLogout()">로그아웃</button></div>';
+    return;
+  }
+  renderAuth();
+}
 function cloudGoto(v) {
   cloudView = v;
   if (v === 'main') { Cloud.setAuthFlow(false); authCtx.mode = null; }
-  renderCloudCard();
+  renderAuth();   // 로그인됨 상태는 cloudGoto를 타지 않으므로 현재 authTarget에 맞게 다시 그리면 된다
 }
 function cloudMsg(t) { var el = document.getElementById('cloudMsg'); if (el) el.textContent = t; }
 /* ---- 흐름 완료 공통 ---- */
@@ -846,14 +873,14 @@ function cloudSyncOnLogin() {
     }
     if (!server) {
       /* 서버가 비어 있음 → 이 기기 내용을 올림 */
-      Cloud.push(db).then(function () { toast('이 기기 내용을 서버에 올렸어요 ☁'); renderCloudCard(); });
+      Cloud.push(db).then(function () { toast('이 기기 내용을 서버에 올렸어요 ☁'); renderCloudCard(); renderHome(); });
     } else if (isEmptyDb(db) && !isEmptyDb(server)) {
       /* 새 기기(빈 상태)로 로그인 — 시계가 뭐라 하든 서버 데이터를 지킨다 (실데이터 비파괴) */
       adoptServer();
     } else if (serverAt > localAt) {
       adoptServer();
     } else {
-      Cloud.push(db).then(function () { toast('서버에 저장했어요 ☁'); renderCloudCard(); });
+      Cloud.push(db).then(function () { toast('서버에 저장했어요 ☁'); renderCloudCard(); renderHome(); });
     }
   });
 }
@@ -1085,11 +1112,15 @@ if (window.Cloud && Cloud.enabled()) {
       Cloud.setAuthFlow(true);
       cloudView = 'newpw';
       authCtx.mode = 'reset';
+      authTarget = 'cloudBody';   // 재설정은 보관함 카드에서 진행
       showTab('archive');
       return;
     }
     if (Cloud.inAuthFlow()) return;   // 가입 인증·재설정 진행 중 — 화면을 덮지 않는다
     if (event === 'SIGNED_IN' && userChanged) cloudSyncOnLogin();
+    /* 지금 보이는 탭의 인증 UI를 갱신한다. 홈이면 홈 로그인 카드(homeLoginBody),
+       아니면 보관함 카드(cloudBody). 초기 INITIAL_SESSION이 홈 카드를 지우지 않게 하기 위함. */
+    else if (document.getElementById('tab-home').style.display !== 'none') renderHome();
     else renderCloudCard();
   });
   Cloud.init();

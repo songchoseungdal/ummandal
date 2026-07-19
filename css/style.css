@@ -192,6 +192,10 @@ footer { text-align: center; color: var(--faint); padding: 26px; font-size: 14.5
 .btn-kakao:hover { background: #fada0a; }
 .authdivider { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 14.5px; margin: 14px 0 8px; max-width: 360px; }
 .authdivider::before, .authdivider::after { content: ''; flex: 1; border-top: 1.5px solid var(--line); }
+/* 홈 첫 화면의 로그인 카드 — 인증 UI를 카드 중앙에 정렬 */
+#homeLoginCard .socialbtns, #homeLoginCard .authdivider { margin-left: auto; margin-right: auto; }
+#homeLoginCard .staffrow { justify-content: center; border-bottom: none; }
+#homeLoginCard .toolbar { justify-content: center; margin-bottom: 0; }
 
 /* 진행바 */
 #genProgress { display: none; margin: 4px 0 14px; }
