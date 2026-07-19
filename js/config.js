@@ -6,6 +6,7 @@ var CLOUD_CONFIG = {
   key: 'sb_publishable_NZPD5RINx_Uo_tZHnXZzRg_v03bR8MH',
   /* 비밀번호 재설정 메일·소셜 로그인이 돌아올 주소 (Supabase Auth Redirect URLs에도 등록 필요) */
   siteUrl: 'https://songchoseungdal.github.io/ummandal/',
-  /* 소셜 로그인 버튼 목록 — Supabase 대시보드에서 해당 제공자 설정 필요 (절차: 로그인_설정_안내.md) */
-  oauth: ['google', 'kakao']
+  /* 소셜 로그인 버튼 목록 — Supabase 대시보드에서 해당 제공자 설정 필요 (절차: 로그인_설정_안내.md)
+     kakao는 숨김(2026-07-19): 이메일 동의항목이 비즈 앱 전용이라 보류. 되살리려면 'kakao' 추가 */
+  oauth: ['google']
 };

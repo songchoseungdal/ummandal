@@ -24,7 +24,11 @@ var Cloud = (function () {
   function getUser() { return user; }
   function getLastSync() { return lastSync; }
 
-  function signUp(email, pw) { return sb.auth.signUp({ email: email, password: pw }); }
+  function signUp(email, pw) {
+    /* 확인 메일이 돌아올 주소를 명시 — 없으면 서버 기본값에 의존해 엉뚱한 곳(루트 404)으로 갈 수 있다 */
+    var to = CLOUD_CONFIG.siteUrl || (location.origin + location.pathname);
+    return sb.auth.signUp({ email: email, password: pw, options: { emailRedirectTo: to } });
+  }
   function signIn(email, pw) { return sb.auth.signInWithPassword({ email: email, password: pw }); }
   function signOut() { return sb.auth.signOut(); }
 

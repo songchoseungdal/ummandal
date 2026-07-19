@@ -703,6 +703,27 @@ var GOOGLE_SVG = '<svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://
   '<path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
 var KAKAO_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
   '<path fill="#191919" d="M12 3.5C6.75 3.5 2.5 6.86 2.5 11c0 2.68 1.78 5.03 4.46 6.36-.2.73-.72 2.64-.82 3.05-.13.5.18.5.39.36.16-.11 2.6-1.77 3.66-2.49.6.09 1.22.13 1.85.13 5.25 0 9.5-3.36 9.5-7.5S17.25 3.5 12 3.5z"/></svg>';
+/* PWA 설치 — 크롬이 설치 가능하다고 알려줄 때만 로그인 카드에 「앱으로 설치」 버튼 표시.
+   설치하면 앱 아이콘으로 실행되어 인앱 브라우저 문제 자체가 사라진다.
+   (카톡 내장 브라우저·iOS에서는 이 이벤트가 오지 않아 버튼이 안 뜬다) */
+var deferredInstall = null;
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  deferredInstall = e;
+  /* 홈 로그인 카드가 떠 있고 아직 입력을 시작하지 않았을 때만 다시 그린다 (입력 중 내용 보호) */
+  var em = document.getElementById('cloudEmail');
+  var home = document.getElementById('tab-home');
+  if (home && home.style.display !== 'none' && (!em || !em.value)) renderHome();
+});
+function installApp() {
+  if (!deferredInstall) return;
+  var p = deferredInstall;
+  deferredInstall = null;
+  p.prompt();
+  p.userChoice.then(function (r) {
+    if (r && r.outcome === 'accepted') toast('설치했어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
+  });
+}
 /* 인앱 브라우저(카톡·네이버·라인 등) 감지 — 구글이 앱 내장 브라우저(WebView) 로그인을
    정책으로 차단한다(403 disallowed_useragent). 감지되면 기본 브라우저로 안내한다. */
 function inAppBrowser() {
@@ -788,7 +809,12 @@ function renderAuth() {
       '<button class="btn gray" onclick="cloudGoto(\'signup\')">처음이면 이메일 가입</button>' +
       '<span class="hint" id="cloudMsg"></span>' +
       '</div>' +
-      '<p class="hint">비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a></p>';
+      '<p class="hint">비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a></p>' +
+      (deferredInstall
+        ? '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">' +
+          '<button class="btn big" onclick="installApp()">📱 휴대폰에 앱으로 설치하기</button>' +
+          '<p class="hint" style="margin-top:6px">설치하면 홈 화면의 🌙 아이콘으로 바로 열 수 있어요.</p></div>'
+        : '');
   }
 }
 function renderCloudCard() {
