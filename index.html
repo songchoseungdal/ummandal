@@ -58,14 +58,25 @@
       <!-- "로그인 없이 시작하기"는 숨김(2026-07-19 사용자 결정: 로그인 기본 구조). 복원 시 skipLogin() 링크를 되살릴 것 -->
     </div>
 
-    <!-- 상태 1: 인원 없음 -->
+    <!-- 상태 1: 인원 없음 → 온보딩 선택 (쓰던 근무표 가져오기 우선) -->
     <div class="card empty-card" id="homeEmpty" style="display:none">
       <div class="bigmoon">🌙</div>
       <h2>엄만달에 오신 것을 환영해요</h2>
-      <p class="empty-msg">우리 병동 사람들만 넣으면,<br>한 달 근무표가 <b>1분 만에</b> 나와요.</p>
-      <button class="btn big" onclick="showTab('ward')">👥 사람 넣으러 가기</button>
+      <p class="empty-msg">쓰시던 근무표를 주시면<br><b>사람·규칙까지 자동으로</b> 읽어서 준비해 드려요.</p>
+      <div class="onboard-opts">
+        <button class="onboard-card" onclick="document.getElementById('importFileXlsx').click()">
+          <span class="ob-ico">📄</span>
+          <span class="ob-txt"><b>엑셀 근무표 불러오기</b>
+          <span class="ob-sub">엑셀 파일을 고르면 인원과 규칙을 자동으로 읽어요</span></span>
+        </button>
+        <button class="onboard-card soon" onclick="toast('곧 열려요! 지금은 엑셀 불러오기를 이용해 주세요 🙏')">
+          <span class="ob-ico">📷</span>
+          <span class="ob-txt"><b>사진·PDF·워드로 불러오기 <span class="ob-badge">준비 중</span></b>
+          <span class="ob-sub">근무표를 찍어 올리면 자동으로 읽어드려요</span></span>
+        </button>
+      </div>
+      <p class="hint">가져올 파일이 없다면 → <a class="link" onclick="showTab('ward')">직접 사람 넣기</a></p>
       <p class="hint">먼저 구경해보고 싶으면 → <a class="link" onclick="trySample()">예시 인원 12명으로 연습하기</a></p>
-      <p class="hint">쓰던 근무표가 있다면 → <a class="link" onclick="document.getElementById('importFileXlsx').click()">엑셀 불러오기</a></p>
     </div>
 
     <!-- 상태 2: 인원 있음 + 이번 달 근무표 없음 -->

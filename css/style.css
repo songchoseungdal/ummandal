@@ -71,6 +71,20 @@ h2 { font-size: 21px; margin: 4px 0 14px; }
 .empty-msg { font-size: 19px; color: var(--sub); margin: 0 0 22px; line-height: 1.65; }
 .empty-msg b { color: var(--brand-dk); }
 .empty-card .hint { margin-top: 18px; }
+/* 온보딩 선택 카드 (엑셀 / 사진·문서) */
+.onboard-opts { display: flex; flex-direction: column; gap: 12px; max-width: 420px; margin: 0 auto 6px; }
+.onboard-card { display: flex; align-items: center; gap: 14px; text-align: left; width: 100%;
+  padding: 18px 20px; border: 2px solid var(--line); border-radius: 16px; background: #fff;
+  font-family: inherit; font-size: 18px; cursor: pointer; }
+.onboard-card:hover { border-color: var(--brand); }
+.onboard-card .ob-ico { font-size: 32px; }
+.onboard-card .ob-txt { display: flex; flex-direction: column; gap: 3px; }
+.onboard-card .ob-txt b { font-size: 19px; }
+.onboard-card .ob-sub { font-size: 15px; color: var(--sub); font-weight: 400; }
+.onboard-card.soon { background: #faf8f4; }
+.onboard-card.soon .ob-txt b { color: var(--sub); }
+.ob-badge { display: inline-block; font-size: 13px; font-weight: 700; color: #9a6b00;
+  background: #FFF0C8; border-radius: 8px; padding: 2px 8px; vertical-align: 2px; }
 
 /* 상태 2: 준비 카드 */
 .prep-title { font-size: 15px; color: var(--sub); margin: 0 0 8px; }
