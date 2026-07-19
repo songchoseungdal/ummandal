@@ -175,8 +175,16 @@ function hasAny() {
 }
 
 /* ---- 홈 화면 (상태에 따라 바뀜) ---- */
+/* 머리글 로그아웃 버튼 — 로그인 상태에서만 표시 */
+function renderAcctBtn() {
+  var b = document.getElementById('acctBtn');
+  if (!b) return;
+  var u = window.Cloud && Cloud.enabled() && Cloud.getUser();
+  b.style.display = u ? '' : 'none';
+}
 function renderHome() {
   renderMonthLabel();
+  renderAcctBtn();
   var staff = staffList();
   var empty = document.getElementById('homeEmpty');
   var prep = document.getElementById('homePrep');
@@ -765,6 +773,7 @@ function renderAuth() {
 }
 function renderCloudCard() {
   authTarget = 'cloudBody';   // 보관함 카드가 인증 UI의 기본 자리
+  renderAcctBtn();
   var card = document.getElementById('cloudCard');
   if (!window.Cloud || !Cloud.enabled()) { card.style.display = 'none'; return; }
   card.style.display = '';
