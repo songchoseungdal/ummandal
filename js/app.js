@@ -1047,9 +1047,7 @@ function aiImport(ev) {
   var fl = Array.prototype.slice.call(ev.target.files || []);
   ev.target.value = '';
   if (!fl.length) return;
-  var pdfCnt = fl.filter(function (f) { return f.type === 'application/pdf'; }).length;
-  if (pdfCnt > 0 && fl.length > 1) { alert('PDF는 한 번에 1개만 올릴 수 있어요.'); return; }
-  if (fl.length > 3) { alert('사진은 한 번에 3장까지 올릴 수 있어요.'); return; }
+  if (fl.length > 3) { alert('사진·PDF는 한 번에 3개까지 올릴 수 있어요.'); return; }
   toast('근무표를 읽는 중… 30초쯤 걸려요 ⏳');
   Promise.all(fl.map(aiFileToB64)).then(function (files) {
     return Cloud.aiAnalyze(files);
