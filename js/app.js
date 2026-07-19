@@ -863,7 +863,14 @@ function cloudSetNewPw() {
   });
 }
 function cloudLogout() {
-  Cloud.signOut().then(function () { toast('로그아웃했어요'); cloudView = 'main'; renderCloudCard(); });
+  Cloud.signOut().then(function () {
+    toast('로그아웃했어요'); cloudView = 'main';
+    renderAcctBtn();
+    /* renderCloudCard는 authTarget을 cloudBody로 되돌려 홈 로그인 카드를 비워버린다.
+       지금 보이는 탭에 맞는 쪽을 그린다. */
+    if (document.getElementById('tab-home').style.display !== 'none') renderHome();
+    else renderCloudCard();
+  });
 }
 function cloudSyncOnLogin() {
   Cloud.pull().then(function (res) {
