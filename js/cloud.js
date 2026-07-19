@@ -36,9 +36,26 @@ var Cloud = (function () {
   function oauthProviders() {
     return (enabled() && CLOUD_CONFIG.oauth) ? CLOUD_CONFIG.oauth : [];
   }
+  /* 서버 인증 설정(제공자 활성 여부) — 세션당 1회 조회 캐시 */
+  var settingsCache = null;
+  function authSettings() {
+    if (!settingsCache) {
+      settingsCache = fetch(CLOUD_CONFIG.url + '/auth/v1/settings', { headers: { apikey: CLOUD_CONFIG.key } })
+        .then(function (r) { return r.json(); })
+        .catch(function () { settingsCache = null; return null; });
+    }
+    return settingsCache;
+  }
   function signInOAuth(provider) {
-    var to = CLOUD_CONFIG.siteUrl || (location.origin + location.pathname);
-    return sb.auth.signInWithOAuth({ provider: provider, options: { redirectTo: to } });
+    /* 제공자가 꺼져 있으면 이동하지 말 것 — 이동해 버리면 서버가 안내 없는 JSON 400 페이지를
+       띄워 사용자가 갇힌다. 이동 전에 설정을 조회해 앱 안에서 한국어로 안내한다. */
+    return authSettings().then(function (s) {
+      if (s && s.external && s.external[provider] === false) {
+        return { error: { message: 'provider is not enabled' } };
+      }
+      var to = CLOUD_CONFIG.siteUrl || (location.origin + location.pathname);
+      return sb.auth.signInWithOAuth({ provider: provider, options: { redirectTo: to } });
+    });
   }
   function setPassword(pw) { return sb.auth.updateUser({ password: pw }); }
   /* 비번 재설정 후 다른 기기 세션 무효화 (이 기기는 유지) */
