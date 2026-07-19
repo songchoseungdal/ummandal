@@ -191,17 +191,26 @@ function renderHome() {
   var tools = document.getElementById('homeTools');
   var gridCard = document.getElementById('gridCard');
   var loginCard = document.getElementById('homeLoginCard');
-  if (!staff.length) {
-    /* 처음 연 사람(비로그인·건너뛰기 안 함·Cloud 켜짐)에게는 로그인 카드를 먼저 보여준다 */
-    var showLogin = window.Cloud && Cloud.enabled() && !Cloud.getUser() && !db.loginSkipped;
-    loginCard.style.display = showLogin ? '' : 'none';
-    empty.style.display = showLogin ? 'none' : '';
+  /* 로그인 안 된 상태(처음 연 사람 + 로그아웃 직후)에는 인원 유무와 상관없이 로그인 카드를 먼저 보여준다.
+     인원이 있는데 로그아웃한 경우엔 「이 기기 근무표 계속 보기」로 빠져나갈 수 있게 한다(데이터는 지우지 않음). */
+  var showLogin = window.Cloud && Cloud.enabled() && !Cloud.getUser() && !db.loginSkipped;
+  if (showLogin) {
+    loginCard.style.display = '';
+    empty.style.display = 'none';
     prep.style.display = 'none';
     gridCard.style.display = 'none';
-    if (showLogin) { authTarget = 'homeLoginBody'; cloudView = 'main'; renderAuth(); }
+    var keep = document.getElementById('homeKeepLocal');
+    if (keep) keep.style.display = staff.length ? '' : 'none';
+    authTarget = 'homeLoginBody'; cloudView = 'main'; renderAuth();
     return;
   }
-  loginCard.style.display = 'none';   // 인원이 있으면 로그인 카드는 항상 숨김
+  loginCard.style.display = 'none';
+  if (!staff.length) {
+    empty.style.display = '';
+    prep.style.display = 'none';
+    gridCard.style.display = 'none';
+    return;
+  }
   empty.style.display = 'none';
   gridCard.style.display = '';
   var filled = hasAny();
@@ -916,13 +925,14 @@ function cloudSetNewPw() {
 function cloudLogout() {
   Cloud.signOut().then(function () {
     toast('로그아웃했어요'); cloudView = 'main';
+    /* 지난번 「로그인 없이 쓰기」 선택은 해제한다 — 안 그러면 로그아웃해도 로그인 카드가 안 뜬다 */
+    db.loginSkipped = false; save();
     renderAcctBtn();
-    /* renderCloudCard는 authTarget을 cloudBody로 되돌려 홈 로그인 카드를 비워버린다.
-       지금 보이는 탭에 맞는 쪽을 그린다. */
-    if (document.getElementById('tab-home').style.display !== 'none') renderHome();
-    else renderCloudCard();
+    showTab('home');   // 어느 탭에 있었든 로그인 화면(홈)으로 돌려보낸다
   });
 }
+/* 로그아웃했지만 이 기기에 있는 근무표를 계속 보고 싶을 때 (데이터는 그대로) */
+function keepLocal() { db.loginSkipped = true; save(); renderHome(); }
 function cloudSyncOnLogin() {
   Cloud.pull().then(function (res) {
     if (res.error) { toast('서버에서 불러오지 못했어요'); renderCloudCard(); return; }
