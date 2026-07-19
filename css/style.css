@@ -182,10 +182,16 @@ footer { text-align: center; color: var(--faint); padding: 26px; font-size: 14.5
 .lg-md { background: #66a80f; color: #fff; } .lg-e2 { background: #f08c00; color: #fff; }
 .lg-v { background: #fde9c8; color: #9a6700; } .lg-pin { background: #f1edfb; color: #6a4bc4; }
 .authtitle { margin: 4px 0 8px; font-size: 19px; }
-.otpinput { width: 150px; font-size: 26px; letter-spacing: 8px; text-align: center; padding: 10px 12px;
-  border: 1.5px solid var(--line); border-radius: 12px; font-family: inherit; }
-input[type="tel"]#authPhone { font-size: 19px; padding: 10px 12px; border: 1.5px solid var(--line);
-  border-radius: 12px; font-family: inherit; }
+.socialbtns { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 4px 0 2px; }
+.socialbtns button { display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: 18.5px; font-weight: 700; padding: 13px 16px; border-radius: 14px; cursor: pointer;
+  font-family: inherit; border: 1.5px solid var(--line); }
+.btn-google { background: #fff; color: #3c4043; }
+.btn-google:hover { background: #f8f9fa; }
+.btn-kakao { background: #FEE500; color: #191919; border-color: #FEE500; }
+.btn-kakao:hover { background: #fada0a; }
+.authdivider { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 14.5px; margin: 14px 0 8px; max-width: 360px; }
+.authdivider::before, .authdivider::after { content: ''; flex: 1; border-top: 1.5px solid var(--line); }
 
 /* 진행바 */
 #genProgress { display: none; margin: 4px 0 14px; }

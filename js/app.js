@@ -667,21 +667,25 @@ function cloudErrMsg(err) {
   if (m.indexOf('valid email') >= 0 || m.indexOf('invalid format') >= 0) return '주소/번호를 다시 확인해주세요.';
   if (m.indexOf('Email not confirmed') >= 0) return '가입 확인 메일을 먼저 눌러주세요. 메일함을 확인해보세요.';
   if (m.indexOf('Failed to fetch') >= 0) return '인터넷 연결을 확인해주세요.';
-  /* 전화 인증 계열 */
+  if (m.indexOf('provider is not enabled') >= 0 || m.indexOf('Unsupported provider') >= 0)
+    return '이 로그인 방식은 아직 준비 중이에요. 이메일로 로그인해주세요.';
+  /* 인증번호(비밀번호 재설정 메일 링크 만료 등) 계열 — 이메일 복구에도 해당 */
   if (c === 'otp_expired' || m.indexOf('expired') >= 0 || m.indexOf('Token has expired') >= 0 || m.indexOf('invalid') >= 0)
     return '인증번호가 맞지 않거나 시간이 지났어요. 「다시 보내기」로 새 번호를 받아주세요.';
   if (c === 'over_sms_send_rate_limit' || m.indexOf('security purposes') >= 0 || m.indexOf('rate limit') >= 0)
     return '문자를 너무 자주 보냈어요. 1분 뒤에 다시 눌러주세요.';
-  if (m.indexOf('Signups not allowed for otp') >= 0 || c === 'otp_disabled')
-    return '가입된 번호가 아니에요. 번호를 확인하거나 먼저 회원가입을 해주세요.';
-  if (c === 'phone_provider_disabled' || m.indexOf('Phone signups are disabled') >= 0 || m.indexOf('phone provider') >= 0)
-    return '전화 가입이 아직 열리지 않았어요. 이메일로 가입해주세요.';
-  if (m.indexOf('Error sending sms') >= 0 || m.indexOf('sms') >= 0)
-    return '문자 발송이 잘 안 됐어요. 잠시 후 다시 시도해주세요.';
   return '잠시 후 다시 시도해주세요. (' + m + ')';
 }
-var cloudView = 'main';   // main | signup | otp | reset | newpw | emailReset | emailLogin
-var authCtx = { phone: null, mode: null, cooldown: 0, timer: null }; // mode: 'signup' | 'reset'
+var cloudView = 'main';   // main | signup | newpw | emailReset
+var authCtx = { mode: null }; // mode: 'reset' (이메일 비밀번호 재설정 진행 표시)
+/* 소셜 로그인 버튼용 인라인 로고 (외부 요청 없이 정적 웹앱에서 바로 렌더) */
+var GOOGLE_SVG = '<svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">' +
+  '<path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>' +
+  '<path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>' +
+  '<path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/>' +
+  '<path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
+var KAKAO_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+  '<path fill="#191919" d="M12 3.5C6.75 3.5 2.5 6.86 2.5 11c0 2.68 1.78 5.03 4.46 6.36-.2.73-.72 2.64-.82 3.05-.13.5.18.5.39.36.16-.11 2.6-1.77 3.66-2.49.6.09 1.22.13 1.85.13 5.25 0 9.5-3.36 9.5-7.5S17.25 3.5 12 3.5z"/></svg>';
 function pwInput(id, ph) {
   return '<input type="password" id="' + id + '" placeholder="' + ph + '" style="width:170px;font-size:19px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;font-family:inherit">';
 }
@@ -692,10 +696,9 @@ function renderCloudCard() {
   card.style.display = '';
   var body = document.getElementById('cloudBody');
   var u = Cloud.getUser();
-  var phoneOn = Cloud.phoneEnabled();
   if (u && cloudView !== 'newpw') {
     var t = Cloud.getLastSync();
-    var who = u.email || (u.phone ? Cloud.phoneDisp('+' + String(u.phone).replace(/^\+/, '')) : '회원');
+    var who = u.email || (u.user_metadata && (u.user_metadata.name || u.user_metadata.full_name)) || '회원';
     body.innerHTML =
       '<p><b>' + esc(who) + '</b> 님으로 로그인되어 있어요.<br>' +
       '<span class="hint">바뀐 내용은 자동으로 서버에 저장됩니다.' +
@@ -705,25 +708,15 @@ function renderCloudCard() {
   }
   if (cloudView === 'signup') {
     body.innerHTML =
-      '<h3 class="authtitle">회원가입 <span class="hint">— 휴대폰 번호로 가입해요</span></h3>' +
-      '<p class="hint">📢 <b>이미 이메일로 가입해서 쓰고 계셨다면</b> 새로 가입하지 마시고 <a class="link" onclick="cloudGoto(\'emailLogin\')">이메일 로그인</a>을 눌러주세요. 새로 가입하면 근무표가 새 계정에 따로 저장돼요.</p>' +
+      '<h3 class="authtitle">이메일로 가입하기</h3>' +
+      '<p class="hint">가입하면 확인 메일이 가요. 메일함에서 링크를 한 번만 눌러주시면 가입이 끝나요.</p>' +
       '<div class="staffrow" style="border-bottom:none">' +
-      '<input type="tel" id="authPhone" placeholder="휴대폰 번호 (010…)" style="width:210px" autocomplete="tel">' +
+      '<input type="text" id="cloudEmail" placeholder="이메일" style="width:220px" autocomplete="email">' +
       pwInput('authPw', '비밀번호 (6자 이상)') + pwInput('authPw2', '비밀번호 다시') +
       '</div>' +
       '<div class="toolbar" style="margin-top:6px">' +
-      '<button class="btn big" onclick="cloudPhoneSignup()">📩 인증번호 받기</button>' +
+      '<button class="btn big" onclick="cloudSignup()">가입하기</button>' +
       '<span class="hint" id="cloudMsg"></span></div>' + backLink();
-  } else if (cloudView === 'otp') {
-    body.innerHTML =
-      '<h3 class="authtitle">인증번호 입력</h3>' +
-      '<p>' + esc(Cloud.phoneDisp(authCtx.phone)) + ' 번호로 문자를 보냈어요.<br>문자에 적힌 <b>숫자 6자리</b>를 넣어주세요.</p>' +
-      '<div class="staffrow" style="border-bottom:none">' +
-      '<input type="tel" id="authOtp" class="otpinput" placeholder="000000" maxlength="6" autocomplete="one-time-code">' +
-      '<button class="btn big" onclick="cloudOtpVerify()">확인</button>' +
-      '<button class="btn gray" id="resendBtn" onclick="cloudOtpResend()">다시 보내기</button>' +
-      '</div>' +
-      '<p class="hint" id="cloudMsg">문자가 안 오면 1분쯤 기다렸다가 「다시 보내기」를 눌러주세요.</p>' + backLink();
   } else if (cloudView === 'newpw') {
     body.innerHTML =
       '<h3 class="authtitle">새 비밀번호 만들기</h3>' +
@@ -732,15 +725,6 @@ function renderCloudCard() {
       pwInput('authPw', '새 비밀번호 (6자 이상)') + pwInput('authPw2', '한 번 더') +
       '<button class="btn big" onclick="cloudSetNewPw()">바꾸기</button>' +
       '</div><span class="hint" id="cloudMsg"></span>';
-  } else if (cloudView === 'reset') {
-    body.innerHTML =
-      '<h3 class="authtitle">비밀번호 찾기</h3>' +
-      '<p>가입할 때 쓴 <b>휴대폰 번호</b>를 넣으면 인증번호를 보내드려요.</p>' +
-      '<div class="staffrow" style="border-bottom:none">' +
-      '<input type="tel" id="authPhone" placeholder="휴대폰 번호 (010…)" style="width:210px" autocomplete="tel">' +
-      '<button class="btn big" onclick="cloudResetStart()">📩 인증번호 받기</button>' +
-      '</div><span class="hint" id="cloudMsg"></span>' +
-      '<p class="hint">이메일로 가입하셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">이메일로 비밀번호 찾기</a></p>' + backLink();
   } else if (cloudView === 'emailReset') {
     body.innerHTML =
       '<h3 class="authtitle">비밀번호 찾기 (이메일)</h3>' +
@@ -749,68 +733,41 @@ function renderCloudCard() {
       '<input type="text" id="cloudEmail" placeholder="이메일" style="width:220px" autocomplete="email">' +
       '<button class="btn big" onclick="cloudEmailReset()">📮 메일 보내기</button>' +
       '</div><span class="hint" id="cloudMsg"></span>' + backLink();
-  } else if (cloudView === 'emailLogin' || (!phoneOn && cloudView === 'main')) {
+  } else {
+    /* main — 소셜 로그인(구글·카카오) + 이메일 로그인 */
+    var provs = Cloud.oauthProviders();
+    var socials = '';
+    if (provs.indexOf('google') >= 0)
+      socials += '<button class="btn-google" onclick="cloudOAuth(\'google\')">' + GOOGLE_SVG + 'Google로 계속하기</button>';
+    if (provs.indexOf('kakao') >= 0)
+      socials += '<button class="btn-kakao" onclick="cloudOAuth(\'kakao\')">' + KAKAO_SVG + '카카오로 계속하기</button>';
     body.innerHTML =
       '<p>로그인하면 폰·컴퓨터 어디서든 <b>같은 근무표</b>를 볼 수 있어요.<br>' +
       '<span class="hint">로그인하지 않아도 이 기기에서는 그대로 쓸 수 있습니다.</span></p>' +
+      (socials ? '<div class="socialbtns">' + socials + '</div><div class="authdivider">또는 이메일로</div>' : '') +
       '<div class="staffrow" style="border-bottom:none">' +
       '<input type="text" id="cloudEmail" placeholder="이메일" style="width:220px" autocomplete="email">' +
       pwInput('cloudPw', '비밀번호') +
       '</div>' +
       '<div class="toolbar" style="margin-top:6px">' +
       '<button class="btn big" onclick="cloudLogin()">로그인</button>' +
-      (phoneOn ? '' : '<button class="btn gray" onclick="cloudSignup()">처음이면 가입하기</button>') +
+      '<button class="btn gray" onclick="cloudGoto(\'signup\')">처음이면 이메일 가입</button>' +
       '<span class="hint" id="cloudMsg"></span>' +
       '</div>' +
-      '<p class="hint">' +
-      (phoneOn ? '<a class="link" onclick="cloudGoto(\'main\')">← 전화번호로 로그인</a> · ' : '') +
-      '비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a></p>';
-  } else {
-    /* main + 전화 인증 켜짐 */
-    body.innerHTML =
-      '<p>로그인하면 폰·컴퓨터 어디서든 <b>같은 근무표</b>를 볼 수 있어요.</p>' +
-      '<div class="staffrow" style="border-bottom:none">' +
-      '<input type="tel" id="authPhone" placeholder="휴대폰 번호 (010…)" style="width:210px" autocomplete="tel">' +
-      pwInput('cloudPw', '비밀번호') +
-      '</div>' +
-      '<div class="toolbar" style="margin-top:6px">' +
-      '<button class="btn big" onclick="cloudPhoneLogin()">로그인</button>' +
-      '<button class="btn gray" onclick="cloudGoto(\'signup\')">처음이면 회원가입</button>' +
-      '<span class="hint" id="cloudMsg"></span>' +
-      '</div>' +
-      '<p class="hint">비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'reset\')">비밀번호 찾기</a>' +
-      ' · <a class="link" onclick="cloudGoto(\'emailLogin\')">이메일로 로그인</a></p>';
+      '<p class="hint">비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a></p>';
   }
 }
 function cloudGoto(v) {
   cloudView = v;
-  if (v === 'main') { Cloud.setAuthFlow(false); authCtx.mode = null; stopCooldown(); }
+  if (v === 'main') { Cloud.setAuthFlow(false); authCtx.mode = null; }
   renderCloudCard();
 }
 function cloudMsg(t) { var el = document.getElementById('cloudMsg'); if (el) el.textContent = t; }
-/* ---- 재전송 쿨다운 ---- */
-function startCooldown(sec) {
-  stopCooldown();
-  authCtx.cooldown = sec;
-  authCtx.timer = setInterval(function () {
-    authCtx.cooldown--;
-    var b = document.getElementById('resendBtn');
-    if (b) {
-      b.disabled = authCtx.cooldown > 0;
-      b.textContent = authCtx.cooldown > 0 ? '다시 보내기 (' + authCtx.cooldown + '초)' : '다시 보내기';
-    }
-    if (authCtx.cooldown <= 0) stopCooldown();
-  }, 1000);
-  var b = document.getElementById('resendBtn');
-  if (b) { b.disabled = true; b.textContent = '다시 보내기 (' + sec + '초)'; }
-}
-function stopCooldown() { clearInterval(authCtx.timer); authCtx.timer = null; }
 /* ---- 흐름 완료 공통 ---- */
 function finishAuthFlow(msg) {
   Cloud.setAuthFlow(false);
   cloudView = 'main';
   authCtx.mode = null;
-  stopCooldown();
   if (msg) toast(msg);
   if (Cloud.getUser()) cloudSyncOnLogin(); else renderCloudCard();
 }
@@ -828,15 +785,24 @@ function cloudLogin() {
 }
 function cloudSignup() {
   var em = document.getElementById('cloudEmail').value.trim();
-  var pw = document.getElementById('cloudPw').value;
-  if (!em || !pw) { cloudMsg('이메일과 비밀번호를 넣어주세요.'); return; }
+  var pw = document.getElementById('authPw').value;
+  var pw2 = document.getElementById('authPw2').value;
+  if (!em) { cloudMsg('이메일을 넣어주세요.'); return; }
   if (pw.length < 6) { cloudMsg('비밀번호는 6자 이상으로 해주세요.'); return; }
+  if (pw !== pw2) { cloudMsg('비밀번호 두 칸이 서로 달라요. 같게 넣어주세요.'); return; }
   cloudMsg('가입 중…');
   Cloud.signUp(em, pw).then(function (res) {
     if (res.error) { cloudMsg(cloudErrMsg(res.error)); return; }
     if (res.data && res.data.user && !res.data.session) {
       cloudMsg('확인 메일을 보냈어요. 메일함에서 확인 후 로그인해주세요.');
     }
+  });
+}
+/* ---- 소셜 로그인 (구글·카카오) ---- */
+function cloudOAuth(provider) {
+  cloudMsg('로그인 화면으로 이동 중…');
+  Cloud.signInOAuth(provider).then(function (res) {
+    if (res.error) cloudMsg(cloudErrMsg(res.error));
   });
 }
 function cloudEmailReset() {
@@ -846,71 +812,6 @@ function cloudEmailReset() {
   Cloud.resetEmail(em).then(function (res) {
     if (res.error) { cloudMsg(cloudErrMsg(res.error)); return; }
     cloudMsg('메일을 보냈어요. 메일함에서 「비밀번호 재설정」 링크를 눌러주세요. (몇 분 걸릴 수 있어요)');
-  });
-}
-/* ---- 전화 로그인/가입/재설정 ---- */
-function readPhone() {
-  var p = Cloud.phoneNorm(document.getElementById('authPhone').value);
-  if (!p) { cloudMsg('휴대폰 번호를 확인해주세요 — 010으로 시작하는 11자리예요.'); return null; }
-  return p;
-}
-function cloudPhoneLogin() {
-  var p = readPhone(); if (!p) return;
-  var pw = document.getElementById('cloudPw').value;
-  if (!pw) { cloudMsg('비밀번호를 넣어주세요.'); return; }
-  cloudMsg('로그인 중…');
-  Cloud.signInPhone(p, pw).then(function (res) {
-    if (res.error) { cloudMsg(cloudErrMsg(res.error)); return; }
-    cloudView = 'main';
-  });
-}
-function cloudPhoneSignup() {
-  var p = readPhone(); if (!p) return;
-  var pw = document.getElementById('authPw').value;
-  var pw2 = document.getElementById('authPw2').value;
-  if (pw.length < 6) { cloudMsg('비밀번호는 6자 이상으로 해주세요.'); return; }
-  if (pw !== pw2) { cloudMsg('비밀번호 두 칸이 서로 달라요. 같게 넣어주세요.'); return; }
-  cloudMsg('인증번호를 보내는 중…');
-  Cloud.setAuthFlow(true);
-  authCtx.phone = p; authCtx.mode = 'signup';
-  Cloud.signUpPhone(p, pw).then(function (res) {
-    if (res.error) { Cloud.setAuthFlow(false); cloudMsg(cloudErrMsg(res.error)); return; }
-    if (res.data && res.data.session) { finishAuthFlow('가입 완료! 🎉'); return; } // 전화 확인 꺼진 설정 대비
-    cloudView = 'otp';
-    renderCloudCard();
-    startCooldown(60);
-  });
-}
-function cloudResetStart() {
-  var p = readPhone(); if (!p) return;
-  cloudMsg('인증번호를 보내는 중…');
-  Cloud.setAuthFlow(true);
-  authCtx.phone = p; authCtx.mode = 'reset';
-  Cloud.sendOtp(p).then(function (res) {
-    if (res.error) { Cloud.setAuthFlow(false); cloudMsg(cloudErrMsg(res.error)); return; }
-    cloudView = 'otp';
-    renderCloudCard();
-    startCooldown(60);
-  });
-}
-function cloudOtpResend() {
-  if (authCtx.cooldown > 0) return;
-  cloudMsg('다시 보내는 중…');
-  var job = authCtx.mode === 'signup' ? Cloud.resendOtp(authCtx.phone) : Cloud.sendOtp(authCtx.phone);
-  job.then(function (res) {
-    if (res.error) { cloudMsg(cloudErrMsg(res.error)); return; }
-    cloudMsg('새 인증번호를 보냈어요.');
-    startCooldown(60);
-  });
-}
-function cloudOtpVerify() {
-  var code = (document.getElementById('authOtp').value || '').replace(/\D/g, '');
-  if (code.length !== 6) { cloudMsg('문자에 적힌 숫자 6자리를 넣어주세요.'); return; }
-  cloudMsg('확인 중…');
-  Cloud.verifyOtp(authCtx.phone, code).then(function (res) {
-    if (res.error) { cloudMsg(cloudErrMsg(res.error)); return; }
-    if (authCtx.mode === 'reset') { cloudView = 'newpw'; renderCloudCard(); }
-    else finishAuthFlow('가입 완료! 🎉 이제 자동으로 저장돼요.');
   });
 }
 function cloudSetNewPw() {
@@ -1169,6 +1070,14 @@ renderMonthLabel();
 renderRules();
 bindRules();
 showTab('home');
+/* 소셜 로그인 실패로 돌아온 경우 — URL의 error_description을 사람 말로 알려주고 주소를 정리한다 */
+(function () {
+  var mch = (location.search + location.hash).match(/[?#&]error_description=([^&]+)/);
+  if (!mch) return;
+  var desc = decodeURIComponent(mch[1].replace(/\+/g, ' '));
+  toast('로그인이 안 됐어요: ' + cloudErrMsg({ message: desc }));
+  history.replaceState(null, '', location.pathname);
+})();
 if (window.Cloud && Cloud.enabled()) {
   Cloud.onChange(function (event, userChanged) {
     if (event === 'PASSWORD_RECOVERY') {
