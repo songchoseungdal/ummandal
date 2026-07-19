@@ -193,7 +193,7 @@ function renderHome() {
   var loginCard = document.getElementById('homeLoginCard');
   /* 로그인 안 된 상태(처음 연 사람 + 로그아웃 직후)에는 인원 유무와 상관없이 로그인 카드를 먼저 보여준다.
      인원이 있는데 로그아웃한 경우엔 「이 기기 근무표 계속 보기」로 빠져나갈 수 있게 한다(데이터는 지우지 않음). */
-  var showLogin = window.Cloud && Cloud.enabled() && !Cloud.getUser() && !db.loginSkipped;
+  var showLogin = window.Cloud && Cloud.enabled() && !Cloud.getUser() && !loginSkippedNow;
   if (showLogin) {
     loginCard.style.display = '';
     empty.style.display = 'none';
@@ -222,8 +222,10 @@ function renderHome() {
     : '칸을 눌러 ★(쉬고 싶은 날)이나 미리 정해진 근무를 표시해 둘 수 있어요.';
   renderGrid();
 }
-/* 로그인 없이 시작하기 — 이 선택을 저장해 다음부터 로그인 카드가 안 뜨게 한다 */
-function skipLogin() { db.loginSkipped = true; save(); renderHome(); }
+/* 「로그인 없이 쓰기」는 이번 실행에서만 유효하다(저장하지 않음).
+   예전처럼 db.loginSkipped에 영구 저장하면, 한 번 누른 뒤로는 로그아웃해도 로그인 화면이 영영 안 뜬다. */
+var loginSkippedNow = false;
+function skipLogin() { loginSkippedNow = true; renderHome(); }
 function renderPrep() {
   var staff = staffList();
   var m = month(curYM);
@@ -925,14 +927,16 @@ function cloudSetNewPw() {
 function cloudLogout() {
   Cloud.signOut().then(function () {
     toast('로그아웃했어요'); cloudView = 'main';
-    /* 지난번 「로그인 없이 쓰기」 선택은 해제한다 — 안 그러면 로그아웃해도 로그인 카드가 안 뜬다 */
-    db.loginSkipped = false; save();
+    /* 「로그인 없이 쓰기」 선택은 해제한다 — 안 그러면 로그아웃해도 로그인 카드가 안 뜬다.
+       예전 버전이 기기에 저장해둔 영구 플래그도 함께 지운다 */
+    loginSkippedNow = false;
+    if (db.loginSkipped) { db.loginSkipped = false; save(); }
     renderAcctBtn();
     showTab('home');   // 어느 탭에 있었든 로그인 화면(홈)으로 돌려보낸다
   });
 }
-/* 로그아웃했지만 이 기기에 있는 근무표를 계속 보고 싶을 때 (데이터는 그대로) */
-function keepLocal() { db.loginSkipped = true; save(); renderHome(); }
+/* 로그아웃했지만 이 기기에 있는 근무표를 계속 보고 싶을 때 (데이터는 그대로, 이번 실행에서만) */
+function keepLocal() { loginSkippedNow = true; renderHome(); }
 function cloudSyncOnLogin() {
   Cloud.pull().then(function (res) {
     if (res.error) { toast('서버에서 불러오지 못했어요'); renderCloudCard(); return; }
