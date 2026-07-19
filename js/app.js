@@ -1070,7 +1070,12 @@ function applyAiResult(d) {
     return {
       name: String(r.name || '').trim(),
       group: r.group === 'NA' ? 'NA' : 'RN',
-      codes: cells.map(function (c) { return Importer._normCode(c, unknown); })
+      codes: cells.map(function (c) {
+        var s = String(c == null ? '' : c).trim();
+        /* AI가 표 머리글(요일·날짜)을 셀로 옮겨오는 경우 — 근무 코드가 아니므로 빈칸 처리 */
+        if (/^[일월화수목금토](요일)?$/.test(s) || /^\d{1,2}$/.test(s)) return '';
+        return Importer._normCode(s, unknown);
+      })
     };
   }).filter(function (r) { return /^[가-힣]{2,5}$/.test(r.name); });
   if (!rows.length) { alert('사람 이름을 찾지 못했어요. 표 전체가 잘 보이게 다시 찍어주세요.'); return; }
@@ -1414,4 +1419,11 @@ if (window.Cloud && Cloud.enabled()) {
     else renderCloudCard();
   });
   Cloud.init();
+}
+
+/* 설치형 앱 세로 고정 보강 — manifest orientation은 기존 설치본에 소급되지 않으므로
+   앱 화면에서 직접 잠근다 (브라우저 탭에서는 실패해도 무해) */
+if (window.matchMedia && matchMedia('(display-mode: standalone)').matches &&
+    screen.orientation && screen.orientation.lock) {
+  screen.orientation.lock('portrait').catch(function () { });
 }
