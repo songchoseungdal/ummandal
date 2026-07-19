@@ -703,6 +703,20 @@ var GOOGLE_SVG = '<svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://
   '<path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
 var KAKAO_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
   '<path fill="#191919" d="M12 3.5C6.75 3.5 2.5 6.86 2.5 11c0 2.68 1.78 5.03 4.46 6.36-.2.73-.72 2.64-.82 3.05-.13.5.18.5.39.36.16-.11 2.6-1.77 3.66-2.49.6.09 1.22.13 1.85.13 5.25 0 9.5-3.36 9.5-7.5S17.25 3.5 12 3.5z"/></svg>';
+/* 인앱 브라우저(카톡·네이버·라인 등) 감지 — 구글이 앱 내장 브라우저(WebView) 로그인을
+   정책으로 차단한다(403 disallowed_useragent). 감지되면 기본 브라우저로 안내한다. */
+function inAppBrowser() {
+  var ua = navigator.userAgent || '';
+  return /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|FB_IAB|Line\/|DaumApps/i.test(ua);
+}
+function openInBrowser() {
+  var ua = navigator.userAgent || '';
+  var url = location.origin + location.pathname;
+  if (/KAKAOTALK/i.test(ua)) { location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url); return; }
+  if (/Line\//i.test(ua)) { location.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'openExternalBrowser=1'; return; }
+  if (/Android/i.test(ua)) { location.href = 'intent://' + location.host + location.pathname + '#Intent;scheme=https;end'; return; }
+  toast('화면 아래 ⋯ 메뉴에서 「다른 브라우저로 열기」를 눌러주세요');
+}
 function pwInput(id, ph) {
   return '<input type="password" id="' + id + '" placeholder="' + ph + '" style="width:170px;font-size:19px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;font-family:inherit">';
 }
@@ -746,6 +760,12 @@ function renderAuth() {
   } else {
     /* main — 소셜 로그인(구글·카카오) + 이메일 로그인 */
     var provs = Cloud.oauthProviders();
+    /* 인앱 브라우저에서는 구글 로그인이 차단되므로 기본 브라우저로 안내 */
+    var inapp = inAppBrowser()
+      ? '<div style="background:#FFF6E5;border:1.5px solid #F0C36D;border-radius:12px;padding:12px 14px;margin-bottom:12px">' +
+        '⚠️ 카카오톡·네이버 앱 안에서는 <b>Google 로그인이 막혀 있어요</b>.<br>' +
+        '<button class="btn big" style="margin-top:8px" onclick="openInBrowser()">🌐 크롬(브라우저)으로 열기</button></div>'
+      : '';
     var socials = '';
     if (provs.indexOf('google') >= 0)
       socials += '<button class="btn-google" onclick="cloudOAuth(\'google\')">' + GOOGLE_SVG + 'Google로 계속하기</button>';
@@ -757,7 +777,7 @@ function renderAuth() {
         '<span class="hint">로그인하지 않아도 이 기기에서는 그대로 쓸 수 있습니다.</span></p>'
       : '';
     body.innerHTML =
-      intro +
+      intro + inapp +
       (socials ? '<div class="socialbtns">' + socials + '</div><div class="authdivider">또는 이메일로</div>' : '') +
       '<div class="staffrow" style="border-bottom:none">' +
       '<input type="text" id="cloudEmail" placeholder="이메일" style="width:220px" autocomplete="email">' +
@@ -836,6 +856,11 @@ function cloudSignup() {
 }
 /* ---- 소셜 로그인 (구글·카카오) ---- */
 function cloudOAuth(provider) {
+  if (provider === 'google' && inAppBrowser()) {
+    cloudMsg('카카오톡 등 앱 안에서는 Google 로그인이 막혀 있어요. 크롬으로 열어드릴게요.');
+    openInBrowser();
+    return;
+  }
   cloudMsg('로그인 화면으로 이동 중…');
   Cloud.signInOAuth(provider).then(function (res) {
     if (res.error) cloudMsg(cloudErrMsg(res.error));
