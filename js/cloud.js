@@ -54,6 +54,9 @@ var Cloud = (function () {
         return { error: { message: 'provider is not enabled' } };
       }
       var to = CLOUD_CONFIG.siteUrl || (location.origin + location.pathname);
+      /* 카카오 요청 범위(account_email·profile_image·profile_nickname)는 Supabase 서버가
+         고정으로 보낸다 — 클라이언트 scopes 옵션은 추가만 될 뿐 줄일 수 없음(2026-07-19 실측).
+         따라서 카카오 콘솔에는 세 동의항목이 모두 설정되어 있어야 한다(아니면 KOE205). */
       return sb.auth.signInWithOAuth({ provider: provider, options: { redirectTo: to } });
     });
   }
