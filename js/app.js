@@ -1286,7 +1286,8 @@ function importData(ev) {
 }
 
 /* ---- 기존 근무표(엑셀) 불러오기 ---- */
-var _importParse = null;   // parse 결과 보관 (확인 화면 → 적용에서 재사용)
+var _importParse = null;   // 기준(최근) 달 parse 결과 — 확인 화면 → 적용에서 재사용
+var _importPrevSheets = [];  // 함께 올린 이전 달들 — 이력으로만 저장(사람·규칙은 기준 달로)
 function importXlsx(ev) {
   var f = ev.target.files[0];
   ev.target.value = '';
@@ -1300,18 +1301,30 @@ function importXlsx(ev) {
     if (res.error) { alert(res.error + '\n\n날짜(1, 2, 3 …)가 한 줄에 이어진 근무표 엑셀인지 확인해주세요.'); return; }
     if (!res.rows || !res.rows.length) { alert('사람 이름을 찾지 못했어요. 이름이 한글로 적힌 근무표인지 확인해주세요.'); return; }
     _importParse = res;
+    _importPrevSheets = [];                 // 엑셀은 한 장짜리
     renderImportReview(prevYM(curYM, 1));   // 기본값: 지난달
   };
   reader.onerror = function () { alert('파일을 읽는 중 문제가 생겼어요. 다시 시도해주세요.'); };
   reader.readAsArrayBuffer(f);
 }
 /* ---- 사진/PDF AI 가져오기 (2단계) — 서버가 표를 읽고, 분석·확인은 엑셀과 같은 흐름 ---- */
-function aiImportStart() {
+function aiImportReady() {
   if (!(window.Cloud && Cloud.enabled() && Cloud.getUser())) {
     toast('로그인한 뒤에 쓸 수 있어요. 위에서 먼저 로그인해주세요');
-    return;
+    return false;
   }
+  if (aiBusy) return false;
+  return true;
+}
+/* 사진 — 카메라·앨범 선택창 */
+function aiImportStart() {
+  if (!aiImportReady()) return;
   document.getElementById('aiImportFile').click();
+}
+/* PDF — 파일 선택창 (드물게 쓰는 경로라 따로 둔다) */
+function aiImportPdfStart() {
+  if (!aiImportReady()) return;
+  document.getElementById('aiImportPdf').click();
 }
 /* 파일 → base64 (사진은 긴 변 2200px·JPEG로 축소해 용량·비용 절감) */
 function aiFileToB64(file) {
@@ -1403,7 +1416,7 @@ function aiImport(ev) {
   var fl = Array.prototype.slice.call(ev.target.files || []);
   ev.target.value = '';
   if (!fl.length) return;
-  if (fl.length > 3) { alert('사진·PDF는 한 번에 3개까지 올릴 수 있어요.'); return; }
+  if (fl.length > 3) { alert('한 번에 3개까지 올릴 수 있어요. (지금 ' + fl.length + '개를 고르셨어요)\n\n달이 여러 개면 최근 3개 달만 골라주세요.'); return; }
   if (aiBusy) return;                     // 두 번 눌러 겹치지 않게
   aiLoadingShow();
   Promise.all(fl.map(aiFileToB64)).then(function (files) {
@@ -1418,12 +1431,12 @@ function aiImport(ev) {
     alert('분석 중 문제가 생겼어요. 다시 시도해주세요.');
   });
 }
-/* 서버가 읽어온 표(원문 셀)를 엑셀 가져오기와 같은 형태로 변환 → 기존 확인 창 재사용 */
-function applyAiResult(d) {
-  var days = d.days | 0;
+/* 서버가 읽어온 표(원문 셀) 한 장을 엑셀 가져오기와 같은 형태로 변환 */
+function aiSheetToParse(sheet) {
+  var days = sheet.days | 0;
   if (days < 28 || days > 31) days = 31;
   var unknown = [];
-  var rows = (d.rows || []).map(function (r) {
+  var rows = (sheet.rows || []).map(function (r) {
     var cells = (r.cells || []).slice(0, days);
     while (cells.length < days) cells.push('');
     return {
@@ -1437,10 +1450,30 @@ function applyAiResult(d) {
       })
     };
   }).filter(function (r) { return /^[가-힣]{2,5}$/.test(r.name); });
-  if (!rows.length) { alert('사람 이름을 찾지 못했어요. 표 전체가 잘 보이게 다시 찍어주세요.'); return; }
-  _importParse = { days: days, rows: rows, unknownCodes: unknown };
-  var ym = /^\d{4}-\d{2}$/.test(d.ym || '') ? d.ym : prevYM(curYM, 1);
-  toast('다 읽었어요! 내용을 확인해주세요 ✓');
+  return { ym: /^\d{4}-\d{2}$/.test(sheet.ym || '') ? sheet.ym : '', days: days, rows: rows, unknownCodes: unknown };
+}
+/* 여러 장(달)을 받아 **가장 최근 달을 기준**으로 삼고, 이전 달들은 이력으로만 저장한다.
+   2026-07-20: 예전엔 서버가 여러 장을 무조건 한 표로 합쳐서, 5·6월을 같이 올리면
+   뒤섞여 한 달치만 쓴 것처럼 보였다. 이제 달별로 분리해 받는다.
+   사람·규칙은 최근 달 기준(전월은 근무 패턴을 이어받기 위한 참고). */
+function applyAiResult(d) {
+  /* 옛 응답(단일 표) 호환 */
+  var sheets = d.sheets && d.sheets.length ? d.sheets : [{ ym: d.ym, days: d.days, rows: d.rows }];
+  var parsed = sheets.map(aiSheetToParse).filter(function (p) { return p.rows.length; });
+  if (!parsed.length) { alert('사람 이름을 찾지 못했어요. 표 전체가 잘 보이게 다시 찍어주세요.'); return; }
+
+  /* 연-월을 아는 것끼리는 날짜순, 모르는 것은 받은 순서 유지 → 마지막이 가장 최근 달 */
+  var known = parsed.filter(function (p) { return p.ym; }).sort(function (a, b) { return a.ym < b.ym ? -1 : 1; });
+  var unknownYm = parsed.filter(function (p) { return !p.ym; });
+  var ordered = known.length === parsed.length ? known : unknownYm.concat(known);
+
+  var base = ordered[ordered.length - 1];          // 기준 = 가장 최근 달
+  _importParse = { days: base.days, rows: base.rows, unknownCodes: base.unknownCodes };
+  _importPrevSheets = ordered.slice(0, -1);        // 그 앞의 달들 = 이력용
+  var ym = base.ym || prevYM(curYM, 1);
+  toast(ordered.length > 1
+    ? ordered.length + '장을 읽었어요! 가장 최근 달을 기준으로 확인해주세요 ✓'
+    : '다 읽었어요! 내용을 확인해주세요 ✓');
   renderImportReview(ym);
 }
 function reReviewMonth() {
@@ -1503,6 +1536,11 @@ function renderImportReview(ym) {
   var warn = (res.unknownCodes && res.unknownCodes.length)
     ? '<div class="imp-warn">알아보지 못한 표시가 있어요: <b>' + res.unknownCodes.map(esc).join(', ') + '</b> — 이 칸은 빈칸으로 들어가요. 불러온 뒤 직접 고쳐주세요.</div>'
     : '';
+  /* 여러 달을 함께 올린 경우 — 무엇이 기준이고 무엇이 참고인지 분명히 알린다 */
+  var multi = _importPrevSheets.length
+    ? '<div class="imp-warn">📚 <b>' + (_importPrevSheets.length + 1) + '개 달</b>을 읽었어요. ' +
+      '<b>사람과 규칙은 아래 기준 월</b>로 정하고, 그 이전 달들은 <b>나이트·주말 횟수를 이어받기 위한 기록</b>으로만 저장돼요.</div>'
+    : '';
 
   var html =
     '<div class="imp-card">' +
@@ -1511,7 +1549,7 @@ function renderImportReview(ym) {
     '<div style="margin:10px 0 4px"><b>기준 월</b> &nbsp;' +
     '<select id="impYear" onchange="reReviewMonth()">' + yearOpts + '</select> ' +
     '<select id="impMonth" onchange="reReviewMonth()">' + monOpts + '</select></div>' +
-    warn +
+    multi + warn +
     '<h3 style="margin:16px 0 4px">인원 <span class="hint">(' + an.meta.count + '명 — 형태·성향을 확인하고, 뺄 사람은 제외에 체크)</span></h3>' +
     '<div class="imp-scroll"><table>' +
     '<tr><th>이름</th><th>직군</th><th>형태</th><th>성향</th><th>제외</th></tr>' +
@@ -1567,13 +1605,35 @@ function applyImport() {
   });
   db.months = db.months || {};
   db.months[ym] = { codes: codes, wish: {}, pins: {}, holidays: [] };
+
+  /* 함께 올린 이전 달들 — 이름이 같은 사람에게만 붙여 이력으로 저장한다.
+     (그만둔 사람·새로 온 사람은 자연히 빠진다) */
+  var byName = {};
+  staff.forEach(function (p) { byName[p.name] = p.id; });
+  var histSaved = 0;
+  _importPrevSheets.forEach(function (sheet, idx) {
+    /* 연-월을 모르면 기준 월에서 거꾸로 한 달씩 매긴다 (배열은 오래된 것 → 최근 순) */
+    var back = _importPrevSheets.length - idx;
+    var hym = sheet.ym || prevYM(ym, back);
+    var hdim = daysInYM(hym), hcodes = {}, matched = 0;
+    sheet.rows.forEach(function (row) {
+      var id = byName[row.name];
+      if (!id) return;
+      var arr = [];
+      for (var d = 0; d < hdim; d++) arr.push(row.codes[d] || '');
+      hcodes[id] = arr;
+      matched++;
+    });
+    if (matched) { db.months[hym] = { codes: hcodes, wish: {}, pins: {}, holidays: [] }; histSaved++; }
+  });
   save();
 
   closeImportReview();
   renderRules();
   showTab('home');
   var msg = '근무표를 불러왔어요 — ' + staff.length + '명 등록 ✓';
-  if (ym !== curYM) msg += ' (이력으로 저장됨 — 다음 달 만들 때 반영)';
+  if (histSaved) msg += ' · 이전 ' + histSaved + '개 달은 기록으로 저장됨';
+  else if (ym !== curYM) msg += ' (이력으로 저장됨 — 다음 달 만들 때 반영)';
   toast(msg);
 }
 

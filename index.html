@@ -74,11 +74,15 @@
         </button>
         <button class="onboard-card" onclick="aiImportStart()">
           <span class="ob-ico">📷</span>
-          <span class="ob-txt"><b>사진·PDF로 불러오기</b>
-          <span class="ob-sub">근무표를 찍어 올리면 자동으로 읽어드려요 (사진·PDF 1~3개)</span></span>
+          <span class="ob-txt"><b>사진으로 불러오기</b>
+          <span class="ob-sub">근무표를 찍거나 앨범에서 고르면 자동으로 읽어드려요 (최대 3장)</span></span>
         </button>
-        <input type="file" id="aiImportFile" accept="image/*,application/pdf" multiple style="display:none" onchange="aiImport(event)">
+        <!-- 사진 전용 — accept를 image/*로 두어야 안드로이드에서 카메라·앨범 선택창이 뜬다.
+             PDF까지 섞으면 파일 탐색기가 떠서 어르신이 헤맨다(2026-07-20 제보) -->
+        <input type="file" id="aiImportFile" accept="image/*" multiple style="display:none" onchange="aiImport(event)">
+        <input type="file" id="aiImportPdf" accept="application/pdf" multiple style="display:none" onchange="aiImport(event)">
       </div>
+      <p class="hint">PDF 파일이라면 → <a class="link" onclick="aiImportPdfStart()">PDF로 불러오기</a></p>
       <p class="hint">가져올 파일이 없다면 → <a class="link" onclick="showTab('ward')">직접 사람 넣기</a></p>
       <p class="hint">먼저 구경해보고 싶으면 → <a class="link" onclick="trySample()">예시 인원 12명으로 연습하기</a></p>
     </div>
