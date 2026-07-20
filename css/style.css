@@ -147,8 +147,9 @@ table.duty th.cntcol { color: var(--sub); font-weight: 600; font-size: 12.5px; }
 .lockbtn { border: none; background: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 6px 0 0; vertical-align: -1px; }
 tr.locked td.name, tr.locked td.cntcol { background: var(--brand-soft); }
 
-/* 통계 */
-.stat { margin-top: 24px; }
+/* 통계 — 표가 좁은 화면보다 넓으면 이 안에서만 옆으로 밀린다.
+   (이게 없으면 표가 페이지 전체를 늘려서 화면이 옆으로 밀리고 잘린다) */
+.stat { margin-top: 24px; overflow-x: auto; }
 table.stats { border-collapse: collapse; font-size: 17px; width: 100%; max-width: 780px; }
 table.stats th, table.stats td { border-bottom: 1px solid var(--line); padding: 10px 12px; text-align: center; }
 table.stats th { background: none; color: var(--sub); font-size: 15px; font-weight: 600; }
@@ -178,9 +179,10 @@ footer { text-align: center; color: var(--faint); padding: 26px; font-size: 14.5
 
 /* 선택판 */
 #picker { position: absolute; z-index: 50; background: #fff; border-radius: 16px; display: none;
-          box-shadow: 0 10px 30px rgba(50, 46, 60, .25); padding: 12px; border: 1px solid var(--line); }
+          box-shadow: 0 10px 30px rgba(50, 46, 60, .25); padding: 12px; border: 1px solid var(--line);
+          max-width: calc(100vw - 16px); }   /* 좁은 화면에서 선택판이 화면 밖으로 나가지 않게 */
 #picker .who { font-size: 15px; color: var(--sub); margin: 2px 4px 10px; }
-#picker .row { display: flex; gap: 7px; }
+#picker .row { display: flex; gap: 7px; flex-wrap: wrap; }
 #picker button { font-size: 18px; font-weight: 800; border: none; border-radius: 12px;
                  width: 60px; height: 56px; cursor: pointer; font-family: inherit; }
 #picker button:hover { filter: brightness(.93); }

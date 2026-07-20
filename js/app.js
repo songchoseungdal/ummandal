@@ -425,8 +425,8 @@ function tapCell(ev, pid, d) {
     '</div>';
   pk.style.display = 'block';
   var rect = ev.target.getBoundingClientRect();
-  var pkW = 410;
-  var x = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - pkW);
+  var pkW = pk.offsetWidth || 410;   // 실제 폭으로 계산 — 고정값이면 좁은 폰에서 화면 밖으로 나간다
+  var x = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - pkW - 8);
   pk.style.left = Math.max(8, x) + 'px';
   pk.style.top = (rect.bottom + window.scrollY + 6) + 'px';
   ev.stopPropagation();
@@ -1435,9 +1435,19 @@ if (window.Cloud && Cloud.enabled()) {
   Cloud.init();
 }
 
-/* 설치형 앱 세로 고정 보강 — manifest orientation은 기존 설치본에 소급되지 않으므로
-   앱 화면에서 직접 잠근다 (브라우저 탭에서는 실패해도 무해) */
-if (window.matchMedia && matchMedia('(display-mode: standalone)').matches &&
-    screen.orientation && screen.orientation.lock) {
-  screen.orientation.lock('portrait').catch(function () { });
+/* 설치형 앱 세로 고정 보강 — manifest orientation은 기존 설치본에 소급되지 않으므로 앱에서 직접 잠근다.
+   2026-07-20 재검토: 예전엔 ①standalone일 때만 ②시작할 때 딱 한 번만 시도해서,
+   그 순간 실패하면(브라우저가 아직 안 받아주는 시점 등) 영영 다시 걸리지 않았다.
+   이제 조건 없이 시도하고, 화면이 돌아갈 때마다 다시 건다. (브라우저 탭에서는 거부돼도 무해) */
+function lockPortrait() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(function () { });
+    }
+  } catch (e) { /* 미지원 기기 — 무시 */ }
 }
+lockPortrait();
+window.addEventListener('orientationchange', lockPortrait);
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') lockPortrait();
+});
