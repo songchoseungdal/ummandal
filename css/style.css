@@ -343,7 +343,50 @@ footer { text-align: center; color: var(--faint); padding: 26px; font-size: 14.5
 #importReview th { color: var(--sub); font-size: 14.5px; font-weight: 600; }
 #importReview select { font-size: 16px; padding: 6px 8px; border: 1.5px solid var(--line);
   border-radius: 10px; font-family: inherit; }
-#importReview .imp-scroll { max-height: 42vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+#importReview .imp-scroll { max-height: 42vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+#importReview .imp-scroll2 { overflow-x: auto; }
+
+/* 인원 카드 — 이름을 위, 직군·형태·성향을 아래 줄로 (표를 옆으로 늘리면 폰에서 잘린다) */
+.impperson { border-bottom: 1px solid var(--line); padding: 9px 8px; }
+.impperson:last-child { border-bottom: none; }
+.impperson.off { opacity: .45; }
+.impperson .ip-top { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.impperson .ip-name { font-size: 17.5px; }
+.impperson .ip-days { font-size: 13.5px; color: var(--sub); }
+.impperson .ip-exc { margin-left: auto; font-size: 14px; color: var(--sub);
+  display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.impperson .ip-exc input { width: 20px; height: 20px; }
+.impperson .ip-sel { display: flex; gap: 6px; margin-top: 6px; }
+.impperson .ip-sel select { flex: 1; min-width: 0; font-size: 15px; padding: 7px 6px;
+  border: 1.5px solid var(--line); border-radius: 10px; font-family: inherit; background: #fff; }
+
+/* 평균 휴무 안내 */
+.impavg { margin: 4px 0 10px; font-size: 16px; background: var(--brand-soft);
+  border-radius: 12px; padding: 9px 12px; }
+
+/* 하루 인원 — 최소~최대 입력 */
+/* #importReview th/td 규칙(id 선택자)이 더 강하므로 여기서도 id를 붙여 우선순위를 맞춘다 */
+/* 어떤 폭에서도 한 화면에 들어오도록 칸을 비율로 잡는다(고정 px는 폰에서 반드시 넘친다) */
+#importReview table.rgtable { width: 100%; table-layout: fixed; }
+#importReview table.rgtable th, #importReview table.rgtable td { padding: 6px 2px; }
+#importReview table.rgtable th { font-size: 13px; text-align: center; }
+#importReview table.rgtable th:first-child { width: 24%; }
+#importReview table.rgtable td.rgname { font-size: 13.5px; line-height: 1.25; text-align: left; }
+#importReview table.rgtable .rgcell { text-align: center; white-space: nowrap; }
+#importReview table.rgtable .rgcell input { width: 42%; max-width: 42px; font-size: 15px;
+  padding: 5px 1px; text-align: center; border: 1.5px solid var(--line); border-radius: 8px;
+  font-family: inherit; box-sizing: border-box; }
+#importReview table.rgtable .rgcell span { color: var(--faint); margin: 0; font-size: 12px; }
+
+/* 근무 패턴 */
+#importReview table.pttable { border-collapse: collapse; width: 100%; font-size: 15.5px; }
+#importReview table.pttable td { border-bottom: 1px solid var(--line); padding: 9px 4px; }
+#importReview table.pttable td:last-child { text-align: right; white-space: nowrap; }
+table.pttable { width: 100%; }
+table.pttable input { width: 58px; font-size: 15px; padding: 5px 6px; text-align: center;
+  border: 1.5px solid var(--line); border-radius: 8px; font-family: inherit; }
+table.pttable select { font-size: 15px; padding: 6px 8px; border: 1.5px solid var(--line);
+  border-radius: 8px; font-family: inherit; }
 #importReview .imp-warn { background: var(--moon-soft); color: #8a6d00; border-radius: 12px;
   padding: 10px 14px; margin: 10px 0; font-size: 15.5px; }
 #importReview .imp-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }

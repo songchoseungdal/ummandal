@@ -159,6 +159,8 @@
       if (work === 0) { type = 'three'; note = '근무 없음'; }
       else if (nCnt > 0 && famD + famE === 0) type = 'night';
       else if (famD > 0 && famE === 0 && nCnt === 0 && weekendWork === 0) type = 'day';
+      /* 나이트를 한 번도 안 섰고 데이·이브닝을 도는 사람 = 2교대 (2026-07-20 추가) */
+      else if (nCnt === 0 && famD > 0 && famE > 0) type = 'two';
       else type = 'three';
       var pref = '';
       if (famD >= famE * 2 && famE <= 3) pref = 'D';
@@ -232,8 +234,13 @@
     /* --- meta --- */
     var byGroup = { RN: 0, NA: 0 };
     staff.forEach(function (s) { byGroup[s.group]++; });
+    /* 한 달 평균 휴무일수 — 근무한 사람 기준. 절대 기준이 아니라 "대충 이 정도 쉬는구나" 참고값 */
+    var worked = staff.filter(function (s) { return s.workDays > 0; });
+    var offAvg = worked.length
+      ? Math.round((worked.reduce(function (t, s) { return t + (days - s.workDays); }, 0) / worked.length) * 10) / 10
+      : 0;
     var meta = {
-      count: staff.length, byGroup: byGroup,
+      count: staff.length, byGroup: byGroup, days: days, offAvg: offAvg,
       nightNames: staff.filter(function (s) { return s.type === 'night'; }).map(function (s) { return s.name; }),
       excluded: staff.filter(function (s) { return s.workDays === 0; }).map(function (s) { return s.name; })
     };

@@ -4,7 +4,10 @@ var db = Store.load();
 var now = new Date();
 var curYM = db.currentMonth || (now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0'));
 var undoStack = [];
-var typeNames = { three: '3교대', night: '나이트 전담', day: '평일 상근' };
+/* 근무 형태. two = 2교대(데이·이브닝만, 나이트 없음) — 어머니 병동이 이 방식(2026-07-20).
+   MD·E2 같은 건 데이/이브닝의 변형이라 별도 형태가 아니다. */
+var typeNames = { three: '3교대', two: '2교대(데이·이브닝)', night: '나이트 전담', day: '평일 상근' };
+var TYPE_ORDER = ['three', 'two', 'night', 'day'];
 var groupNames = { RN: '간호사', NA: '조무사' };
 var prefNames = { '': '자동', D: '데이 위주', E: '이브닝 위주' };
 /* 셀 표시: 근무 5종 + 휴무 4종 */
@@ -680,7 +683,7 @@ function renderStaff() {
         return '<option value="' + g + '"' + (staffGroup(p) === g ? ' selected' : '') + '>' + groupNames[g] + '</option>';
       }).join('') + '</select>' +
       '<select onchange="chgType(' + i + ', this.value)" title="근무 형태">' +
-      ['three', 'night', 'day'].map(function (t) {
+      TYPE_ORDER.map(function (t) {
         return '<option value="' + t + '"' + (p.type === t ? ' selected' : '') + '>' + typeNames[t] + '</option>';
       }).join('') + '</select>' +
       '<select onchange="chgPref(' + i + ', this.value)" title="선호 근무">' +
@@ -1312,6 +1315,7 @@ function importData(ev) {
 /* ---- 기존 근무표(엑셀) 불러오기 ---- */
 var _importParse = null;   // 기준(최근) 달 parse 결과 — 확인 화면 → 적용에서 재사용
 var _importPrevSheets = [];  // 함께 올린 이전 달들 — 이력으로만 저장(사람·규칙은 기준 달로)
+var _importRuleKeys = [];    // 확인 화면의 하루 인원 입력칸 목록(적용 때 읽어들인다)
 function importXlsx(ev) {
   var f = ev.target.files[0];
   ev.target.value = '';
@@ -1527,35 +1531,64 @@ function renderImportReview(ym) {
     var grpSel = ['RN', 'NA'].map(function (g) {
       return '<option value="' + g + '"' + (s.group === g ? ' selected' : '') + '>' + groupNames[g] + '</option>';
     }).join('');
-    var typeSel = ['three', 'night', 'day'].map(function (t) {
+    var typeSel = TYPE_ORDER.map(function (t) {
       return '<option value="' + t + '"' + (s.type === t ? ' selected' : '') + '>' + typeNames[t] + '</option>';
     }).join('');
     var prefSel = ['', 'D', 'E'].map(function (v) {
       return '<option value="' + v + '"' + (s.pref === v ? ' selected' : '') + '>' + prefNames[v] + '</option>';
     }).join('');
     var exc = s.workDays === 0;   // 근무 없는 사람은 기본 제외
-    return '<tr>' +
-      '<td><b>' + esc(s.name) + '</b>' + (s.note ? ' <span class="hint">(' + s.note + ')</span>' : '') + '</td>' +
-      '<td><select id="impGroup_' + i + '">' + grpSel + '</select></td>' +
-      '<td><select id="impType_' + i + '">' + typeSel + '</select></td>' +
-      '<td><select id="impPref_' + i + '">' + prefSel + '</select></td>' +
-      '<td style="text-align:center"><input type="checkbox" id="impExc_' + i + '"' + (exc ? ' checked' : '') + ' style="width:22px;height:22px"></td>' +
-      '</tr>';
+    /* 이름을 위, 직군·형태·성향을 아래 줄로 — 표를 옆으로 늘리면 폰에서 잘린다(2026-07-20) */
+    return '<div class="impperson' + (exc ? ' off' : '') + '" id="impCard_' + i + '">' +
+      '<div class="ip-top">' +
+      '<b class="ip-name">' + esc(s.name) + '</b>' +
+      (s.note ? '<span class="hint"> (' + s.note + ')</span>' : '') +
+      '<span class="ip-days">근무 ' + s.workDays + '일 · 쉼 ' + (an.meta.days - s.workDays) + '일</span>' +
+      '<label class="ip-exc"><input type="checkbox" id="impExc_' + i + '"' + (exc ? ' checked' : '') +
+      ' onchange="document.getElementById(\'impCard_' + i + '\').classList.toggle(\'off\', this.checked)"> 빼기</label>' +
+      '</div>' +
+      '<div class="ip-sel">' +
+      '<select id="impGroup_' + i + '" title="직군">' + grpSel + '</select>' +
+      '<select id="impType_' + i + '" title="근무 형태">' + typeSel + '</select>' +
+      '<select id="impPref_' + i + '" title="선호">' + prefSel + '</select>' +
+      '</div></div>';
   }).join('');
 
-  /* 규칙 요약 표 */
+  /* 하루 인원 규칙 — 읽기만 하던 것을 고칠 수 있게 바꿨다(2026-07-20) */
   var ruleRows = '';
+  var ruleKeys = [];
   Object.keys(an.rulesByGroup).forEach(function (g) {
     var gr = an.rulesByGroup[g];
     [['wd', '평일'], ['hd', '주말·공휴일']].forEach(function (kd) {
       var set = gr[kd[0]];
-      function rg(x) { return x[0] === x[1] ? x[0] : (x[0] + '~' + x[1]); }
-      ruleRows += '<tr><td>' + groupNames[g] + ' <span class="hint">' + kd[1] + '</span></td>' +
-        '<td style="text-align:center">' + rg(set.D) + '</td>' +
-        '<td style="text-align:center">' + rg(set.E) + '</td>' +
-        '<td style="text-align:center">' + rg(set.N) + '</td></tr>';
+      function box(fam) {
+        var id = 'impR_' + g + '_' + kd[0] + '_' + fam;
+        ruleKeys.push({ id: id, g: g, kind: kd[0], fam: fam });
+        return '<td class="rgcell">' +
+          '<input type="number" min="0" max="20" id="' + id + '_lo" value="' + set[fam][0] + '">' +
+          '<span>~</span>' +
+          '<input type="number" min="0" max="20" id="' + id + '_hi" value="' + set[fam][1] + '"></td>';
+      }
+      ruleRows += '<tr><td class="rgname">' + groupNames[g] + '<br><span class="hint">' + kd[1] + '</span></td>' +
+        box('D') + box('E') + box('N') + '</tr>';
     });
   });
+  _importRuleKeys = ruleKeys;
+
+  /* 패턴 규칙 — 지금까지 화면에 아예 안 보이던 값들. 보여주고 고칠 수 있게 한다 */
+  var gl = an.global;
+  function num(id, val, min, max) {
+    return '<input type="number" id="' + id + '" value="' + val + '" min="' + min + '" max="' + max + '">';
+  }
+  var patternRows =
+    '<tr><td>한 번에 이어서 일하는 최대 일수</td><td>' + num('impMaxWork', gl.maxWork, 1, 7) + ' 일</td></tr>' +
+    '<tr><td>나이트를 이어서 서는 최대 일수</td><td>' + num('impMaxN', gl.maxN, 1, 5) + ' 일</td></tr>' +
+    '<tr><td>나이트 끝나고 최소로 쉬는 날</td><td>' + num('impOffAfterN', gl.offAfterN, 0, 3) + ' 일</td></tr>' +
+    '<tr><td>이브닝 다음날 데이 <span class="hint">(역행)</span></td><td>' +
+    '<select id="impBackward">' +
+    '<option value="0"' + (gl.backward === 0 ? ' selected' : '') + '>해도 됨</option>' +
+    '<option value="1"' + (gl.backward === 1 ? ' selected' : '') + '>안 됨</option>' +
+    '</select></td></tr>';
 
   var warn = (res.unknownCodes && res.unknownCodes.length)
     ? '<div class="imp-warn">알아보지 못한 표시가 있어요: <b>' + res.unknownCodes.map(esc).join(', ') + '</b> — 이 칸은 빈칸으로 들어가요. 불러온 뒤 직접 고쳐주세요.</div>'
@@ -1574,12 +1607,14 @@ function renderImportReview(ym) {
     '<select id="impYear" onchange="reReviewMonth()">' + yearOpts + '</select> ' +
     '<select id="impMonth" onchange="reReviewMonth()">' + monOpts + '</select></div>' +
     multi + warn +
-    '<h3 style="margin:16px 0 4px">인원 <span class="hint">(' + an.meta.count + '명 — 형태·성향을 확인하고, 뺄 사람은 제외에 체크)</span></h3>' +
-    '<div class="imp-scroll"><table>' +
-    '<tr><th>이름</th><th>직군</th><th>형태</th><th>성향</th><th>제외</th></tr>' +
-    staffRows + '</table></div>' +
-    '<h3 style="margin:16px 0 4px">근무 규칙 <span class="hint">(하루 인원 — 적용 후 「우리 병동 &gt; 근무 규칙」에서 언제든 수정)</span></h3>' +
-    '<table><tr><th>직군</th><th>데이(D)</th><th>이브닝(E)</th><th>나이트(N)</th></tr>' + ruleRows + '</table>' +
+    '<h3 style="margin:16px 0 4px">인원 <span class="hint">(' + an.meta.count + '명 — 형태·성향을 고치고, 뺄 사람은 「빼기」 체크)</span></h3>' +
+    '<p class="impavg">이 달은 한 사람이 평균 <b>' + an.meta.offAvg + '일</b> 쉬었어요 ' +
+    '<span class="hint">(' + an.meta.days + '일 기준 · 참고값이라 딱 맞출 필요는 없어요)</span></p>' +
+    '<div class="imp-scroll">' + staffRows + '</div>' +
+    '<h3 style="margin:16px 0 4px">하루 인원 <span class="hint">(최소~최대 — 고쳐도 돼요)</span></h3>' +
+    '<div class="imp-scroll2"><table class="rgtable"><tr><th>직군</th><th>데이(D)</th><th>이브닝(E)</th><th>나이트(N)</th></tr>' + ruleRows + '</table></div>' +
+    '<h3 style="margin:16px 0 4px">근무 패턴 <span class="hint">(읽어낸 규칙 — 고쳐도 돼요)</span></h3>' +
+    '<table class="pttable">' + patternRows + '</table>' +
     '<div class="imp-actions">' +
     '<button class="btn big" onclick="applyImport()">이대로 적용</button>' +
     '<button class="btn gray" onclick="closeImportReview()">취소</button>' +
@@ -1611,12 +1646,31 @@ function applyImport() {
   if (!staff.length) { alert('등록할 사람이 없어요. 제외 체크를 하나 이상 풀어주세요.'); return; }
   if (staffList().length && !confirm('기존 인원 ' + staffList().length + '명을 지우고 새로 등록합니다. 계속할까요?')) return;
 
-  /* 규칙: 감지된 그룹만 덮고 나머지는 유지, 전역 4개 값 갱신 */
+  /* 규칙: 감지된 그룹만 덮고 나머지는 유지.
+     2026-07-20 — 화면에서 고친 값이 있으면 그 값을 쓴다(읽기 전용이던 것을 수정 가능하게 바꿨다). */
   var an = Importer.analyze(res.rows, res.days, ym);
   var r = rules2();
   Object.keys(an.rulesByGroup).forEach(function (g) { r.groups[g] = an.rulesByGroup[g]; });
-  r.maxWork = an.global.maxWork; r.maxN = an.global.maxN;
-  r.offAfterN = an.global.offAfterN; r.backward = an.global.backward;
+  function readNum(id, fallback, lo, hi) {
+    var el = document.getElementById(id);
+    if (!el) return fallback;
+    var v = parseInt(el.value, 10);
+    if (isNaN(v)) return fallback;
+    return Math.max(lo, Math.min(hi, v));
+  }
+  _importRuleKeys.forEach(function (k) {
+    var set = r.groups[k.g] && r.groups[k.g][k.kind];
+    if (!set) return;
+    var lo = readNum(k.id + '_lo', set[k.fam][0], 0, 20);
+    var hi = readNum(k.id + '_hi', set[k.fam][1], 0, 20);
+    if (hi < lo) hi = lo;                     // 뒤집혀 들어와도 무너지지 않게
+    set[k.fam] = [lo, hi];
+  });
+  r.maxWork = readNum('impMaxWork', an.global.maxWork, 1, 7);
+  r.maxN = readNum('impMaxN', an.global.maxN, 1, 5);
+  r.offAfterN = readNum('impOffAfterN', an.global.offAfterN, 0, 3);
+  var bw = document.getElementById('impBackward');
+  r.backward = bw ? (parseInt(bw.value, 10) ? 1 : 0) : an.global.backward;
 
   /* 인원 교체 + 선택 월 코드 저장 */
   db.staff = staff;

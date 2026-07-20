@@ -116,6 +116,8 @@
     var f = fam(code);
     if (type === 'night') return f === 'N';
     if (type === 'day') return f === 'D';
+    /* 2교대 — 데이·이브닝만 돈다(나이트 없음). MD·E2 같은 변형 근무는 각 계열에 속하므로 허용된다 */
+    if (type === 'two') return f === 'D' || f === 'E';
     return true;
   }
 
@@ -141,6 +143,7 @@
       if (p.type === 'night') return f === 'N';
       if (f === 'N' && cfg.restrictNToNight) return false;
       if (p.type === 'day') return f === 'D' && !cfg.isRestDay(d);
+      if (p.type === 'two') return f !== 'N';   // 2교대는 나이트를 서지 않는다
       return true;
     }
 
