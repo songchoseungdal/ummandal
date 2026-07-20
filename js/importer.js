@@ -159,9 +159,16 @@
       if (work === 0) { type = 'three'; note = '근무 없음'; }
       else if (nCnt > 0 && famD + famE === 0) type = 'night';
       else if (famD > 0 && famE === 0 && nCnt === 0 && weekendWork === 0) type = 'day';
-      /* 나이트를 한 번도 안 섰고 데이·이브닝을 도는 사람 = 2교대 (2026-07-20 추가) */
-      else if (nCnt === 0 && famD > 0 && famE > 0) type = 'two';
-      else type = 'three';
+      /* 나이트를 한 번도 안 섰고 데이·이브닝을 충분히 도는 사람 = 2교대 (2026-07-20 추가).
+         근무일수 하한이 없으면 중도입사·장기휴가로 며칠만 찍힌 3교대 간호사가 2교대로 잘못 굳어
+         다음 달 나이트 후보에서 영영 빠진다(적대 검토 지적) — 그래서 하한을 둔다. */
+      else if (nCnt === 0 && famD > 0 && famE > 0 &&
+               work >= Math.max(8, Math.round(days * 0.3)) && Math.min(famD, famE) >= 3) type = 'two';
+      else {
+        type = 'three';
+        if (nCnt === 0 && work > 0 && work < Math.max(8, Math.round(days * 0.3)))
+          note = '근무 적음 — 형태 확인';
+      }
       var pref = '';
       if (famD >= famE * 2 && famE <= 3) pref = 'D';
       else if (famE >= famD * 2 && famD <= 3) pref = 'E';
@@ -234,13 +241,17 @@
     /* --- meta --- */
     var byGroup = { RN: 0, NA: 0 };
     staff.forEach(function (s) { byGroup[s.group]++; });
-    /* 한 달 평균 휴무일수 — 근무한 사람 기준. 절대 기준이 아니라 "대충 이 정도 쉬는구나" 참고값 */
+    /* 한 달 평균 휴무일수 — 근무한 사람 기준. 절대 기준이 아니라 "대충 이 정도 쉬는구나" 참고값.
+       기준 일수는 **선택한 달의 실제 일수**를 쓴다. days(읽어낸 날짜 칸 수)는 사진 인식에서
+       31로 고정되는 경우가 있어 2월·30일 달의 휴무가 부풀려진다(적대 검토 지적, 2026-07-20). */
+    var dim = new Date(y, mo, 0).getDate();
+    var baseDays = (dim >= 28 && dim <= 31) ? dim : days;
     var worked = staff.filter(function (s) { return s.workDays > 0; });
     var offAvg = worked.length
-      ? Math.round((worked.reduce(function (t, s) { return t + (days - s.workDays); }, 0) / worked.length) * 10) / 10
+      ? Math.round((worked.reduce(function (t, s) { return t + Math.max(0, baseDays - s.workDays); }, 0) / worked.length) * 10) / 10
       : 0;
     var meta = {
-      count: staff.length, byGroup: byGroup, days: days, offAvg: offAvg,
+      count: staff.length, byGroup: byGroup, days: baseDays, readDays: days, offAvg: offAvg,
       nightNames: staff.filter(function (s) { return s.type === 'night'; }).map(function (s) { return s.name; }),
       excluded: staff.filter(function (s) { return s.workDays === 0; }).map(function (s) { return s.name; })
     };

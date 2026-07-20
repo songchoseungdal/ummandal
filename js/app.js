@@ -1504,10 +1504,38 @@ function applyAiResult(d) {
     : '다 읽었어요! 내용을 확인해주세요 ✓');
   renderImportReview(ym);
 }
+/* 기준 월을 바꾸면 화면을 다시 그린다.
+   ⚠️ 2026-07-20 적대 검토 지적 — 예전에는 이때 사용자가 고쳐둔 직군·형태·성향·빼기가
+   경고도 없이 전부 초기화됐다. 이제 사람 편집은 그대로 이어받는다.
+   (하루 인원·패턴은 달이 바뀌면 주말 계산이 달라져 다시 뽑는 게 맞으므로 새로 계산한다) */
 function reReviewMonth() {
   var y = document.getElementById('impYear').value;
   var mo = document.getElementById('impMonth').value;
+  var keep = [];
+  for (var i = 0; ; i++) {
+    var g = document.getElementById('impGroup_' + i);
+    if (!g) break;
+    keep.push({
+      group: g.value,
+      type: (document.getElementById('impType_' + i) || {}).value,
+      pref: (document.getElementById('impPref_' + i) || {}).value,
+      exc: !!(document.getElementById('impExc_' + i) || {}).checked
+    });
+  }
   renderImportReview(y + '-' + String(mo).padStart(2, '0'));
+  keep.forEach(function (k, i) {
+    var g = document.getElementById('impGroup_' + i);
+    if (!g) return;
+    g.value = k.group;
+    var t = document.getElementById('impType_' + i); if (t && k.type) t.value = k.type;
+    var p = document.getElementById('impPref_' + i); if (p && k.pref !== undefined) p.value = k.pref;
+    var e = document.getElementById('impExc_' + i);
+    if (e) {
+      e.checked = k.exc;
+      var card = document.getElementById('impCard_' + i);
+      if (card) card.classList.toggle('off', k.exc);
+    }
+  });
 }
 function closeImportReview() {
   var h = document.getElementById('importReview');
@@ -1647,8 +1675,19 @@ function applyImport() {
   if (staffList().length && !confirm('기존 인원 ' + staffList().length + '명을 지우고 새로 등록합니다. 계속할까요?')) return;
 
   /* 규칙: 감지된 그룹만 덮고 나머지는 유지.
-     2026-07-20 — 화면에서 고친 값이 있으면 그 값을 쓴다(읽기 전용이던 것을 수정 가능하게 바꿨다). */
-  var an = Importer.analyze(res.rows, res.days, ym);
+     ⚠️ 2026-07-20 적대 검토 지적 — 예전에는 원본(res.rows)으로 규칙을 산출해서,
+     화면에서 직군을 조무사로 고치거나 사람을 「빼기」해도 규칙에는 전혀 반영되지 않았다.
+     (전원 RN으로 읽힌 표에서 NA를 지정하면 NA 규칙이 기본값으로 남아 생성이 사실상 불가능해짐)
+     이제 화면에서 정한 직군·제외를 반영한 행으로 다시 분석한다. */
+  var effRows = res.rows.map(function (row, i) {
+    var gsel = document.getElementById('impGroup_' + i);
+    return { name: row.name, group: gsel ? gsel.value : row.group, codes: row.codes };
+  }).filter(function (row, i) {
+    var ex = document.getElementById('impExc_' + i);
+    return !(ex && ex.checked);
+  });
+  var an = Importer.analyze(effRows.length ? effRows : res.rows, res.days, ym);
+  /* 화면에서 고친 값이 있으면 그 값을 쓴다(읽기 전용이던 것을 수정 가능하게 바꿨다) */
   var r = rules2();
   Object.keys(an.rulesByGroup).forEach(function (g) { r.groups[g] = an.rulesByGroup[g]; });
   function readNum(id, fallback, lo, hi) {

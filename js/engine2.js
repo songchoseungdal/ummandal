@@ -147,6 +147,21 @@
       return true;
     }
 
+    /* 0) 그룹 단위 선검사 — 나이트를 설 수 있는 사람이 아예 없는데 나이트를 요구하는 구성.
+       일자별로 돌리면 같은 말이 31번 쌓여 진짜 원인이 묻힌다(2026-07-20 적대 검토 지적). */
+    var needN0 = Math.max(cfg.required.weekday.N[0], cfg.required.holiday.N[0]);
+    if (needN0 > 0) {
+      var anyN = staff.some(function (p) { return typeAllows(p.type, 'N'); });
+      if (!anyN) {
+        issues.push({
+          day: null, pid: null, rule: '사전검사',
+          msg: '나이트를 설 수 있는 사람이 없어요 — 등록된 인원이 모두 2교대·평일 상근이에요. ' +
+               '「우리 병동 > 근무 규칙」에서 나이트 인원을 0명으로 바꾸거나, 3교대·나이트 전담 인원을 넣어주세요.'
+        });
+        return issues;   // 이 상태에서는 일자별 검사가 의미 없다
+      }
+    }
+
     // 1) 일자별 가용 — 풀 분리(나이트/주간): 휴일의 상근, 전담제의 비전담을 가용으로 세면 안 된다
     for (var d = 1; d <= cfg.days; d++) {
       var need = cfg.isRestDay(d) ? cfg.required.holiday : cfg.required.weekday;
@@ -154,7 +169,9 @@
       var availAll = 0, availN = 0, availDE = 0;
       staff.forEach(function (p) {
         var c = cfg.pre[p.id] && cfg.pre[p.id][d];
-        if (c !== undefined && fam(c)) { famPre[fam(c)]++; return; }        // 선입력 근무 — 슬롯에 계상
+        /* 선입력 근무 — 슬롯에 계상. 단 그 사람 유형이 설 수 없는 근무면 정원으로 세지 않는다
+           (세면 "나이트 가능 인원 부족" 경고가 가려져 수정 왕복이 늘어난다 — 2026-07-20) */
+        if (c !== undefined && fam(c)) { if (typeAllows(p.type, c)) famPre[fam(c)]++; return; }
         if ((c !== undefined && isRest(c)) || (cfg.wishSet[p.id] || {})[d]) return; // 선입력 휴무·희망오프 — 강제 휴식
         availAll++;
         if (capableFam(p, 'N', d)) availN++;
