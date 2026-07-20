@@ -29,14 +29,14 @@
     <div class="brandtx">
       <h1>엄만달</h1>
       <span class="slogan">엄마의 한 달을 1분 만에</span>
-      <button class="installbtn" id="installBtn" style="display:none" onclick="installEntry()">📱 앱으로 설치하기</button>
     </div>
   </div>
-  <div class="monthnav">
+  <div class="monthnav" id="monthNav">
     <button onclick="moveMonth(-1)" title="지난달">◀</button>
     <span class="cur" id="curMonth"></span>
     <button onclick="moveMonth(1)" title="다음달">▶</button>
   </div>
+  <button class="installbtn" id="installBtn" style="display:none" onclick="installEntry()">🔗 바로가기 만들기</button>
   <button class="acctbtn" id="acctBtn" style="display:none" onclick="cloudLogout()" title="로그아웃">🚪 로그아웃</button>
 </header>
 
@@ -56,7 +56,6 @@
       <h2>엄만달에 오신 것을 환영해요</h2>
       <p class="empty-msg">로그인하면 폰·컴퓨터 어디서든<br><b>같은 근무표</b>를 쓸 수 있어요.</p>
       <div id="homeLoginBody"></div>
-      <p class="hint" id="homeKeepLocal" style="display:none">로그인하지 않고 → <a class="link" onclick="keepLocal()">이 기기에 있는 근무표 계속 보기</a></p>
       <p class="hint" style="margin-top:10px"><span class="appver"></span> · <a class="link" onclick="forceUpdate()">최신으로 새로고침</a></p>
       <!-- "로그인 없이 시작하기"는 숨김(2026-07-19 사용자 결정: 로그인 기본 구조). 복원 시 skipLogin() 링크를 되살릴 것 -->
     </div>
@@ -160,7 +159,7 @@
   <!-- ===== 보관함 ===== -->
   <div id="tab-archive" style="display:none">
     <div class="card" id="installCard" style="display:none">
-      <h2>📱 휴대폰에 앱으로 설치하기</h2>
+      <h2>🔗 홈 화면에 바로가기 만들기</h2>
       <div id="installBody"></div>
     </div>
     <div class="card" id="cloudCard" style="display:none">
@@ -184,7 +183,7 @@
   </div>
 </main>
 
-<footer>🌙 엄만달 — 인터넷 연결 없이, 이 기기 안에서만 동작합니다 <span class="appver"></span></footer>
+<footer><span class="appver"></span></footer>
 <div id="browserGate"></div>
 <div id="installModal"></div>
 <div id="importReview"></div>

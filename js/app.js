@@ -145,6 +145,7 @@ function showTab(t) {
     document.getElementById('tab-' + x).style.display = x === t ? '' : 'none';
     document.getElementById('tabBtn-' + x).className = x === t ? 'on' : '';
   });
+  if (t !== 'home') setLoginView(false);   // 다른 탭에서는 로그인 전용 배치를 풀어둔다
   if (t === 'home') renderHome();
   if (t === 'ward') { renderStaff(); renderRules(); }
   if (t === 'archive') { renderArchive(); renderCloudCard(); renderInstallCard(); }
@@ -184,6 +185,14 @@ function renderAcctBtn() {
   var u = window.Cloud && Cloud.enabled() && Cloud.getUser();
   b.style.display = u ? '' : 'none';
 }
+/* 로그인 화면 전용 배치 — 월 달력·하단 탭·푸터를 감추고 여백을 줄여 한 화면에 담는다.
+   (로그인 전에는 달력도 탭도 쓸 데가 없다) */
+function setLoginView(on) {
+  document.body.className = on ? 'loginview' : '';
+  document.querySelector('header').className = on ? 'authonly' : '';
+  var mn = document.getElementById('monthNav');
+  if (mn) mn.style.display = on ? 'none' : '';
+}
 function renderHome() {
   renderMonthLabel();
   renderAcctBtn();
@@ -193,16 +202,14 @@ function renderHome() {
   var tools = document.getElementById('homeTools');
   var gridCard = document.getElementById('gridCard');
   var loginCard = document.getElementById('homeLoginCard');
-  /* 로그인 안 된 상태(처음 연 사람 + 로그아웃 직후)에는 인원 유무와 상관없이 로그인 카드를 먼저 보여준다.
-     인원이 있는데 로그아웃한 경우엔 「이 기기 근무표 계속 보기」로 빠져나갈 수 있게 한다(데이터는 지우지 않음). */
+  /* 로그인 안 된 상태(처음 연 사람 + 로그아웃 직후)에는 인원 유무와 상관없이 로그인 카드만 보여준다. */
   var showLogin = window.Cloud && Cloud.enabled() && !Cloud.getUser() && !loginSkippedNow;
+  setLoginView(showLogin);
   if (showLogin) {
     loginCard.style.display = '';
     empty.style.display = 'none';
     prep.style.display = 'none';
     gridCard.style.display = 'none';
-    var keep = document.getElementById('homeKeepLocal');
-    if (keep) keep.style.display = staff.length ? '' : 'none';
     authTarget = 'homeLoginBody'; cloudView = 'main'; renderAuth();
     return;
   }
@@ -716,9 +723,10 @@ var GOOGLE_SVG = '<svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://
   '<path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
 var KAKAO_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
   '<path fill="#191919" d="M12 3.5C6.75 3.5 2.5 6.86 2.5 11c0 2.68 1.78 5.03 4.46 6.36-.2.73-.72 2.64-.82 3.05-.13.5.18.5.39.36.16-.11 2.6-1.77 3.66-2.49.6.09 1.22.13 1.85.13 5.25 0 9.5-3.36 9.5-7.5S17.25 3.5 12 3.5z"/></svg>';
-/* PWA 설치 — 크롬이 설치 가능하다고 알려줄 때만 로그인 카드에 「앱으로 설치」 버튼 표시.
-   설치하면 앱 아이콘으로 실행되어 인앱 브라우저 문제 자체가 사라진다.
-   (카톡 내장 브라우저·iOS에서는 이 이벤트가 오지 않아 버튼이 안 뜬다) */
+/* 홈 화면 바로가기(PWA) — 크롬이 「설치 가능」을 알려주면 원터치로 만든다.
+   만들어두면 아이콘으로 바로 실행되어 인앱 브라우저 문제 자체가 사라진다.
+   사용자 표기는 「바로가기 만들기」로 통일(2026-07-20) — "앱 설치"는 스토어 앱으로 오해된다.
+   (카톡 내장 브라우저·iOS에서는 이 이벤트가 오지 않아 손 안내로 대체) */
 var deferredInstall = null;
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
@@ -732,7 +740,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
 window.addEventListener('appinstalled', function () {
   deferredInstall = null;
   renderInstallCard(); renderInstallBtn();
-  toast('설치했어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
+  toast('만들었어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
 });
 function installApp() {
   if (!deferredInstall) return;
@@ -740,7 +748,7 @@ function installApp() {
   deferredInstall = null;
   p.prompt();
   p.userChoice.then(function (r) {
-    if (r && r.outcome === 'accepted') toast('설치했어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
+    if (r && r.outcome === 'accepted') toast('만들었어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
     renderInstallCard(); renderInstallBtn();
   });
 }
@@ -761,9 +769,7 @@ function browserKind() {
   if (/Chrome|CriOS/i.test(ua)) return 'chrome';
   return 'other';
 }
-/* 「앱으로 설치」 카드 — 크롬이 원터치 설치를 지원하면 버튼, 아니면 기기별 손 설치 안내.
-   2026-07-20: 예전엔 로그인 카드에만 버튼이 있어서, 로그인한 상태로 들어오면
-   설치 버튼을 볼 방법이 아예 없었다. 이제 보관함에 항상 자리를 둔다. */
+/* 「바로가기 만들기」 안내 — 크롬이 원터치를 지원하면 버튼, 아니면 기기별 손 안내. */
 function installStepsHtml() {
   var kind = browserKind();
   var box = function (title, steps, extra) {
@@ -771,9 +777,9 @@ function installStepsHtml() {
       steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>' + (extra || '');
   };
   if (kind === 'inapp') {
-    return '<p>지금은 <b>카카오톡·네이버 같은 앱 안의 브라우저</b>로 보고 계세요. 여기서는 설치할 수 없어요.</p>' +
-      '<button class="btn big" onclick="openInBrowser()">🌐 크롬(브라우저)으로 열기</button>' +
-      '<p class="hint" style="margin-top:6px">크롬으로 열린 다음, 이 화면에서 다시 설치해 주세요.</p>';
+    return '<p>지금은 <b>카카오톡·네이버 같은 앱 안의 브라우저</b>로 보고 계세요. 여기서는 만들 수 없어요.</p>' +
+      '<button class="btn big" onclick="openInChrome()">🌐 크롬으로 열기</button>' +
+      '<p class="hint" style="margin-top:6px">크롬으로 열린 다음, 다시 눌러주세요.</p>';
   }
   if (kind === 'ios-safari') {
     return box('아이폰 · 사파리', [
@@ -784,7 +790,7 @@ function installStepsHtml() {
   }
   if (kind === 'ios-other') {
     return box('아이폰', [
-      '아이폰은 <b>사파리</b>에서만 설치할 수 있어요.',
+      '아이폰은 <b>사파리</b>에서만 만들 수 있어요.',
       '주소를 복사해 <b>사파리</b>로 연 뒤, 아래 <b>공유 단추</b> → <b>「홈 화면에 추가」</b>를 누르세요.'
     ], '<button class="btn gray" style="margin-top:8px" onclick="copyAppLink()">🔗 주소 복사하기</button>');
   }
@@ -796,16 +802,16 @@ function installStepsHtml() {
     ]);
   }
   if (kind === 'firefox' || kind === 'whale' || kind === 'edge' || kind === 'other') {
-    return box('설치하기', [
+    return box('만드는 방법', [
       '브라우저 <b>메뉴(⋮ 또는 ≡)</b>를 누르세요.',
-      '<b>「홈 화면에 추가」</b> 또는 <b>「앱 설치」</b>를 누르세요.'
-    ], '<p class="hint" style="margin-top:6px">메뉴에 없다면 <b>크롬</b>으로 열면 한 번에 설치할 수 있어요.</p>');
+      '<b>「홈 화면에 추가」</b>를 누르세요.'
+    ], '<p class="hint" style="margin-top:6px">메뉴에 없다면 <b>크롬</b>으로 열면 한 번에 만들 수 있어요.</p>');
   }
-  /* 크롬인데 설치 안내 이벤트가 아직 안 온 경우 (이미 설치돼 있거나, 잠시 뒤 나타남) */
+  /* 크롬인데 안내 이벤트가 아직 안 온 경우 (이미 만들어져 있거나, 잠시 뒤 나타남) */
   return box('크롬', [
     '오른쪽 위 <b>메뉴(⋮)</b>를 누르세요.',
-    '<b>「앱 설치」</b> 또는 <b>「홈 화면에 추가」</b>를 누르세요.'
-  ], '<p class="hint" style="margin-top:6px">이미 설치돼 있으면 이 항목이 안 보일 수 있어요. 그때는 홈 화면의 🌙 아이콘으로 열어주세요.</p>');
+    '<b>「홈 화면에 추가」</b>를 누르세요.'
+  ], '<p class="hint" style="margin-top:6px">이미 만들어져 있으면 이 항목이 안 보일 수 있어요. 그때는 홈 화면의 🌙 아이콘으로 열어주세요.</p>');
 }
 /* ---- 비지원 브라우저 안내막 ----
    2026-07-20 사용자 결정: 크롬 외 브라우저에서 로그인·기능을 쓰면 정체 모를 오류가 난다
@@ -864,29 +870,28 @@ function renderBrowserGate() {
     '<h2>' + (ios ? '사파리에서 열어주세요' : '크롬에서 열어주세요') + '</h2>' +
     '<p>지금 브라우저에서는 <b>로그인이 되지 않아</b><br>근무표가 어긋날 수 있어요.<br>' +
     (ios ? '아이폰은 <b>사파리</b>에서 써주세요.' : '<b>크롬</b>에서 열면 문제없이 쓸 수 있어요.') + '</p>' +
+    /* 2026-07-20 사용자 결정: 여기서는 「크롬으로 열기」 하나만 — 선택지를 늘리면 헷갈린다 */
     (ios
       ? '<button class="btn big xl" onclick="copyAppLink()">🔗 주소 복사하기</button>'
       : '<button class="btn big xl" onclick="openInChrome()">🌐 크롬으로 열기</button>') +
-    '<button class="btn gray" onclick="openInstallModal()">📱 앱으로 설치하는 방법</button>' +
-    '<p class="gate-esc">' + (ios ? '사파리' : '크롬') + '에서 앱으로 설치해두시면<br>다음부터 이 안내가 나오지 않아요.</p></div>';
+    '</div>';
   g.className = 'on';
 }
 
-/* 머리글 설치 버튼 — 앱으로 실행 중이 아니면 항상 보인다(브라우저 종류 무관).
-   2026-07-20: 로그인 카드·보관함에만 두었더니 못 찾는다는 제보 → 로고 아래 상설. */
+/* 머리글 「바로가기 만들기」 버튼 — 바로가기로 실행 중이 아니면 항상 보인다(엄만달 제목과 같은 줄, 오른쪽). */
 function renderInstallBtn() {
   var b = document.getElementById('installBtn');
   if (!b) return;
   b.style.display = isStandalone() ? 'none' : '';
 }
-/* 버튼을 누르면 — 원터치 설치가 되는 브라우저면 바로 설치창, 아니면 기기별 안내를 띄운다 */
+/* 버튼을 누르면 — 원터치가 되는 브라우저면 바로 만들기, 아니면 기기별 안내를 띄운다 */
 function installEntry() {
   if (deferredInstall) { installApp(); return; }
   openInstallModal();
 }
 function openInstallModal() {
   var m = document.getElementById('installModal');
-  m.innerHTML = '<div class="ins-card"><h2>📱 휴대폰에 앱으로 설치하기</h2>' +
+  m.innerHTML = '<div class="ins-card"><h2>🔗 홈 화면에 바로가기 만들기</h2>' +
     '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면도 세로로 고정됩니다.</p>' +
     installStepsHtml() +
     '<div class="imp-actions"><button class="btn gray" onclick="closeInstallModal()">닫기</button></div></div>';
@@ -903,13 +908,13 @@ function renderInstallCard() {
   if (!card || !body) return;
   card.style.display = '';
   if (isStandalone()) {
-    body.innerHTML = '<p>✅ 이미 <b>앱으로 설치</b>되어 실행 중이에요. 그대로 쓰시면 됩니다.</p>';
+    body.innerHTML = '<p>✅ 이미 <b>바로가기로 실행</b> 중이에요. 그대로 쓰시면 됩니다.</p>';
     return;
   }
   body.innerHTML =
     '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면도 세로로 고정됩니다.</p>' +
     (deferredInstall
-      ? '<button class="btn big xl" onclick="installApp()">📱 지금 설치하기</button>'
+      ? '<button class="btn big xl" onclick="installApp()">🔗 지금 만들기</button>'
       : installStepsHtml());
 }
 /* 아이폰 등에서 주소만 복사 — 다른 브라우저로 옮겨가야 할 때 */
@@ -1006,15 +1011,8 @@ function renderAuth() {
       '<span class="hint" id="cloudMsg"></span>' +
       '</div>' +
       '<p class="hint">비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a></p>' +
-      (isStandalone() ? '' :
-        '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">' +
-        (deferredInstall
-          ? '<button class="btn big" onclick="installApp()">📱 휴대폰에 앱으로 설치하기</button>' +
-            '<p class="hint" style="margin-top:6px">설치하면 홈 화면의 🌙 아이콘으로 바로 열 수 있어요.</p>'
-          /* 원터치 설치가 안 되는 브라우저에서도 방법은 알려준다 */
-          : '<p class="hint">📱 홈 화면에 아이콘으로 두고 쓰시려면 → ' +
-            '<a class="link" onclick="showTab(\'archive\')">앱으로 설치하는 방법</a></p>') +
-        '</div>');
+      /* 바로가기 안내는 머리글 버튼 한 곳으로 모았다(2026-07-20) — 로그인 화면을 한 화면에 담기 위해 */
+      '';
   }
 }
 function renderCloudCard() {
@@ -1124,8 +1122,6 @@ function cloudLogout() {
     showTab('home');   // 어느 탭에 있었든 로그인 화면(홈)으로 돌려보낸다
   });
 }
-/* 로그아웃했지만 이 기기에 있는 근무표를 계속 보고 싶을 때 (데이터는 그대로, 이번 실행에서만) */
-function keepLocal() { loginSkippedNow = true; renderHome(); }
 function cloudSyncOnLogin() {
   Cloud.pull().then(function (res) {
     if (res.error) { toast('서버에서 불러오지 못했어요'); renderCloudCard(); return; }

@@ -147,12 +147,27 @@ table.duty th.cntcol { color: var(--sub); font-weight: 600; font-size: 12.5px; }
 .lockbtn { border: none; background: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 6px 0 0; vertical-align: -1px; }
 tr.locked td.name, tr.locked td.cntcol { background: var(--brand-soft); }
 
-/* 머리글 「앱으로 설치」 버튼 — 로고 바로 아래, 항상 눈에 띄는 자리 */
-.installbtn { margin-top: 4px; align-self: flex-start; font-family: inherit; cursor: pointer;
-  font-size: 14.5px; font-weight: 700; color: #fff; background: var(--brand);
-  border: none; border-radius: 999px; padding: 6px 14px; white-space: nowrap;
+/* 머리글 「바로가기 만들기」 버튼 — 엄만달 제목과 같은 줄, 오른쪽 */
+.installbtn { font-family: inherit; cursor: pointer;
+  font-size: 15px; font-weight: 700; color: #fff; background: var(--brand);
+  border: none; border-radius: 999px; padding: 9px 16px; white-space: nowrap;
   box-shadow: 0 2px 8px rgba(106, 75, 196, .28); }
 .installbtn:hover { background: var(--brand-dk); }
+/* 항상 오른쪽 끝에 붙인다 — 좁은 화면에서 줄이 바뀌어도 왼쪽으로 흘러내리지 않게 */
+.installbtn { margin-left: auto; }
+
+/* ===== 로그인 화면 — 한 화면에 들어오게 여백을 줄인다 ===== */
+body.loginview footer { display: none; }
+body.loginview nav { display: none; }
+body.loginview main { padding-top: 10px; }
+body.loginview .empty-card { margin: 0 auto; padding: 22px 18px 20px; }
+body.loginview .bigmoon { font-size: 40px; margin-bottom: 4px; }
+body.loginview .empty-card h2 { font-size: 21px; margin: 0 0 6px; }
+body.loginview .empty-msg { margin: 0 0 14px; }
+@media (max-width: 768px) {
+  body.loginview { padding-bottom: 8px; }   /* 하단 탭 바를 숨겼으니 자리도 비운다 */
+  body.loginview header { padding: 8px 14px; }
+}
 
 /* 비지원 브라우저 안내막 — 앱 전체를 덮는다 */
 #browserGate { position: fixed; inset: 0; z-index: 300; display: none;
