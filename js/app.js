@@ -884,10 +884,21 @@ function renderInstallBtn() {
   if (!b) return;
   b.style.display = isStandalone() ? 'none' : '';
 }
-/* 버튼을 누르면 — 원터치가 되는 브라우저면 바로 만들기, 아니면 기기별 안내를 띄운다 */
+/* 버튼을 누르면 — 되도록 안내 없이 바로 만든다.
+   크롬이 「설치 가능」 신호(beforeinstallprompt)를 늦게 주는 경우가 있어, 잠깐 기다렸다가
+   그래도 없으면 그때만 손 안내를 띄운다. (기다림은 사용자 클릭 유효시간 안이라 바로 실행된다) */
 function installEntry() {
   if (deferredInstall) { installApp(); return; }
-  openInstallModal();
+  var btn = document.getElementById('installBtn');
+  var label = btn && btn.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = '준비 중…'; }
+  var waited = 0;
+  var timer = setInterval(function () {
+    waited += 200;
+    if (deferredInstall) { clearInterval(timer); restore(); installApp(); return; }
+    if (waited >= 1200) { clearInterval(timer); restore(); openInstallModal(); }
+  }, 200);
+  function restore() { if (btn) { btn.disabled = false; btn.textContent = label; } }
 }
 function openInstallModal() {
   var m = document.getElementById('installModal');

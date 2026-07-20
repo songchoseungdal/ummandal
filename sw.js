@@ -1,5 +1,5 @@
 /* 엄만달 서비스 워커 — 전 파일 캐시로 오프라인 동작 */
-var CACHE = 'ummandal-v5-0-0';
+var CACHE = 'ummandal-v5-0-2';
 var ASSETS = [
   './',
   './index.html',
@@ -15,7 +15,10 @@ var ASSETS = [
   './js/app.js',
   './manifest.json',
   './icons/icon.svg',
-  './icons/icon-maskable.svg'
+  './icons/icon-maskable.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png'
 ];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
