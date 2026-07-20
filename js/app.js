@@ -148,6 +148,7 @@ function showTab(t) {
   if (t === 'home') renderHome();
   if (t === 'ward') { renderStaff(); renderRules(); }
   if (t === 'archive') { renderArchive(); renderCloudCard(); renderInstallCard(); }
+  renderInstallBtn();
   window.scrollTo(0, 0);
 }
 function moveMonth(dir) {
@@ -721,7 +722,7 @@ var deferredInstall = null;
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
   deferredInstall = e;
-  renderInstallCard();
+  renderInstallCard(); renderInstallBtn();
   /* 홈 로그인 카드가 떠 있고 아직 입력을 시작하지 않았을 때만 다시 그린다 (입력 중 내용 보호) */
   var em = document.getElementById('cloudEmail');
   var home = document.getElementById('tab-home');
@@ -729,7 +730,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
 });
 window.addEventListener('appinstalled', function () {
   deferredInstall = null;
-  renderInstallCard();
+  renderInstallCard(); renderInstallBtn();
   toast('설치했어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
 });
 function installApp() {
@@ -739,7 +740,7 @@ function installApp() {
   p.prompt();
   p.userChoice.then(function (r) {
     if (r && r.outcome === 'accepted') toast('설치했어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
-    renderInstallCard();
+    renderInstallCard(); renderInstallBtn();
   });
 }
 /* 이미 앱으로 실행 중인가 (설치본으로 열었으면 설치 안내가 필요 없다) */
@@ -804,6 +805,31 @@ function installStepsHtml() {
     '오른쪽 위 <b>메뉴(⋮)</b>를 누르세요.',
     '<b>「앱 설치」</b> 또는 <b>「홈 화면에 추가」</b>를 누르세요.'
   ], '<p class="hint" style="margin-top:6px">이미 설치돼 있으면 이 항목이 안 보일 수 있어요. 그때는 홈 화면의 🌙 아이콘으로 열어주세요.</p>');
+}
+/* 머리글 설치 버튼 — 앱으로 실행 중이 아니면 항상 보인다(브라우저 종류 무관).
+   2026-07-20: 로그인 카드·보관함에만 두었더니 못 찾는다는 제보 → 로고 아래 상설. */
+function renderInstallBtn() {
+  var b = document.getElementById('installBtn');
+  if (!b) return;
+  b.style.display = isStandalone() ? 'none' : '';
+}
+/* 버튼을 누르면 — 원터치 설치가 되는 브라우저면 바로 설치창, 아니면 기기별 안내를 띄운다 */
+function installEntry() {
+  if (deferredInstall) { installApp(); return; }
+  openInstallModal();
+}
+function openInstallModal() {
+  var m = document.getElementById('installModal');
+  m.innerHTML = '<div class="ins-card"><h2>📱 휴대폰에 앱으로 설치하기</h2>' +
+    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면도 세로로 고정됩니다.</p>' +
+    installStepsHtml() +
+    '<div class="imp-actions"><button class="btn gray" onclick="closeInstallModal()">닫기</button></div></div>';
+  m.className = 'on';
+  m.onclick = function (ev) { if (ev.target === m) closeInstallModal(); };
+}
+function closeInstallModal() {
+  var m = document.getElementById('installModal');
+  m.className = ''; m.innerHTML = '';
 }
 function renderInstallCard() {
   var card = document.getElementById('installCard');
