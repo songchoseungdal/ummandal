@@ -455,17 +455,29 @@
       Object.keys(row).forEach(function (ds) { if (isRest(row[ds]) && row[ds] !== 'O') preRestNonO++; });
       return Math.max(0, days - cfg.targetOff - preRestNonO);
     }
-    var capN = 0, capDE = 0;
-    staff.forEach(function (p) {
-      if (p.type === 'night') capN += capOf(p);
-      else capDE += capOf(p);       // three는 N 제한 해제 시 N도 서지만, 보수적으로 DE 풀에만 계상
-    });
-    var budgetPool = {
-      N: Math.max(0, capN - minDemandN),
-      DE: Math.max(0, capDE - minDemandDE)
-    };
-    var usedPool = { N: 0, DE: 0 };
-    function poolOf(code) { return code === 'N' ? 'N' : 'DE'; }
+    /* 소프트 충원 예산 풀.
+       - 전담제(restrictNToNight=true): N 슬롯은 전담자만 서므로 N/DE 풀을 나눠 각각의 여력을 따로 관리한다.
+         전담의 남는 capacity가 D/E 예산으로 새면 주간이 과충원되어 O 하한(≈targetOff)이 무너지기 때문.
+       - 전담 없음: 누구나 D/E/N을 설 수 있으므로 풀을 나누면 안 된다. 나누면 capN=0이라 N 예산이 0에 갇혀,
+         규칙에서 N을 [2,3]으로 잡아도 최소치(2)를 절대 못 넘고 남는 여력이 전부 D/E로 흘러 주간만
+         과충원된다(2026-07-20 적대 검토 확정). 하나의 풀로 합쳐 총 여력을 공유한다. */
+    var budgetPool, usedPool, poolOf;
+    if (cfg.restrictNToNight) {
+      var capN = 0, capDE = 0;
+      staff.forEach(function (p) {
+        if (p.type === 'night') capN += capOf(p);
+        else capDE += capOf(p);
+      });
+      budgetPool = { N: Math.max(0, capN - minDemandN), DE: Math.max(0, capDE - minDemandDE) };
+      usedPool = { N: 0, DE: 0 };
+      poolOf = function (code) { return code === 'N' ? 'N' : 'DE'; };
+    } else {
+      var capAll = 0;
+      staff.forEach(function (p) { capAll += capOf(p); });
+      budgetPool = { all: Math.max(0, capAll - (minDemandN + minDemandDE)) };
+      usedPool = { all: 0 };
+      poolOf = function () { return 'all'; };
+    }
 
     function preAt(pid, d) {
       var row = cfg.pre[pid];
