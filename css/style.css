@@ -154,6 +154,19 @@ tr.locked td.name, tr.locked td.cntcol { background: var(--brand-soft); }
   box-shadow: 0 2px 8px rgba(106, 75, 196, .28); }
 .installbtn:hover { background: var(--brand-dk); }
 
+/* 비지원 브라우저 안내막 — 앱 전체를 덮는다 */
+#browserGate { position: fixed; inset: 0; z-index: 300; display: none;
+  background: var(--bg); padding: 24px 20px; overflow-y: auto; }
+#browserGate.on { display: block; }
+#browserGate .gate-in { max-width: 480px; margin: 6vh auto 0; background: var(--card);
+  border-radius: 20px; padding: 28px 24px; border: 1px solid var(--line);
+  box-shadow: 0 2px 12px rgba(50, 46, 60, .06); text-align: center; }
+#browserGate .gate-moon { font-size: 54px; line-height: 1; margin-bottom: 10px; }
+#browserGate h2 { font-size: 23px; margin: 0 0 10px; }
+#browserGate p { color: var(--sub); font-size: 17px; margin: 0 0 18px; }
+#browserGate .btn { display: block; width: 100%; margin-bottom: 10px; }
+#browserGate .gate-esc { font-size: 14.5px; color: var(--faint); margin-top: 14px; }
+
 /* 설치 안내 모달 */
 #installModal { position: fixed; inset: 0; z-index: 210; display: none;
   background: rgba(40, 36, 52, .5); padding: 20px; overflow-y: auto; }
