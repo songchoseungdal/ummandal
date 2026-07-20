@@ -813,13 +813,20 @@ function installStepsHtml() {
    실행되지 않으면 Cloud가 조용히 꺼져 로그인 관문 자체가 사라진다).
    그래서 크롬이 아니면 앱을 아예 가리고 「크롬으로 열기」·「설치」 두 가지만 안내한다.
    ※ 아이폰은 예외 — 사파리에서만 홈 화면 설치가 되므로 사파리를 정상 취급한다. */
+/* 로그인 기능이 살아 있는가 — 설정은 있는데 supabase 스크립트가 실행되지 않은 브라우저에서는
+   Cloud가 조용히 꺼지고 로그인 관문이 통째로 사라진다(= 로그인 없이 기능을 쓰게 되는 경로).
+   그런 브라우저는 지원 목록에 들어 있더라도 막는다. */
+function cloudBroken() {
+  return !!(window.CLOUD_CONFIG && CLOUD_CONFIG.url && CLOUD_CONFIG.key) &&
+         !(window.Cloud && Cloud.enabled());
+}
 function browserOk() {
+  if (cloudBroken()) return false;          // 로그인이 불가능한 브라우저 — 설치본이어도 막는다
   if (isStandalone()) return true;          // 이미 앱으로 실행 중이면 통과
   var k = browserKind();
   if (k === 'ios-safari') return true;      // 아이폰의 유일한 설치 경로
   return k === 'chrome';
 }
-var gateEscaped = false;   // 이번 실행에서 「그냥 여기서 볼게요」를 눌렀는가
 function openInChrome() {
   var ua = navigator.userAgent || '';
   var url = location.origin + location.pathname;
@@ -835,22 +842,22 @@ function openInChrome() {
 function renderBrowserGate() {
   var g = document.getElementById('browserGate');
   if (!g) return;
-  if (browserOk() || gateEscaped) { g.className = ''; g.innerHTML = ''; return; }
-  var ios = browserKind() === 'ios-other';
+  if (browserOk()) { g.className = ''; g.innerHTML = ''; return; }
+  /* 2026-07-20 사용자 결정: 탈출구(「그냥 여기서 볼게요」) 제거 — 그리로 들어가면
+     로그인 없이 기능을 쓰게 되어 데이터가 어긋난다. 크롬·사파리 외에는 완전 차단. */
+  var ios = browserKind() === 'ios-other' || (cloudBroken() && /iPhone|iPad|iPod/i.test(navigator.userAgent || ''));
   g.innerHTML =
     '<div class="gate-in"><div class="gate-moon">🌙</div>' +
     '<h2>' + (ios ? '사파리에서 열어주세요' : '크롬에서 열어주세요') + '</h2>' +
-    '<p>지금 브라우저에서는 로그인이 제대로 되지 않아<br>근무표가 어긋날 수 있어요.<br>' +
+    '<p>지금 브라우저에서는 <b>로그인이 되지 않아</b><br>근무표가 어긋날 수 있어요.<br>' +
     (ios ? '아이폰은 <b>사파리</b>에서 써주세요.' : '<b>크롬</b>에서 열면 문제없이 쓸 수 있어요.') + '</p>' +
     (ios
       ? '<button class="btn big xl" onclick="copyAppLink()">🔗 주소 복사하기</button>'
       : '<button class="btn big xl" onclick="openInChrome()">🌐 크롬으로 열기</button>') +
     '<button class="btn gray" onclick="openInstallModal()">📱 앱으로 설치하는 방법</button>' +
-    '<p class="gate-esc">설치해서 쓰시면 이 안내가 다시 나오지 않아요.<br>' +
-    '<a class="link" onclick="gateEscape()">그냥 여기서 볼게요</a></p></div>';
+    '<p class="gate-esc">' + (ios ? '사파리' : '크롬') + '에서 앱으로 설치해두시면<br>다음부터 이 안내가 나오지 않아요.</p></div>';
   g.className = 'on';
 }
-function gateEscape() { gateEscaped = true; renderBrowserGate(); }
 
 /* 머리글 설치 버튼 — 앱으로 실행 중이 아니면 항상 보인다(브라우저 종류 무관).
    2026-07-20: 로그인 카드·보관함에만 두었더니 못 찾는다는 제보 → 로고 아래 상설. */
