@@ -1338,19 +1338,83 @@ function aiFileToB64(file) {
     img.src = url;
   });
 }
+/* ---- 분석 중 화면 ----
+   30초쯤 걸리는데 토스트가 사라지면 되는지 안 되는지 알 수 없다는 제보(2026-07-20).
+   진행 중임을 계속 보여주고, 그동안 뒤로가기·새로고침·다른 조작으로 취소되지 않게 막는다.
+   (중간에 끊기면 서버 횟수만 소모되고 결과는 못 받는다) */
+var aiBusy = false, aiTick = null, aiT0 = 0;
+var AI_STEPS = [
+  [0, '사진을 준비하는 중…'],
+  [4, '근무표를 서버로 보내는 중…'],
+  [10, 'AI가 표를 한 칸씩 읽는 중…'],
+  [26, '거의 다 됐어요. 조금만 더…'],
+  [50, '표가 크면 1분 넘게 걸리기도 해요. 그대로 기다려주세요…']
+];
+function aiStepText(sec) {
+  var t = AI_STEPS[0][1];
+  for (var i = 0; i < AI_STEPS.length; i++) if (sec >= AI_STEPS[i][0]) t = AI_STEPS[i][1];
+  return t;
+}
+function aiBlockBack() {
+  if (!aiBusy) return;
+  history.pushState({ ai: 1 }, '', location.href);
+  toast('분석 중이에요. 조금만 기다려주세요');
+}
+function aiBlockUnload(e) {
+  if (!aiBusy) return;
+  e.preventDefault();
+  e.returnValue = '';
+  return '';
+}
+function aiLoadingShow() {
+  var el = document.getElementById('aiLoading');
+  if (!el) return;
+  aiBusy = true;
+  aiT0 = Date.now();
+  el.innerHTML =
+    '<div class="ai-card"><div class="ai-spin"></div>' +
+    '<h2>근무표를 읽는 중이에요</h2>' +
+    '<p class="ai-step" id="aiStep">' + aiStepText(0) + '</p>' +
+    '<p class="ai-sec" id="aiSec">0초 지났어요</p>' +
+    '<p class="ai-warn">⚠️ 다 될 때까지 <b>앱을 닫거나 뒤로 가지 마세요</b>.<br>중간에 멈추면 처음부터 다시 해야 해요.</p></div>';
+  el.className = 'on';
+  aiTick = setInterval(function () {
+    var sec = Math.floor((Date.now() - aiT0) / 1000);
+    var s = document.getElementById('aiStep'), c = document.getElementById('aiSec');
+    if (s) s.textContent = aiStepText(sec);
+    if (c) c.textContent = sec + '초 지났어요';
+  }, 1000);
+  /* 뒤로가기 차단 — 한 칸 쌓아두고, 뒤로 누르면 도로 채워 넣는다 */
+  history.pushState({ ai: 1 }, '', location.href);
+  window.addEventListener('popstate', aiBlockBack);
+  window.addEventListener('beforeunload', aiBlockUnload);
+}
+function aiLoadingHide() {
+  aiBusy = false;
+  if (aiTick) { clearInterval(aiTick); aiTick = null; }
+  window.removeEventListener('popstate', aiBlockBack);
+  window.removeEventListener('beforeunload', aiBlockUnload);
+  var el = document.getElementById('aiLoading');
+  if (el) { el.className = ''; el.innerHTML = ''; }
+  /* 막으려고 쌓아둔 기록 한 칸을 조용히 정리 */
+  if (history.state && history.state.ai) history.back();
+}
 function aiImport(ev) {
   var fl = Array.prototype.slice.call(ev.target.files || []);
   ev.target.value = '';
   if (!fl.length) return;
   if (fl.length > 3) { alert('사진·PDF는 한 번에 3개까지 올릴 수 있어요.'); return; }
-  toast('근무표를 읽는 중… 30초쯤 걸려요 ⏳');
+  if (aiBusy) return;                     // 두 번 눌러 겹치지 않게
+  aiLoadingShow();
   Promise.all(fl.map(aiFileToB64)).then(function (files) {
     return Cloud.aiAnalyze(files);
   }).then(function (res) {
+    aiLoadingHide();
     if (!res || !res.status) { alert('분석 요청에 실패했어요. 인터넷 연결을 확인해주세요.'); return; }
     if (res.status !== 200) { alert((res.data && res.data.error) || '분석에 실패했어요. 다시 시도해주세요.'); return; }
     applyAiResult(res.data);
   }).catch(function () {
+    aiLoadingHide();
     alert('분석 중 문제가 생겼어요. 다시 시도해주세요.');
   });
 }

@@ -170,6 +170,21 @@ body.loginview .empty-msg { margin: 0 0 14px; }
   body.loginview header { padding: 8px 14px; }
 }
 
+/* AI 분석 중 — 화면 전체를 덮어 조작을 막는다(중간에 취소되면 횟수만 날아간다) */
+#aiLoading { position: fixed; inset: 0; z-index: 400; display: none;
+  background: rgba(40, 36, 52, .62); padding: 20px; }
+#aiLoading.on { display: flex; align-items: center; justify-content: center; }
+#aiLoading .ai-card { background: var(--card); border-radius: 20px; padding: 30px 26px;
+  max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 40px rgba(50, 46, 60, .35); }
+#aiLoading .ai-spin { width: 58px; height: 58px; margin: 0 auto 16px; border-radius: 50%;
+  border: 6px solid var(--brand-soft); border-top-color: var(--brand); animation: aispin 1s linear infinite; }
+@keyframes aispin { to { transform: rotate(360deg); } }
+#aiLoading h2 { margin: 0 0 6px; font-size: 21px; }
+#aiLoading .ai-step { font-size: 17px; color: var(--sub); margin: 0 0 12px; min-height: 26px; }
+#aiLoading .ai-sec { font-size: 15px; color: var(--faint); }
+#aiLoading .ai-warn { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line);
+  font-size: 15px; color: #9a6700; background: none; }
+
 /* 비지원 브라우저 안내막 — 앱 전체를 덮는다 */
 #browserGate { position: fixed; inset: 0; z-index: 300; display: none;
   background: var(--bg); padding: 24px 20px; overflow-y: auto; }
