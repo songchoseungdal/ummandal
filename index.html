@@ -98,6 +98,7 @@
         <button class="btn gray" onclick="undo()">↩ 되돌리기</button>
         <button class="btn share" onclick="exportImage()">📤 이미지로 저장</button>
         <button class="btn gray" onclick="printSchedule()">🖨 인쇄</button>
+        <button class="btn gray" onclick="resetMonth()">🧹 초기화</button>
         <span class="hint" id="genInfo"></span>
       </div>
       <div id="genProgress"><div class="lbl"><span id="genProgLbl"></span><span>화면은 멈추지 않아요</span></div><div class="track"><div class="bar" id="genProgBar"></div></div></div>
@@ -162,8 +163,9 @@
       <h2>🔗 홈 화면에 바로가기 만들기</h2>
       <div id="installBody"></div>
     </div>
+    <!-- 평소엔 숨김. 비밀번호 재설정(메일 링크로 돌아온 경우)에만 이 자리에서 진행한다.
+         「여러 기기에서 함께 쓰기」 안내는 2026-07-20 사용자 결정으로 삭제. -->
     <div class="card" id="cloudCard" style="display:none">
-      <h2>여러 기기에서 함께 쓰기 <span class="hint">— 선택사항이에요</span></h2>
       <div id="cloudBody"></div>
     </div>
     <div class="card">

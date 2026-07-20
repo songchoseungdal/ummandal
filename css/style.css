@@ -100,6 +100,7 @@ h2 { font-size: 21px; margin: 4px 0 14px; }
 #banner.ok { display: block; background: var(--ok-soft); color: var(--ok); border: 1px solid #c9ecd4; }
 #banner.bad { display: block; background: var(--danger-soft); color: #c22525; border: 1px solid #f6cfcf; }
 .viol-item { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.violmore { display: inline-block; margin-top: 6px; font-weight: 700; }
 
 /* 범례 */
 .legend { display: flex; gap: 8px; flex-wrap: wrap; font-size: 15px; margin: 6px 0 10px; }

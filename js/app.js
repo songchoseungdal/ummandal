@@ -339,11 +339,35 @@ function toggleLock(ev, pid) {
   if (m.locks[pid]) delete m.locks[pid]; else m.locks[pid] = true;
   save(); renderGrid();
 }
+/* 위반 칸으로 데려가기.
+   2026-07-20 수정: scrollIntoView만으로는 이름·개수 열이 고정(sticky)으로 왼쪽을 덮고 있어
+   칸이 그 아래로 숨거나, 가로로 멀리 밀려 있으면 어디인지 못 찾는 문제가 있었다.
+   고정 열 폭을 빼고 남는 영역의 한가운데로 직접 밀어준 뒤, 눈에 띄게 오래 깜빡인다. */
 function jumpTo(pid, day) {
   var el = document.getElementById('c_' + pid + '_' + day);
   if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-  el.animate([{ boxShadow: 'inset 0 0 0 3px #e03131' }, { boxShadow: 'inset 0 0 0 3px rgba(224,49,49,0)' }], { duration: 1300, iterations: 2 });
+  var wrap = document.querySelector('.gridwrap');
+  if (wrap) {
+    var nameCell = wrap.querySelector('td.name');
+    var cntCell = wrap.querySelector('td.cntcol');
+    var stick = (nameCell ? nameCell.offsetWidth : 0) + (cntCell ? cntCell.offsetWidth : 0);
+    var wr = wrap.getBoundingClientRect(), er = el.getBoundingClientRect();
+    var viewCenter = wr.left + stick + (wr.width - stick) / 2;
+    var delta = (er.left + er.width / 2) - viewCenter;
+    /* 부드러운 스크롤(scrollTo behavior:'smooth')은 브라우저에 따라 조용히 무시된다 —
+       실측으로 확인(2026-07-20). 확실하게 즉시 이동시키고, 대신 강조를 크게 준다. */
+    wrap.scrollLeft = Math.max(0, wrap.scrollLeft + delta);
+  }
+  /* 세로는 페이지를 움직인다 — 칸이 화면 한가운데 오도록 */
+  var r = el.getBoundingClientRect();
+  var top = window.pageYOffset + r.top - window.innerHeight / 2 + r.height / 2;
+  window.scrollTo(0, Math.max(0, top));
+  /* 도착한 자리에서 크게 깜빡여 어디인지 확실히 알린다 */
+  el.animate([
+    { boxShadow: 'inset 0 0 0 4px #e03131', transform: 'scale(1)' },
+    { boxShadow: 'inset 0 0 0 4px #e03131', transform: 'scale(1.18)' },
+    { boxShadow: 'inset 0 0 0 4px rgba(224,49,49,0)', transform: 'scale(1)' }
+  ], { duration: 900, iterations: 3 });
 }
 function buildSchedule(gStaff) {
   var m = month(curYM);
@@ -372,6 +396,8 @@ function currentViolMap() {
   });
   return map;
 }
+var violExpanded = false;   // 위반 목록을 모두 펼쳤는가
+function toggleViols() { violExpanded = !violExpanded; renderBanner(); }
 function renderBanner() {
   var b = document.getElementById('banner');
   if (!hasAny()) { b.className = ''; b.style.display = 'none'; return; }
@@ -382,11 +408,20 @@ function renderBanner() {
     b.innerHTML = '✅ 규칙 위반이 없습니다. 이대로 쓰셔도 좋아요!';
   } else {
     b.className = 'bad';
-    var list = v.slice(0, 4).map(function (x) {
+    /* 기본은 4건만. 「모두 보기」를 누르면 전부 펼친다 — 예전엔 "…외 N건"이 어떤 항목인지
+       알 수도, 눌러서 갈 수도 없었다(2026-07-20). */
+    var shown = violExpanded ? v : v.slice(0, 4);
+    var list = shown.map(function (x) {
       if (x.pid) return '<span class="viol-item" onclick="jumpTo(\'' + x.pid + '\',' + x.day + ')">· ' + x.msg + ' →</span>';
       return '<span>· ' + x.msg + '</span>';
     }).join('<br>');
-    b.innerHTML = '⚠️ 확인이 필요한 곳이 <b>' + v.length + '건</b> 있어요.<br>' + list + (v.length > 4 ? '<br>…외 ' + (v.length - 4) + '건' : '');
+    var more = '';
+    if (v.length > 4) {
+      more = violExpanded
+        ? '<br><a class="link violmore" onclick="toggleViols()">↑ 접기</a>'
+        : '<br><a class="link violmore" onclick="toggleViols()">…외 ' + (v.length - 4) + '건 — 모두 보기</a>';
+    }
+    b.innerHTML = '⚠️ 확인이 필요한 곳이 <b>' + v.length + '건</b> 있어요.<br>' + list + more;
   }
 }
 function renderStats() {
@@ -473,6 +508,23 @@ function setCell(pid, d, code) {
     }
   }
   save(); renderHome();
+}
+
+/* ---- 이번 달 초기화 ---- */
+/* 위반이 얽혀 손으로는 못 푸는 상태를 한 번에 정리한다. 사람·규칙·지난 달 기록은 건드리지 않는다. */
+function resetMonth() {
+  hidePicker();
+  if (!hasAny() && !Object.keys(month(curYM).pins || {}).length) {
+    alert('이번 달은 이미 비어 있어요.');
+    return;
+  }
+  if (!confirm('이번 달 근무표를 모두 지울까요?\n\n지워지는 것 — 이번 달 근무, 📌 직접 고정한 칸, ★ 희망\n그대로 두는 것 — 사람, 규칙, 공휴일, 지난 달 기록\n\n되돌리기(↩)로 되살릴 수 있어요.')) return;
+  pushUndo();
+  var m = month(curYM);
+  m.codes = {}; m.pins = {}; m.wish = {};
+  violExpanded = false;
+  save(); renderHome();
+  toast('이번 달 근무표를 지웠어요');
 }
 
 /* ---- 되돌리기 ---- */
@@ -1050,27 +1102,22 @@ function renderAuth() {
       '';
   }
 }
+/* 보관함의 클라우드 카드 — 2026-07-20 사용자 결정으로 「여러 기기에서 함께 쓰기」 안내는 없앴다.
+   로그인 상태는 머리글 로그아웃 버튼으로 충분하다.
+   단, 비밀번호 재설정(메일 링크로 돌아온 경우)은 이 자리에서만 진행되므로 그때만 띄운다. */
 function renderCloudCard() {
-  authTarget = 'cloudBody';   // 보관함 카드가 인증 UI의 기본 자리
   renderAcctBtn();
   var card = document.getElementById('cloudCard');
-  if (!window.Cloud || !Cloud.enabled()) { card.style.display = 'none'; return; }
-  card.style.display = '';
-  var u = Cloud.getUser();
-  if (u && cloudView !== 'newpw') {
-    var hb = document.getElementById('homeLoginBody');
-    if (hb) hb.innerHTML = '';   // 홈 로그인 카드와 입력칸 id 충돌 방지
-    var body = document.getElementById('cloudBody');
-    var t = Cloud.getLastSync();
-    var who = u.email || (u.user_metadata && (u.user_metadata.name || u.user_metadata.full_name)) || '회원';
-    body.innerHTML =
-      '<p><b>' + esc(who) + '</b> 님으로 로그인되어 있어요.<br>' +
-      '<span class="hint">바뀐 내용은 자동으로 서버에 저장됩니다.' +
-      (t ? ' 마지막 저장: ' + t.getHours() + '시 ' + String(t.getMinutes()).padStart(2, '0') + '분' : '') + '</span></p>' +
-      '<div class="toolbar"><button class="btn gray" onclick="cloudLogout()">로그아웃</button></div>';
+  if (!card) return;
+  var body = document.getElementById('cloudBody');
+  if (cloudView === 'newpw') {
+    authTarget = 'cloudBody';
+    card.style.display = '';
+    renderAuth();
     return;
   }
-  renderAuth();
+  card.style.display = 'none';
+  if (body) body.innerHTML = '';   // 홈 로그인 카드와 입력칸 id 충돌 방지
 }
 function cloudGoto(v) {
   cloudView = v;
