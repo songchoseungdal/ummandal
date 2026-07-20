@@ -47,7 +47,15 @@ function month(ym) {
   m.wish = m.wish || {};
   m.codes = m.codes || {};
   m.pins = m.pins || {};          // 선입력(사용자가 손으로 찍은 셀) — 재생성에도 불가침
-  m.holidays = m.holidays || [];  // 이 달의 공휴일 일자
+  if (!m.holidays) m.holidays = [];   // 이 달의 공휴일 일자
+  /* 법정공휴일 자동 반영 — 사람이 ※ 칸을 저장한 적이 없는 달에만.
+     저장하면 holidaysAuto=false가 되어 그 뒤로는 자동 반영이 덮지 않는다.
+     자동인 달은 표가 갱신되면(임시공휴일 지정 등) 따라 바뀐다. */
+  if (m.holidaysAuto !== false && typeof krHolidayDays === 'function') {
+    var auto = krHolidayDays(ym);
+    if (auto && auto.join(',') !== m.holidays.join(',')) { m.holidays = auto; m.holidaysAuto = true; }
+    else if (auto) m.holidaysAuto = true;
+  }
   return m;
 }
 /* 규칙 v2: 직군별 [최소,최대] 범위. 구 db.rules는 구버전 클라이언트 호환을 위해 남겨둔다(더는 안 씀). */
@@ -197,9 +205,23 @@ function setLoginView(on) {
   var mn = document.getElementById('monthNav');
   if (mn) mn.style.display = on ? 'none' : '';
 }
+/* 보고 있는 달(과 다음 달)의 공휴일을 서버에서 받아온다 — 받아오면 화면을 다시 그린다.
+   대체·임시공휴일이 새로 지정돼도 따라가려면 앱에 박아두면 안 되고 매번 물어봐야 한다. */
+function ensureHolidays(ym) {
+  if (typeof krFetchYear !== 'function') return;
+  krFetchYear(String(ym).slice(0, 4), function (updated) {
+    if (!updated) return;
+    var m = db.months && db.months[ym];
+    if (m && m.holidaysAuto === false) return;   // 사람이 정한 달은 건드리지 않는다
+    month(ym);                                    // 새 값으로 다시 채워진다
+    save();
+    if (document.getElementById('tab-home').style.display !== 'none') renderGrid();
+  });
+}
 function renderHome() {
   renderMonthLabel();
   renderAcctBtn();
+  ensureHolidays(curYM);
   var staff = staffList();
   var empty = document.getElementById('homeEmpty');
   var prep = document.getElementById('homePrep');
@@ -341,7 +363,9 @@ function saveHolidays() {
   var list = hi.value.split(/[,\s]+/).map(function (s) { return parseInt(s, 10); })
     .filter(function (n) { return !isNaN(n) && n >= 1 && n <= days; });
   list = list.filter(function (v, i) { return list.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
-  month(curYM).holidays = list;
+  var mm = month(curYM);
+  mm.holidays = list;
+  mm.holidaysAuto = false;   // 사람이 정했으니 이후 자동 반영이 덮지 않는다
   save();
   toast(list.length ? '공휴일: ' + list.join(', ') + '일 ✓' : '공휴일 없음으로 저장했어요 ✓');
   renderGrid();

@@ -91,7 +91,7 @@
     <div class="card" id="homePrep" style="display:none">
       <p class="prep-title">준비가 끝났어요</p>
       <div class="prep-status" id="prepStatus"></div>
-      <div class="wish-hint">★ 쉬고 싶은 날은 칸을 눌러 <b>★</b>로, 연차·대휴·교육이나 미리 정해진 근무는 칸을 눌러 <b>직접 골라</b> 두세요(📌 고정). 아래 🎌 칸에 공휴일도 적어두면 그날은 주말 인원으로 계산해요. 준비가 끝나면 만들기!</div>
+      <div class="wish-hint">★ 쉬고 싶은 날은 칸을 눌러 <b>★</b>로, 연차·대휴·교육이나 미리 정해진 근무는 칸을 눌러 <b>직접 골라</b> 두세요(📌 고정). 아래 ※ 칸의 공휴일은 자동으로 채워지고, 그날은 주말 인원으로 계산해요. 준비가 끝나면 만들기!</div>
       <button class="btn big xl" onclick="generate()">🪄 자동으로 만들기</button>
       <p class="prep-caption">1분 안에 초안이 나와요 · 나중에 얼마든지 고칠 수 있어요</p>
     </div>
@@ -108,9 +108,9 @@
       </div>
       <div id="genProgress"><div class="lbl"><span id="genProgLbl"></span><span>화면은 멈추지 않아요</span></div><div class="track"><div class="bar" id="genProgBar"></div></div></div>
       <div id="banner"></div>
-      <div class="holirow">🎌 이번 달 공휴일:
+      <div class="holirow">※ 이번 달 공휴일:
         <input type="text" id="holidayInput" placeholder="예: 3, 6" onchange="saveHolidays()">
-        <span class="hint">날짜만 쉼표로 적으세요 — 그날은 주말 인원으로 계산해요</span>
+        <span class="hint">법정공휴일(대체휴일 포함)은 자동으로 채워져요 — 병원 사정에 맞게 고치셔도 됩니다</span>
       </div>
       <div class="legend">
         <span class="lg-d">D 데이</span>
@@ -199,6 +199,7 @@
 <div id="toast"></div>
 
 <script src="js/vendor/xlsx.full.min.js"></script>
+<script src="js/holidays.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/engine2.js"></script>
 <script src="js/store.js"></script>

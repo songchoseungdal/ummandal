@@ -92,6 +92,27 @@ var Cloud = (function () {
     });
   }
 
+  /* 대한민국 공휴일 조회 — 키는 서버에만 있다(공공데이터포털 특일정보 프록시).
+     실패해도 앱은 내장 표로 굴러간다(조용한 실패). */
+  function holidays(year) {
+    return sb.auth.getSession().then(function (s) {
+      var t = s && s.data && s.data.session && s.data.session.access_token;
+      if (!t) return { status: 401, data: null };
+      return fetch(CLOUD_CONFIG.url + '/functions/v1/holidays', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + t,
+          'apikey': CLOUD_CONFIG.key
+        },
+        body: JSON.stringify({ year: year })
+      }).then(function (r) {
+        return r.json().catch(function () { return null; })
+          .then(function (j) { return { status: r.status, data: j }; });
+      });
+    });
+  }
+
   function pull() {
     if (!user) return Promise.resolve({ data: null });
     return sb.from('user_data').select('data, updated_at').eq('user_id', user.id).maybeSingle();
@@ -119,7 +140,7 @@ var Cloud = (function () {
     signUp: signUp, signIn: signIn, signOut: signOut,
     pull: pull, push: push, schedulePush: schedulePush,
     setAuthFlow: setAuthFlow, inAuthFlow: inAuthFlow,
-    oauthProviders: oauthProviders, signInOAuth: signInOAuth, aiAnalyze: aiAnalyze,
+    oauthProviders: oauthProviders, signInOAuth: signInOAuth, aiAnalyze: aiAnalyze, holidays: holidays,
     setPassword: setPassword, signOutOthers: signOutOthers, resetEmail: resetEmail
   };
 })();
