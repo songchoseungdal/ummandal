@@ -74,6 +74,7 @@ var Cloud = (function () {
 
   /* 사진/PDF 근무표 AI 분석 — Edge Function 호출 (키는 서버에만 있음, 로그인 필수) */
   function aiAnalyze(files) {
+    if (!sb) return Promise.resolve({ status: 0, data: { error: '로그인 준비 중이에요. 잠시 후 다시 시도해주세요.' } });
     return sb.auth.getSession().then(function (s) {
       var t = s && s.data && s.data.session && s.data.session.access_token;
       if (!t) return { status: 401, data: { error: '로그인한 뒤에 쓸 수 있어요.' } };
@@ -93,8 +94,12 @@ var Cloud = (function () {
   }
 
   /* 대한민국 공휴일 조회 — 키는 서버에만 있다(공공데이터포털 특일정보 프록시).
-     실패해도 앱은 내장 표로 굴러간다(조용한 실패). */
+     실패해도 앱은 내장 표로 굴러간다(조용한 실패).
+     ⚠️ sb 가드(2026-07-21): 부팅 시 renderHome→ensureHolidays가 Cloud.init()(=sb 생성)보다
+     먼저 이 함수를 부른다. sb가 null이면 sb.auth에서 동기 예외가 나 renderHome→부팅 전체가
+     중단(홈 백지 + Cloud.init 미실행 → 로그인 깨짐)됐다. null이면 조용히 빈 응답을 돌려준다. */
   function holidays(year) {
+    if (!sb) return Promise.resolve({ status: 0, data: null });
     return sb.auth.getSession().then(function (s) {
       var t = s && s.data && s.data.session && s.data.session.access_token;
       if (!t) return { status: 401, data: null };
