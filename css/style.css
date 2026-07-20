@@ -412,6 +412,37 @@ table.pttable select { font-size: 15px; padding: 6px 8px; border: 1.5px solid va
 .patmemo .pm-del { flex: none; background: var(--danger-soft); color: var(--danger); border: none;
   border-radius: 8px; padding: 6px 10px; font-size: 15px; cursor: pointer; font-family: inherit; }
 
+/* ===== 불러온 근무표 확인 — 3단계 마법사 ===== */
+.imp-card.wiz h2 { margin: 4px 0 14px; text-align: center; }
+.wz-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.wz-dots { display: flex; gap: 8px; }
+.wz-dot { width: 12px; height: 12px; border-radius: 999px; background: var(--line); display: inline-block; }
+.wz-dot.on { background: var(--brand); transform: scale(1.25); }
+.wz-dot.done { background: var(--brand-soft); border: 2px solid var(--brand); box-sizing: border-box; }
+.wz-count { font-size: 14px; color: var(--sub); font-weight: 700; }
+.wz-month { font-size: 17px; margin: 4px 0 10px; text-align: center; }
+.wz-month select { font-size: 17px; padding: 8px 10px; border: 1.5px solid var(--line);
+  border-radius: 10px; font-family: inherit; }
+.wz-note { background: var(--brand-soft); border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
+.wz-ask { text-align: center; padding: 18px 8px 8px; }
+.wz-q { font-size: 26px; font-weight: 800; color: var(--brand-dk); line-height: 1.4; margin: 0 0 8px; }
+.wz-summary { max-width: 460px; margin: 10px auto; }
+.wz-sumline { background: var(--bg); border: 1.5px solid var(--line); border-radius: 12px;
+  padding: 12px 16px; margin: 8px 0; font-size: 17px; line-height: 1.6; text-align: left; }
+.wz-people { margin: 4px 0; }
+.wz-person { display: flex; align-items: center; gap: 10px; padding: 10px 6px;
+  border-bottom: 1px solid var(--line); }
+.wz-person:last-child { border-bottom: none; }
+.wz-person.off { opacity: .45; }
+.wz-person .wz-name { font-size: 18px; flex: 1; min-width: 0; }
+.wz-person .wz-grp { font-size: 16px; padding: 7px 8px; border: 1.5px solid var(--line);
+  border-radius: 9px; font-family: inherit; }
+.wz-person .wz-del { font-size: 15px; color: var(--sub); display: flex; align-items: center; gap: 5px; }
+.wz-person .wz-del input { width: 22px; height: 22px; }
+.wz-nav { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.wz-nav .btn { flex: 1; min-width: 120px; font-size: 17px; padding: 14px 10px; }
+.wz-nav .btn.big { flex: 1.4; }
+
 /* ===== 인쇄 ===== */
 @page { size: A4 landscape; margin: 10mm; }
 @media print {

@@ -1341,7 +1341,6 @@ function importData(ev) {
 /* ---- 기존 근무표(엑셀) 불러오기 ---- */
 var _importParse = null;   // 기준(최근) 달 parse 결과 — 확인 화면 → 적용에서 재사용
 var _importPrevSheets = [];  // 함께 올린 이전 달들 — 이력으로만 저장(사람·규칙은 기준 달로)
-var _importRuleKeys = [];    // 확인 화면의 하루 인원 입력칸 목록(적용 때 읽어들인다)
 var _importPatterns = [];    // AI가 관찰한 습관 메모(사진·PDF 경로만). 「맞아요」한 것만 계정에 저장(자동 강제 X)
 /* 습관 메모 dedup용 — 공백만 다른 같은 문장을 중복 저장하지 않도록 정규화 */
 function normPatText(t) { return String(t == null ? '' : t).replace(/\s+/g, ' ').trim(); }
@@ -1540,246 +1539,233 @@ function applyAiResult(d) {
     : '다 읽었어요! 내용을 확인해주세요 ✓');
   renderImportReview(ym);
 }
-/* 기준 월을 바꾸면 화면을 다시 그린다.
-   ⚠️ 2026-07-20 적대 검토 지적 — 예전에는 이때 사용자가 고쳐둔 직군·형태·성향·빼기가
-   경고도 없이 전부 초기화됐다. 이제 사람 편집은 그대로 이어받는다.
-   (하루 인원·패턴은 달이 바뀌면 주말 계산이 달라져 다시 뽑는 게 맞으므로 새로 계산한다) */
-function reReviewMonth() {
-  var y = document.getElementById('impYear').value;
-  var mo = document.getElementById('impMonth').value;
-  var keep = [];
-  for (var i = 0; ; i++) {
-    var g = document.getElementById('impGroup_' + i);
-    if (!g) break;
-    keep.push({
-      group: g.value,
-      type: (document.getElementById('impType_' + i) || {}).value,
-      pref: (document.getElementById('impPref_' + i) || {}).value,
-      exc: !!(document.getElementById('impExc_' + i) || {}).checked
+/* ===== 불러온 근무표 확인 — 3단계 마법사(한 장씩) =====
+   한 화면에 인원·하루인원·습관을 다 쏟으면 어지럽다는 피드백(2026-07-21).
+   인원 → 하루 인원 → 습관 순으로 한 장씩. 대부분 「네」만 누르면 넘어가고 틀린 것만 「아니오」로 펼쳐 고친다.
+   단계 이동에도 입력이 안 날아가게 작업 상태(_wiz)에 담아둔다. */
+var _wiz = null;
+
+function clampNum(v, lo, hi, fb) { var n = parseInt(v, 10); if (isNaN(n)) return fb; return Math.max(lo, Math.min(hi, n)); }
+
+/* analyze 결과로 작업 상태를 만든다. prevByName가 있으면(월 변경 등) 직군·빼기 편집을 이름으로 잇는다. */
+function wizBuild(ym, prevByName, keepPatterns) {
+  var res = _importParse;
+  var an = Importer.analyze(res.rows, res.days, ym);
+  var staff = res.rows.map(function (row, i) {
+    var s = an.staff[i];
+    var prev = prevByName && prevByName[row.name];
+    return {
+      name: s.name, group: prev ? prev.group : s.group,
+      type: s.type, pref: s.pref, note: s.note, workDays: s.workDays,
+      codes: row.codes, exc: prev ? prev.exc : (s.workDays === 0)
+    };
+  });
+  return {
+    ym: ym, step: 0, peopleOpen: false, rulesOpen: false,
+    staff: staff, rules: an.rulesByGroup,
+    global: { maxWork: an.global.maxWork, maxN: an.global.maxN, offAfterN: an.global.offAfterN, backward: an.global.backward },
+    meta: an.meta, days: res.days, unknownCodes: res.unknownCodes || [],
+    patterns: keepPatterns || _importPatterns.map(function (p) { return { text: p.text, choice: '' }; })
+  };
+}
+/* 직군·빼기 편집을 반영해 하루 인원 규칙을 다시 뽑는다(직군을 바꾸면 규칙도 달라져야 한다 — 2026-07-20 교훈). */
+function wizDeriveRules() {
+  var res = _importParse;
+  var eff = _wiz.staff.filter(function (s) { return !s.exc; })
+    .map(function (s) { return { name: s.name, group: s.group, codes: s.codes }; });
+  var an = Importer.analyze(eff.length ? eff : res.rows, res.days, _wiz.ym);
+  _wiz.rules = an.rulesByGroup;
+  _wiz.global = { maxWork: an.global.maxWork, maxN: an.global.maxN, offAfterN: an.global.offAfterN, backward: an.global.backward };
+}
+/* 지금 단계의 화면 입력을 작업 상태로 읽어들인다(단계 이동·월 변경 전에 호출 — 입력 보존). */
+function wizReadStep() {
+  if (!_wiz) return;
+  if (_wiz.step === 0 && _wiz.peopleOpen) {
+    _wiz.staff.forEach(function (s, i) {
+      var g = document.getElementById('wzGroup_' + i); if (g) s.group = g.value;
+      var e = document.getElementById('wzExc_' + i); if (e) s.exc = e.checked;
+    });
+  } else if (_wiz.step === 1 && _wiz.rulesOpen) {
+    Object.keys(_wiz.rules).forEach(function (gk) {
+      ['wd', 'hd'].forEach(function (kind) {
+        ['D', 'E', 'N'].forEach(function (f) {
+          var lo = document.getElementById('wzR_' + gk + '_' + kind + '_' + f + '_lo');
+          var hi = document.getElementById('wzR_' + gk + '_' + kind + '_' + f + '_hi');
+          if (!lo || !hi) return;
+          var l = clampNum(lo.value, 0, 20, _wiz.rules[gk][kind][f][0]);
+          var h = clampNum(hi.value, 0, 20, _wiz.rules[gk][kind][f][1]);
+          if (h < l) h = l;
+          _wiz.rules[gk][kind][f] = [l, h];
+        });
+      });
+    });
+  } else if (_wiz.step === 2) {
+    _wiz.patterns.forEach(function (p, i) {
+      var sel = document.querySelector('input[name="wzPat_' + i + '"]:checked');
+      p.choice = sel ? sel.value : '';
     });
   }
-  /* 습관 「맞아요/우연이에요」 선택도 보존한다 — 습관은 월과 무관한 관찰이라 월을 바꿔도 그대로.
-     재렌더가 라디오를 초기화해 사용자가 고른 채택이 경고 없이 사라지던 문제(적대 검토 지적, 인원 편집과 동일 처리). */
-  var keepPat = _importPatterns.map(function (p, i) {
-    var sel = document.querySelector('input[name="impPat_' + i + '"]:checked');
-    return sel ? sel.value : null;
-  });
-  renderImportReview(y + '-' + String(mo).padStart(2, '0'));
-  keep.forEach(function (k, i) {
-    var g = document.getElementById('impGroup_' + i);
-    if (!g) return;
-    g.value = k.group;
-    var t = document.getElementById('impType_' + i); if (t && k.type) t.value = k.type;
-    var p = document.getElementById('impPref_' + i); if (p && k.pref !== undefined) p.value = k.pref;
-    var e = document.getElementById('impExc_' + i);
-    if (e) {
-      e.checked = k.exc;
-      var card = document.getElementById('impCard_' + i);
-      if (card) card.classList.toggle('off', k.exc);
-    }
-  });
-  keepPat.forEach(function (v, i) {
-    if (!v) return;
-    var el = document.querySelector('input[name="impPat_' + i + '"][value="' + v + '"]');
-    if (el) el.checked = true;
-  });
+}
+function wizNext() {
+  wizReadStep();
+  if (_wiz.step === 0) wizDeriveRules();   // 직군 편집을 규칙에 반영
+  _wiz.step = Math.min(2, _wiz.step + 1);
+  renderWiz();
+}
+function wizBack() { wizReadStep(); _wiz.step = Math.max(0, _wiz.step - 1); renderWiz(); }
+function wizOpenPeople() { wizReadStep(); _wiz.peopleOpen = true; renderWiz(); }
+function wizOpenRules() { wizReadStep(); _wiz.rulesOpen = true; renderWiz(); }
+function wizToggleExc(i) {
+  var e = document.getElementById('wzExc_' + i); if (!e) return;
+  var card = document.getElementById('wzCard_' + i); if (card) card.classList.toggle('off', e.checked);
+}
+function wizSetMonth() {
+  wizReadStep();
+  var y = document.getElementById('wzYear').value, mo = document.getElementById('wzMonth').value;
+  var prevByName = {};
+  _wiz.staff.forEach(function (s) { prevByName[s.name] = { group: s.group, exc: s.exc }; });
+  var keepPat = _wiz.patterns, open = _wiz.peopleOpen;
+  _wiz = wizBuild(y + '-' + String(mo).padStart(2, '0'), prevByName, keepPat);
+  _wiz.peopleOpen = open;
+  renderWiz();
 }
 function closeImportReview() {
   var h = document.getElementById('importReview');
   h.className = ''; h.innerHTML = '';
-  _importParse = null;
+  _importParse = null; _wiz = null;
 }
 function renderImportReview(ym) {
-  var res = _importParse;
-  if (!res) return;
-  var an = Importer.analyze(res.rows, res.days, ym);
-  var pt = ymParts(ym);
-  var nowY = new Date().getFullYear();
-  var yearOpts = '';
-  for (var yy = nowY - 1; yy <= nowY + 1; yy++) yearOpts += '<option value="' + yy + '"' + (yy === pt.y ? ' selected' : '') + '>' + yy + '년</option>';
-  var monOpts = '';
-  for (var mm = 1; mm <= 12; mm++) monOpts += '<option value="' + mm + '"' + (mm === pt.m ? ' selected' : '') + '>' + mm + '월</option>';
-
-  /* 인원 표 */
-  var staffRows = res.rows.map(function (row, i) {
-    var s = an.staff[i];
-    var grpSel = ['RN', 'NA'].map(function (g) {
-      return '<option value="' + g + '"' + (s.group === g ? ' selected' : '') + '>' + groupNames[g] + '</option>';
-    }).join('');
-    var typeSel = TYPE_ORDER.map(function (t) {
-      return '<option value="' + t + '"' + (s.type === t ? ' selected' : '') + '>' + typeNames[t] + '</option>';
-    }).join('');
-    var prefSel = ['', 'D', 'E'].map(function (v) {
-      return '<option value="' + v + '"' + (s.pref === v ? ' selected' : '') + '>' + prefNames[v] + '</option>';
-    }).join('');
-    var exc = s.workDays === 0;   // 근무 없는 사람은 기본 제외
-    /* 이름을 위, 직군·형태·성향을 아래 줄로 — 표를 옆으로 늘리면 폰에서 잘린다(2026-07-20) */
-    return '<div class="impperson' + (exc ? ' off' : '') + '" id="impCard_' + i + '">' +
-      '<div class="ip-top">' +
-      '<b class="ip-name">' + esc(s.name) + '</b>' +
-      (s.note ? '<span class="hint"> (' + s.note + ')</span>' : '') +
-      '<span class="ip-days">근무 ' + s.workDays + '일 · 쉼 ' + (an.meta.days - s.workDays) + '일</span>' +
-      '<label class="ip-exc"><input type="checkbox" id="impExc_' + i + '"' + (exc ? ' checked' : '') +
-      ' onchange="document.getElementById(\'impCard_' + i + '\').classList.toggle(\'off\', this.checked)"> 빼기</label>' +
-      '</div>' +
-      '<div class="ip-sel">' +
-      '<select id="impGroup_' + i + '" title="직군">' + grpSel + '</select>' +
-      '<select id="impType_' + i + '" title="근무 형태">' + typeSel + '</select>' +
-      '<select id="impPref_' + i + '" title="선호">' + prefSel + '</select>' +
-      '</div></div>';
+  if (!_importParse) return;
+  _wiz = wizBuild(ym, null, null);
+  renderWiz();
+}
+/* 마법사 렌더 — 현재 단계만 그린다 */
+function renderWiz() {
+  if (!_wiz) return;
+  var titles = ['인원 확인', '하루 근무 인원', '근무 습관'];
+  var dots = titles.map(function (t, i) {
+    return '<span class="wz-dot' + (i === _wiz.step ? ' on' : (i < _wiz.step ? ' done' : '')) + '"></span>';
   }).join('');
+  var body = _wiz.step === 0 ? wizPeopleHTML() : (_wiz.step === 1 ? wizRulesHTML() : wizPatternsHTML());
+  var html =
+    '<div class="imp-card wiz">' +
+    '<div class="wz-top"><div class="wz-dots">' + dots + '</div><span class="wz-count">' + (_wiz.step + 1) + ' / 3</span></div>' +
+    '<h2>' + titles[_wiz.step] + '</h2>' + body + '</div>';
+  var host = document.getElementById('importReview');
+  host.innerHTML = html; host.className = 'on';
+}
+/* --- 1단계: 인원 --- */
+function wizPeopleHTML() {
+  var pt = ymParts(_wiz.ym), nowY = new Date().getFullYear();
+  var yearOpts = '', monOpts = '';
+  for (var yy = nowY - 1; yy <= nowY + 1; yy++) yearOpts += '<option value="' + yy + '"' + (yy === pt.y ? ' selected' : '') + '>' + yy + '년</option>';
+  for (var mm = 1; mm <= 12; mm++) monOpts += '<option value="' + mm + '"' + (mm === pt.m ? ' selected' : '') + '>' + mm + '월</option>';
+  var rn = _wiz.staff.filter(function (s) { return !s.exc && s.group === 'RN'; }).length;
+  var na = _wiz.staff.filter(function (s) { return !s.exc && s.group === 'NA'; }).length;
+  var monthSel = '<div class="wz-month">📅 <select id="wzYear" onchange="wizSetMonth()">' + yearOpts + '</select> ' +
+    '<select id="wzMonth" onchange="wizSetMonth()">' + monOpts + '</select> 근무표예요</div>';
+  var multi = _importPrevSheets.length
+    ? '<p class="hint wz-note">📚 ' + (_importPrevSheets.length + 1) + '개 달을 읽었어요. 사람·규칙은 이 달 기준, 이전 달은 기록으로만 저장돼요.</p>' : '';
+  var warn = (_wiz.unknownCodes && _wiz.unknownCodes.length)
+    ? '<p class="hint wz-note">못 알아본 표시: ' + _wiz.unknownCodes.map(esc).join(', ') + ' (빈칸으로 들어가요)</p>' : '';
 
-  /* 하루 인원 규칙 — 읽기만 하던 것을 고칠 수 있게 바꿨다(2026-07-20) */
-  var ruleRows = '';
-  var ruleKeys = [];
-  Object.keys(an.rulesByGroup).forEach(function (g) {
-    var gr = an.rulesByGroup[g];
+  if (!_wiz.peopleOpen) {
+    return monthSel + multi + warn +
+      '<div class="wz-ask"><p class="wz-q">간호사 <b>' + rn + '명</b>' + (na ? ' · 조무사 <b>' + na + '명</b>' : '') + '<br>맞나요?</p>' +
+      '<p class="hint">이 근무표에서 읽은 사람 수예요.</p></div>' +
+      '<div class="imp-actions wz-nav">' +
+      '<button class="btn gray" onclick="wizOpenPeople()">아니요, 고칠게요</button>' +
+      '<button class="btn big" onclick="wizNext()">네, 맞아요 →</button></div>';
+  }
+  var rows = _wiz.staff.map(function (s, i) {
+    var grpSel = ['RN', 'NA'].map(function (g) { return '<option value="' + g + '"' + (s.group === g ? ' selected' : '') + '>' + groupNames[g] + '</option>'; }).join('');
+    return '<div class="wz-person' + (s.exc ? ' off' : '') + '" id="wzCard_' + i + '">' +
+      '<b class="wz-name">' + esc(s.name) + '</b>' +
+      '<select id="wzGroup_' + i + '" class="wz-grp">' + grpSel + '</select>' +
+      '<label class="wz-del"><input type="checkbox" id="wzExc_' + i + '"' + (s.exc ? ' checked' : '') + ' onchange="wizToggleExc(' + i + ')"> 빼기</label></div>';
+  }).join('');
+  return monthSel + multi + warn +
+    '<p class="hint" style="margin:6px 0 6px">틀린 사람은 「빼기」, 직군이 다르면 간호사↔조무사로 바꿔주세요. 근무 형태·성향은 나중에 「우리 병동」에서 고칠 수 있어요.</p>' +
+    '<div class="wz-people">' + rows + '</div>' +
+    '<div class="imp-actions wz-nav"><button class="btn gray" onclick="closeImportReview()">취소</button>' +
+    '<button class="btn big" onclick="wizNext()">다음 →</button></div>';
+}
+/* --- 2단계: 하루 인원 --- */
+function wizRulesHTML() {
+  var groups = Object.keys(_wiz.rules);
+  function rng(a) { return a[0] === a[1] ? a[0] + '명' : a[0] + '~' + a[1] + '명'; }
+  function sumFor(gk) {
+    var lb = groups.length > 1 ? groupNames[gk] + ' ' : '';
+    var r = _wiz.rules[gk];
+    return '<div class="wz-sumline"><b>' + lb + '평일</b><br>데이(D) ' + rng(r.wd.D) + ' · 이브닝(E) ' + rng(r.wd.E) + ' · 나이트(N) ' + rng(r.wd.N) + '</div>' +
+      '<div class="wz-sumline"><b>' + lb + '주말·공휴일</b><br>데이(D) ' + rng(r.hd.D) + ' · 이브닝(E) ' + rng(r.hd.E) + ' · 나이트(N) ' + rng(r.hd.N) + '</div>';
+  }
+  if (!_wiz.rulesOpen) {
+    return '<div class="wz-ask"><p class="wz-q">하루에 이만큼 근무하나요?</p>' +
+      '<div class="wz-summary">' + groups.map(sumFor).join('') + '</div>' +
+      '<p class="hint">데이=D, 이브닝=E, 나이트=N (MD·E2도 각 계열에 포함돼요)</p></div>' +
+      '<div class="imp-actions wz-nav">' +
+      '<button class="btn gray" onclick="wizBack()">← 이전</button>' +
+      '<button class="btn gray" onclick="wizOpenRules()">아니요, 고칠게요</button>' +
+      '<button class="btn big" onclick="wizNext()">네, 맞아요 →</button></div>';
+  }
+  var rows = '';
+  groups.forEach(function (gk) {
     [['wd', '평일'], ['hd', '주말·공휴일']].forEach(function (kd) {
-      var set = gr[kd[0]];
-      function box(fam) {
-        var id = 'impR_' + g + '_' + kd[0] + '_' + fam;
-        ruleKeys.push({ id: id, g: g, kind: kd[0], fam: fam });
-        return '<td class="rgcell">' +
-          '<input type="number" min="0" max="20" id="' + id + '_lo" value="' + set[fam][0] + '">' +
-          '<span>~</span>' +
-          '<input type="number" min="0" max="20" id="' + id + '_hi" value="' + set[fam][1] + '"></td>';
+      function box(f) {
+        var id = 'wzR_' + gk + '_' + kd[0] + '_' + f, v = _wiz.rules[gk][kd[0]][f];
+        return '<td class="rgcell"><input type="number" min="0" max="20" id="' + id + '_lo" value="' + v[0] + '"><span>~</span><input type="number" min="0" max="20" id="' + id + '_hi" value="' + v[1] + '"></td>';
       }
-      ruleRows += '<tr><td class="rgname">' + groupNames[g] + '<br><span class="hint">' + kd[1] + '</span></td>' +
-        box('D') + box('E') + box('N') + '</tr>';
+      rows += '<tr><td class="rgname">' + (groups.length > 1 ? groupNames[gk] + '<br>' : '') + '<span class="hint">' + kd[1] + '</span></td>' + box('D') + box('E') + box('N') + '</tr>';
     });
   });
-  _importRuleKeys = ruleKeys;
-
-  /* 패턴 규칙 — 지금까지 화면에 아예 안 보이던 값들. 보여주고 고칠 수 있게 한다 */
-  var gl = an.global;
-  function num(id, val, min, max) {
-    return '<input type="number" id="' + id + '" value="' + val + '" min="' + min + '" max="' + max + '">';
-  }
-  var patternRows =
-    '<tr><td>한 번에 이어서 일하는 최대 일수</td><td>' + num('impMaxWork', gl.maxWork, 1, 7) + ' 일</td></tr>' +
-    '<tr><td>나이트를 이어서 서는 최대 일수</td><td>' + num('impMaxN', gl.maxN, 1, 5) + ' 일</td></tr>' +
-    '<tr><td>나이트 끝나고 최소로 쉬는 날</td><td>' + num('impOffAfterN', gl.offAfterN, 0, 3) + ' 일</td></tr>' +
-    '<tr><td>이브닝 다음날 데이 <span class="hint">(역행)</span></td><td>' +
-    '<select id="impBackward">' +
-    '<option value="0"' + (gl.backward === 0 ? ' selected' : '') + '>해도 됨</option>' +
-    '<option value="1"' + (gl.backward === 1 ? ' selected' : '') + '>안 됨</option>' +
-    '</select></td></tr>';
-
-  /* AI가 관찰한 습관 — 사람이 「맞아요」한 것만 계정 메모로 저장(자동 강제 X). 없으면 섹션 자체를 숨긴다 */
-  var patObs = '';
-  if (_importPatterns.length) {
-    var patItems = _importPatterns.map(function (p, i) {
-      return '<div class="imppat">' +
-        '<div class="imppat-t">“' + esc(p.text) + '”</div>' +
+  return '<p class="hint" style="margin:2px 0 8px">하루에 몇 명이 서는지 최소~최대로 고쳐주세요.</p>' +
+    '<div class="imp-scroll2"><table class="rgtable"><tr><th>&nbsp;</th><th>데이(D)</th><th>이브닝(E)</th><th>나이트(N)</th></tr>' + rows + '</table></div>' +
+    '<div class="imp-actions wz-nav"><button class="btn gray" onclick="wizBack()">← 이전</button>' +
+    '<button class="btn big" onclick="wizNext()">다음 →</button></div>';
+}
+/* --- 3단계: 습관 --- */
+function wizPatternsHTML() {
+  var body;
+  if (!_wiz.patterns.length) {
+    body = '<div class="wz-ask"><p class="wz-q">특별한 습관은 없었어요 👍</p><p class="hint">이 근무표에서 눈에 띄는 반복 습관을 찾지 못했어요. 그대로 적용하면 돼요.</p></div>';
+  } else {
+    var items = _wiz.patterns.map(function (p, i) {
+      return '<div class="imppat"><div class="imppat-t">“' + esc(p.text) + '”</div>' +
         '<div class="imppat-c">' +
-        '<label><input type="radio" name="impPat_' + i + '" value="yes"> 맞아요</label>' +
-        '<label><input type="radio" name="impPat_' + i + '" value="no"> 우연이에요</label>' +
+        '<label><input type="radio" name="wzPat_' + i + '" value="yes"' + (p.choice === 'yes' ? ' checked' : '') + '> 맞아요</label>' +
+        '<label><input type="radio" name="wzPat_' + i + '" value="no"' + (p.choice === 'no' ? ' checked' : '') + '> 우연이에요</label>' +
         '</div></div>';
     }).join('');
-    patObs =
-      '<h3 style="margin:18px 0 4px">이 근무표에서 발견한 습관 <span class="hint">(' + _importPatterns.length + '개)</span></h3>' +
-      '<p class="hint" style="margin:0 0 8px">AI가 읽어낸 반복 습관이에요. 맞으면 「맞아요」, 우연이면 「우연이에요」를 눌러주세요. ' +
-      '<b>「맞아요」한 것만</b> 다음에 근무표 만들 때 참고하시라고 「우리 병동 메모」에 적어둬요 — <b>근무표에 자동으로 넣지는 않아요.</b></p>' +
-      patItems;
+    body = '<p class="hint" style="margin:0 0 8px">AI가 읽어낸 반복 습관이에요. 맞으면 「맞아요」를 눌러주세요. <b>「맞아요」한 것만</b> 「우리 병동 메모」에 참고로 저장돼요 — <b>근무표에 자동으로 넣지는 않아요.</b></p>' + items;
   }
-  var warn = (res.unknownCodes && res.unknownCodes.length)
-    ? '<div class="imp-warn">알아보지 못한 표시가 있어요: <b>' + res.unknownCodes.map(esc).join(', ') + '</b> — 이 칸은 빈칸으로 들어가요. 불러온 뒤 직접 고쳐주세요.</div>'
-    : '';
-  /* 여러 달을 함께 올린 경우 — 무엇이 기준이고 무엇이 참고인지 분명히 알린다 */
-  var multi = _importPrevSheets.length
-    ? '<div class="imp-warn">📚 <b>' + (_importPrevSheets.length + 1) + '개 달</b>을 읽었어요. ' +
-      '<b>사람과 규칙은 아래 기준 월</b>로 정하고, 그 이전 달들은 <b>나이트·주말 횟수를 이어받기 위한 기록</b>으로만 저장돼요.</div>'
-    : '';
-
-  var html =
-    '<div class="imp-card">' +
-    '<h2>불러온 근무표 확인</h2>' +
-    '<p class="hint">몇 년 몇 월 근무표인가요? 아래 내용을 확인하고 <b>이대로 적용</b>을 누르세요.</p>' +
-    '<div style="margin:10px 0 4px"><b>기준 월</b> &nbsp;' +
-    '<select id="impYear" onchange="reReviewMonth()">' + yearOpts + '</select> ' +
-    '<select id="impMonth" onchange="reReviewMonth()">' + monOpts + '</select></div>' +
-    multi + warn +
-    '<h3 style="margin:16px 0 4px">인원 <span class="hint">(' + an.meta.count + '명 — 형태·성향을 고치고, 뺄 사람은 「빼기」 체크)</span></h3>' +
-    '<p class="impavg">이 달은 한 사람이 평균 <b>' + an.meta.offAvg + '일</b> 쉬었어요 ' +
-    '<span class="hint">(' + an.meta.days + '일 기준 · 참고값이라 딱 맞출 필요는 없어요)</span></p>' +
-    '<div class="imp-scroll">' + staffRows + '</div>' +
-    '<h3 style="margin:16px 0 4px">하루 인원 <span class="hint">(최소~최대 — 고쳐도 돼요)</span></h3>' +
-    '<div class="imp-scroll2"><table class="rgtable"><tr><th>직군</th><th>데이(D)</th><th>이브닝(E)</th><th>나이트(N)</th></tr>' + ruleRows + '</table></div>' +
-    '<h3 style="margin:16px 0 4px">근무 패턴 <span class="hint">(읽어낸 규칙 — 고쳐도 돼요)</span></h3>' +
-    '<table class="pttable">' + patternRows + '</table>' +
-    patObs +
-    '<div class="imp-actions">' +
-    '<button class="btn big" onclick="applyImport()">이대로 적용</button>' +
-    '<button class="btn gray" onclick="closeImportReview()">취소</button>' +
-    '</div></div>';
-
-  var host = document.getElementById('importReview');
-  host.innerHTML = html;
-  host.className = 'on';
+  return body +
+    '<div class="imp-actions wz-nav"><button class="btn gray" onclick="wizBack()">← 이전</button>' +
+    '<button class="btn big" onclick="applyImport()">이대로 적용 ✓</button></div>';
 }
 function applyImport() {
-  var res = _importParse;
-  if (!res) return;
-  var y = document.getElementById('impYear').value;
-  var mo = document.getElementById('impMonth').value;
-  var ym = y + '-' + String(mo).padStart(2, '0');
+  if (!_wiz) return;
+  wizReadStep();                 // 지금 단계(습관) 선택을 마지막으로 반영
+  var ym = _wiz.ym;
 
   var staff = [], codesById = {};
-  res.rows.forEach(function (row, i) {
-    if (document.getElementById('impExc_' + i).checked) return;
+  _wiz.staff.forEach(function (s, i) {
+    if (s.exc) return;
     var id = 'imp' + Date.now() + '_' + i;
-    staff.push({
-      id: id, name: row.name,
-      group: document.getElementById('impGroup_' + i).value,
-      type: document.getElementById('impType_' + i).value,
-      pref: document.getElementById('impPref_' + i).value
-    });
-    codesById[id] = row.codes.slice();
+    staff.push({ id: id, name: s.name, group: s.group, type: s.type, pref: s.pref });
+    codesById[id] = s.codes.slice();
   });
-  if (!staff.length) { alert('등록할 사람이 없어요. 제외 체크를 하나 이상 풀어주세요.'); return; }
+  if (!staff.length) { alert('등록할 사람이 없어요. 「빼기」를 하나 이상 풀어주세요.'); return; }
   if (staffList().length && !confirm('기존 인원 ' + staffList().length + '명을 지우고 새로 등록합니다. 계속할까요?')) return;
 
-  /* 규칙: 감지된 그룹만 덮고 나머지는 유지.
-     ⚠️ 2026-07-20 적대 검토 지적 — 예전에는 원본(res.rows)으로 규칙을 산출해서,
-     화면에서 직군을 조무사로 고치거나 사람을 「빼기」해도 규칙에는 전혀 반영되지 않았다.
-     (전원 RN으로 읽힌 표에서 NA를 지정하면 NA 규칙이 기본값으로 남아 생성이 사실상 불가능해짐)
-     이제 화면에서 정한 직군·제외를 반영한 행으로 다시 분석한다. */
-  var effRows = res.rows.map(function (row, i) {
-    var gsel = document.getElementById('impGroup_' + i);
-    return { name: row.name, group: gsel ? gsel.value : row.group, codes: row.codes };
-  }).filter(function (row, i) {
-    var ex = document.getElementById('impExc_' + i);
-    return !(ex && ex.checked);
-  });
-  var an = Importer.analyze(effRows.length ? effRows : res.rows, res.days, ym);
-  /* 화면에서 고친 값이 있으면 그 값을 쓴다(읽기 전용이던 것을 수정 가능하게 바꿨다) */
+  /* 규칙: 마법사에서 확정한 값(_wiz.rules)을 그대로 쓴다. 직군 편집은 wizDeriveRules로 이미 반영됨. */
   var r = rules2();
-  Object.keys(an.rulesByGroup).forEach(function (g) { r.groups[g] = an.rulesByGroup[g]; });
-  function readNum(id, fallback, lo, hi) {
-    var el = document.getElementById(id);
-    if (!el) return fallback;
-    var v = parseInt(el.value, 10);
-    if (isNaN(v)) return fallback;
-    return Math.max(lo, Math.min(hi, v));
-  }
-  _importRuleKeys.forEach(function (k) {
-    var set = r.groups[k.g] && r.groups[k.g][k.kind];
-    if (!set) return;
-    var lo = readNum(k.id + '_lo', set[k.fam][0], 0, 20);
-    var hi = readNum(k.id + '_hi', set[k.fam][1], 0, 20);
-    if (hi < lo) hi = lo;                     // 뒤집혀 들어와도 무너지지 않게
-    set[k.fam] = [lo, hi];
-  });
-  r.maxWork = readNum('impMaxWork', an.global.maxWork, 1, 7);
-  r.maxN = readNum('impMaxN', an.global.maxN, 1, 5);
-  r.offAfterN = readNum('impOffAfterN', an.global.offAfterN, 0, 3);
-  var bw = document.getElementById('impBackward');
-  r.backward = bw ? (parseInt(bw.value, 10) ? 1 : 0) : an.global.backward;
+  Object.keys(_wiz.rules).forEach(function (g) { r.groups[g] = _wiz.rules[g]; });
+  r.maxWork = _wiz.global.maxWork; r.maxN = _wiz.global.maxN; r.offAfterN = _wiz.global.offAfterN; r.backward = _wiz.global.backward;
 
   /* 인원 교체 + 선택 월 코드 저장 */
   db.staff = staff;
-  var dim = daysInYM(ym);
-  var codes = {};
+  var dim = daysInYM(ym), codes = {};
   staff.forEach(function (p) {
     var src = codesById[p.id] || [], arr = [];
     for (var d = 0; d < dim; d++) arr.push(src[d] || '');
@@ -1788,46 +1774,38 @@ function applyImport() {
   db.months = db.months || {};
   db.months[ym] = { codes: codes, wish: {}, pins: {}, holidays: [] };
 
-  /* 함께 올린 이전 달들 — 이름이 같은 사람에게만 붙여 이력으로 저장한다.
-     (그만둔 사람·새로 온 사람은 자연히 빠진다) */
+  /* 함께 올린 이전 달들 — 이름이 같은 사람에게만 붙여 이력으로 저장(그만둔/새 사람은 자연히 빠짐) */
   var byName = {};
   staff.forEach(function (p) { byName[p.name] = p.id; });
   var histSaved = 0;
   _importPrevSheets.forEach(function (sheet, idx) {
-    /* 연-월을 모르면 기준 월에서 거꾸로 한 달씩 매긴다 (배열은 오래된 것 → 최근 순) */
     var back = _importPrevSheets.length - idx;
     var hym = sheet.ym || prevYM(ym, back);
     var hdim = daysInYM(hym), hcodes = {}, matched = 0;
     sheet.rows.forEach(function (row) {
-      var id = byName[row.name];
-      if (!id) return;
-      var arr = [];
-      for (var d = 0; d < hdim; d++) arr.push(row.codes[d] || '');
-      hcodes[id] = arr;
-      matched++;
+      var id = byName[row.name]; if (!id) return;
+      var arr = []; for (var d = 0; d < hdim; d++) arr.push(row.codes[d] || '');
+      hcodes[id] = arr; matched++;
     });
     if (matched) { db.months[hym] = { codes: hcodes, wish: {}, pins: {}, holidays: [] }; histSaved++; }
   });
 
-  /* AI 습관 메모 — 「맞아요」로 고른 것만 이 계정에 저장(dedup). 자동 강제는 안 함(참고 표시용).
-     확인 화면 DOM이 아직 살아 있으므로(closeImportReview 전) 라디오를 여기서 읽는다. */
-  var patAdded = 0;
-  if (_importPatterns.length) {
+  /* AI 습관 메모 — 「맞아요」한 것만 이 계정에 저장(dedup·자동 강제 X, 참고 표시용) */
+  var patAdded = 0, patShown = _wiz.patterns.length;
+  if (patShown) {
     db.customPatterns = db.customPatterns || [];
     var seen = db.customPatterns.map(function (p) { return normPatText(p.text); });
     var nowIso = new Date().toISOString();
-    _importPatterns.forEach(function (p, i) {
-      var sel = document.querySelector('input[name="impPat_' + i + '"]:checked');
-      if (!sel || sel.value !== 'yes') return;
+    _wiz.patterns.forEach(function (p, i) {
+      if (p.choice !== 'yes') return;
       var key = normPatText(p.text);
-      if (!key || seen.indexOf(key) >= 0) return;   // 빈 문장·이미 저장된 습관은 건너뜀
+      if (!key || seen.indexOf(key) >= 0) return;
       seen.push(key);
       db.customPatterns.push({ id: 'pat' + Date.now() + '_' + i, text: p.text, source: 'ai', ym: ym, adoptedAt: nowIso });
       patAdded++;
     });
   }
   save();
-
   closeImportReview();
   renderRules();
   showTab('home');
@@ -1835,7 +1813,7 @@ function applyImport() {
   if (histSaved) msg += ' · 이전 ' + histSaved + '개 달은 기록으로 저장됨';
   else if (ym !== curYM) msg += ' (이력으로 저장됨 — 다음 달 만들 때 반영)';
   if (patAdded) msg += ' · 습관 메모 ' + patAdded + '개 저장';
-  else if (_importPatterns.length) msg += ' (습관 메모는 저장하지 않았어요)';
+  else if (patShown) msg += ' (습관 메모는 저장하지 않았어요)';
   toast(msg);
 }
 
