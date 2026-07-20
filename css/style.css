@@ -391,6 +391,27 @@ table.pttable select { font-size: 15px; padding: 6px 8px; border: 1.5px solid va
   padding: 10px 14px; margin: 10px 0; font-size: 15.5px; }
 #importReview .imp-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 
+/* ===== AI 습관 관찰 — 확인 화면의 채택 UI ===== */
+.imppat { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 8px 0;
+  background: var(--brand-soft); }
+.imppat-t { font-size: 16.5px; line-height: 1.5; color: var(--ink); margin-bottom: 9px; }
+.imppat-c { display: flex; gap: 10px; flex-wrap: wrap; }
+.imppat-c label { flex: 1; min-width: 120px; display: flex; align-items: center; justify-content: center;
+  gap: 7px; font-size: 16px; padding: 9px 6px; border: 1.5px solid var(--line); border-radius: 10px;
+  background: #fff; cursor: pointer; color: #5c5668; }
+.imppat-c input { width: 20px; height: 20px; accent-color: var(--brand); }
+.imppat-c label:has(input:checked) { border-color: var(--brand); background: #fff;
+  color: var(--brand-dk); font-weight: 700; box-shadow: 0 0 0 2px var(--brand-soft) inset; }
+
+/* ===== 우리 병동 습관 메모 — 저장된 참고 목록 ===== */
+.patmemo { display: flex; align-items: flex-start; gap: 10px; padding: 11px 4px;
+  border-bottom: 1px solid var(--line); }
+.patmemo:last-child { border-bottom: none; }
+.patmemo .pm-t { flex: 1; font-size: 16.5px; line-height: 1.5; }
+.patmemo .pm-src { display: block; font-size: 13px; color: var(--faint); margin-top: 3px; }
+.patmemo .pm-del { flex: none; background: var(--danger-soft); color: var(--danger); border: none;
+  border-radius: 8px; padding: 6px 10px; font-size: 15px; cursor: pointer; font-family: inherit; }
+
 /* ===== 인쇄 ===== */
 @page { size: A4 landscape; margin: 10mm; }
 @media print {

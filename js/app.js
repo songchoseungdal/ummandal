@@ -754,6 +754,32 @@ function renderRules() {
     '<div class="rulerow"><span class="lbl">이브닝 다음날 데이 금지 (역행 금지)</span>' +
     '<select id="r_backward"><option value="1"' + (+r.backward ? ' selected' : '') + '>금지</option><option value="0"' + (+r.backward ? '' : ' selected') + '>허용</option></select></div>';
   document.getElementById('rulesArea').innerHTML = html;
+  renderPatternMemo();
+}
+/* 우리 병동 습관 메모 — AI가 읽어 저장한 참고 목록. 자동 강제 없음(초안 참고용).
+   저장된 게 없으면 카드 자체를 숨긴다(빈 카드가 화면을 어지럽히지 않게). */
+function renderPatternMemo() {
+  var card = document.getElementById('patternCard');
+  var area = document.getElementById('patternArea');
+  if (!card || !area) return;
+  var list = db.customPatterns || [];
+  if (!list.length) { card.style.display = 'none'; area.innerHTML = ''; return; }
+  card.style.display = '';
+  area.innerHTML =
+    '<p class="hint" style="margin:0 0 10px">AI가 근무표에서 읽어 저장한 습관이에요. 초안을 만들 때 참고하시라고 적어둔 메모예요 — <b>자동으로 근무표에 반영되지는 않아요.</b></p>' +
+    list.map(function (p) {
+      var when = /^\d{4}-\d{2}$/.test(p.ym || '') ? p.ym.replace('-', '년 ') + '월 근무표에서' : '';
+      return '<div class="patmemo"><div class="pm-t">“' + esc(p.text) + '”' +
+        (when ? '<span class="pm-src">' + when + '</span>' : '') + '</div>' +
+        '<button class="pm-del" onclick="removePattern(\'' + esc(p.id) + '\')">지우기</button></div>';
+    }).join('');
+}
+function removePattern(id) {
+  if (!db.customPatterns) return;
+  db.customPatterns = db.customPatterns.filter(function (p) { return p.id !== id; });
+  save();
+  renderPatternMemo();
+  toast('메모를 지웠어요');
 }
 function numVal(id, fallback) {
   var el = document.getElementById(id);
@@ -1316,6 +1342,9 @@ function importData(ev) {
 var _importParse = null;   // 기준(최근) 달 parse 결과 — 확인 화면 → 적용에서 재사용
 var _importPrevSheets = [];  // 함께 올린 이전 달들 — 이력으로만 저장(사람·규칙은 기준 달로)
 var _importRuleKeys = [];    // 확인 화면의 하루 인원 입력칸 목록(적용 때 읽어들인다)
+var _importPatterns = [];    // AI가 관찰한 습관 메모(사진·PDF 경로만). 「맞아요」한 것만 계정에 저장(자동 강제 X)
+/* 습관 메모 dedup용 — 공백만 다른 같은 문장을 중복 저장하지 않도록 정규화 */
+function normPatText(t) { return String(t == null ? '' : t).replace(/\s+/g, ' ').trim(); }
 function importXlsx(ev) {
   var f = ev.target.files[0];
   ev.target.value = '';
@@ -1330,6 +1359,7 @@ function importXlsx(ev) {
     if (!res.rows || !res.rows.length) { alert('사람 이름을 찾지 못했어요. 이름이 한글로 적힌 근무표인지 확인해주세요.'); return; }
     _importParse = res;
     _importPrevSheets = [];                 // 엑셀은 한 장짜리
+    _importPatterns = [];                   // 엑셀 경로는 습관 관찰이 없다(서버 AI 경로 전용)
     renderImportReview(prevYM(curYM, 1));   // 기본값: 지난달
   };
   reader.onerror = function () { alert('파일을 읽는 중 문제가 생겼어요. 다시 시도해주세요.'); };
@@ -1498,6 +1528,12 @@ function applyAiResult(d) {
   var base = ordered[ordered.length - 1];          // 기준 = 가장 최근 달
   _importParse = { days: base.days, rows: base.rows, unknownCodes: base.unknownCodes };
   _importPrevSheets = ordered.slice(0, -1);        // 그 앞의 달들 = 이력용
+  /* 서버(Claude)가 근무표에서 읽어낸 반복 습관 — 확인 화면에서 사람이 채택 여부를 고른다.
+     옛 응답(patterns 없음)이나 형식 오류는 조용히 빈 목록으로(무회귀). */
+  _importPatterns = Array.isArray(d.patterns)
+    ? d.patterns.filter(function (p) { return p && typeof p.text === 'string' && p.text.trim(); })
+                .map(function (p) { return { text: p.text.trim() }; }).slice(0, 8)
+    : [];
   var ym = base.ym || prevYM(curYM, 1);
   toast(ordered.length > 1
     ? ordered.length + '장을 읽었어요! 가장 최근 달을 기준으로 확인해주세요 ✓'
@@ -1522,6 +1558,12 @@ function reReviewMonth() {
       exc: !!(document.getElementById('impExc_' + i) || {}).checked
     });
   }
+  /* 습관 「맞아요/우연이에요」 선택도 보존한다 — 습관은 월과 무관한 관찰이라 월을 바꿔도 그대로.
+     재렌더가 라디오를 초기화해 사용자가 고른 채택이 경고 없이 사라지던 문제(적대 검토 지적, 인원 편집과 동일 처리). */
+  var keepPat = _importPatterns.map(function (p, i) {
+    var sel = document.querySelector('input[name="impPat_' + i + '"]:checked');
+    return sel ? sel.value : null;
+  });
   renderImportReview(y + '-' + String(mo).padStart(2, '0'));
   keep.forEach(function (k, i) {
     var g = document.getElementById('impGroup_' + i);
@@ -1535,6 +1577,11 @@ function reReviewMonth() {
       var card = document.getElementById('impCard_' + i);
       if (card) card.classList.toggle('off', k.exc);
     }
+  });
+  keepPat.forEach(function (v, i) {
+    if (!v) return;
+    var el = document.querySelector('input[name="impPat_' + i + '"][value="' + v + '"]');
+    if (el) el.checked = true;
   });
 }
 function closeImportReview() {
@@ -1618,6 +1665,23 @@ function renderImportReview(ym) {
     '<option value="1"' + (gl.backward === 1 ? ' selected' : '') + '>안 됨</option>' +
     '</select></td></tr>';
 
+  /* AI가 관찰한 습관 — 사람이 「맞아요」한 것만 계정 메모로 저장(자동 강제 X). 없으면 섹션 자체를 숨긴다 */
+  var patObs = '';
+  if (_importPatterns.length) {
+    var patItems = _importPatterns.map(function (p, i) {
+      return '<div class="imppat">' +
+        '<div class="imppat-t">“' + esc(p.text) + '”</div>' +
+        '<div class="imppat-c">' +
+        '<label><input type="radio" name="impPat_' + i + '" value="yes"> 맞아요</label>' +
+        '<label><input type="radio" name="impPat_' + i + '" value="no"> 우연이에요</label>' +
+        '</div></div>';
+    }).join('');
+    patObs =
+      '<h3 style="margin:18px 0 4px">이 근무표에서 발견한 습관 <span class="hint">(' + _importPatterns.length + '개)</span></h3>' +
+      '<p class="hint" style="margin:0 0 8px">AI가 읽어낸 반복 습관이에요. 맞으면 「맞아요」, 우연이면 「우연이에요」를 눌러주세요. ' +
+      '<b>「맞아요」한 것만</b> 다음에 근무표 만들 때 참고하시라고 「우리 병동 메모」에 적어둬요 — <b>근무표에 자동으로 넣지는 않아요.</b></p>' +
+      patItems;
+  }
   var warn = (res.unknownCodes && res.unknownCodes.length)
     ? '<div class="imp-warn">알아보지 못한 표시가 있어요: <b>' + res.unknownCodes.map(esc).join(', ') + '</b> — 이 칸은 빈칸으로 들어가요. 불러온 뒤 직접 고쳐주세요.</div>'
     : '';
@@ -1643,6 +1707,7 @@ function renderImportReview(ym) {
     '<div class="imp-scroll2"><table class="rgtable"><tr><th>직군</th><th>데이(D)</th><th>이브닝(E)</th><th>나이트(N)</th></tr>' + ruleRows + '</table></div>' +
     '<h3 style="margin:16px 0 4px">근무 패턴 <span class="hint">(읽어낸 규칙 — 고쳐도 돼요)</span></h3>' +
     '<table class="pttable">' + patternRows + '</table>' +
+    patObs +
     '<div class="imp-actions">' +
     '<button class="btn big" onclick="applyImport()">이대로 적용</button>' +
     '<button class="btn gray" onclick="closeImportReview()">취소</button>' +
@@ -1743,6 +1808,24 @@ function applyImport() {
     });
     if (matched) { db.months[hym] = { codes: hcodes, wish: {}, pins: {}, holidays: [] }; histSaved++; }
   });
+
+  /* AI 습관 메모 — 「맞아요」로 고른 것만 이 계정에 저장(dedup). 자동 강제는 안 함(참고 표시용).
+     확인 화면 DOM이 아직 살아 있으므로(closeImportReview 전) 라디오를 여기서 읽는다. */
+  var patAdded = 0;
+  if (_importPatterns.length) {
+    db.customPatterns = db.customPatterns || [];
+    var seen = db.customPatterns.map(function (p) { return normPatText(p.text); });
+    var nowIso = new Date().toISOString();
+    _importPatterns.forEach(function (p, i) {
+      var sel = document.querySelector('input[name="impPat_' + i + '"]:checked');
+      if (!sel || sel.value !== 'yes') return;
+      var key = normPatText(p.text);
+      if (!key || seen.indexOf(key) >= 0) return;   // 빈 문장·이미 저장된 습관은 건너뜀
+      seen.push(key);
+      db.customPatterns.push({ id: 'pat' + Date.now() + '_' + i, text: p.text, source: 'ai', ym: ym, adoptedAt: nowIso });
+      patAdded++;
+    });
+  }
   save();
 
   closeImportReview();
@@ -1751,6 +1834,8 @@ function applyImport() {
   var msg = '근무표를 불러왔어요 — ' + staff.length + '명 등록 ✓';
   if (histSaved) msg += ' · 이전 ' + histSaved + '개 달은 기록으로 저장됨';
   else if (ym !== curYM) msg += ' (이력으로 저장됨 — 다음 달 만들 때 반영)';
+  if (patAdded) msg += ' · 습관 메모 ' + patAdded + '개 저장';
+  else if (_importPatterns.length) msg += ' (습관 메모는 저장하지 않았어요)';
   toast(msg);
 }
 
