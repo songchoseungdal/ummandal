@@ -147,7 +147,7 @@ function showTab(t) {
   });
   if (t === 'home') renderHome();
   if (t === 'ward') { renderStaff(); renderRules(); }
-  if (t === 'archive') { renderArchive(); renderCloudCard(); }
+  if (t === 'archive') { renderArchive(); renderCloudCard(); renderInstallCard(); }
   window.scrollTo(0, 0);
 }
 function moveMonth(dir) {
@@ -721,10 +721,16 @@ var deferredInstall = null;
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
   deferredInstall = e;
+  renderInstallCard();
   /* 홈 로그인 카드가 떠 있고 아직 입력을 시작하지 않았을 때만 다시 그린다 (입력 중 내용 보호) */
   var em = document.getElementById('cloudEmail');
   var home = document.getElementById('tab-home');
   if (home && home.style.display !== 'none' && (!em || !em.value)) renderHome();
+});
+window.addEventListener('appinstalled', function () {
+  deferredInstall = null;
+  renderInstallCard();
+  toast('설치했어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
 });
 function installApp() {
   if (!deferredInstall) return;
@@ -733,7 +739,94 @@ function installApp() {
   p.prompt();
   p.userChoice.then(function (r) {
     if (r && r.outcome === 'accepted') toast('설치했어요! 홈 화면에서 🌙 엄만달을 눌러 열어주세요');
+    renderInstallCard();
   });
+}
+/* 이미 앱으로 실행 중인가 (설치본으로 열었으면 설치 안내가 필요 없다) */
+function isStandalone() {
+  return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) ||
+         navigator.standalone === true;
+}
+/* 브라우저 종류 — 설치 방법이 저마다 달라서 안내 문구를 갈라야 한다 */
+function browserKind() {
+  var ua = navigator.userAgent || '';
+  if (inAppBrowser()) return 'inapp';
+  if (/iPhone|iPad|iPod/i.test(ua)) return /CriOS|FxiOS|EdgiOS|Whale/i.test(ua) ? 'ios-other' : 'ios-safari';
+  if (/SamsungBrowser/i.test(ua)) return 'samsung';
+  if (/Whale/i.test(ua)) return 'whale';
+  if (/FxiOS|Firefox/i.test(ua)) return 'firefox';
+  if (/Edg\//i.test(ua)) return 'edge';
+  if (/Chrome|CriOS/i.test(ua)) return 'chrome';
+  return 'other';
+}
+/* 「앱으로 설치」 카드 — 크롬이 원터치 설치를 지원하면 버튼, 아니면 기기별 손 설치 안내.
+   2026-07-20: 예전엔 로그인 카드에만 버튼이 있어서, 로그인한 상태로 들어오면
+   설치 버튼을 볼 방법이 아예 없었다. 이제 보관함에 항상 자리를 둔다. */
+function installStepsHtml() {
+  var kind = browserKind();
+  var box = function (title, steps, extra) {
+    return '<p><b>' + title + '</b></p><ol class="installsteps">' +
+      steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>' + (extra || '');
+  };
+  if (kind === 'inapp') {
+    return '<p>지금은 <b>카카오톡·네이버 같은 앱 안의 브라우저</b>로 보고 계세요. 여기서는 설치할 수 없어요.</p>' +
+      '<button class="btn big" onclick="openInBrowser()">🌐 크롬(브라우저)으로 열기</button>' +
+      '<p class="hint" style="margin-top:6px">크롬으로 열린 다음, 이 화면에서 다시 설치해 주세요.</p>';
+  }
+  if (kind === 'ios-safari') {
+    return box('아이폰 · 사파리', [
+      '화면 <b>아래쪽 가운데 공유 단추</b>(⬆️ 네모에 화살표)를 누르세요.',
+      '목록을 위로 넘겨 <b>「홈 화면에 추가」</b>를 누르세요.',
+      '오른쪽 위 <b>「추가」</b>를 누르면 끝이에요.'
+    ]);
+  }
+  if (kind === 'ios-other') {
+    return box('아이폰', [
+      '아이폰은 <b>사파리</b>에서만 설치할 수 있어요.',
+      '주소를 복사해 <b>사파리</b>로 연 뒤, 아래 <b>공유 단추</b> → <b>「홈 화면에 추가」</b>를 누르세요.'
+    ], '<button class="btn gray" style="margin-top:8px" onclick="copyAppLink()">🔗 주소 복사하기</button>');
+  }
+  if (kind === 'samsung') {
+    return box('삼성 인터넷', [
+      '화면 <b>아래쪽 줄 세 개(≡)</b>를 누르세요.',
+      '<b>「현재 페이지 추가」</b> 또는 <b>「페이지 추가」</b>를 누르세요.',
+      '<b>「홈 화면」</b>을 고르면 끝이에요.'
+    ]);
+  }
+  if (kind === 'firefox' || kind === 'whale' || kind === 'edge' || kind === 'other') {
+    return box('설치하기', [
+      '브라우저 <b>메뉴(⋮ 또는 ≡)</b>를 누르세요.',
+      '<b>「홈 화면에 추가」</b> 또는 <b>「앱 설치」</b>를 누르세요.'
+    ], '<p class="hint" style="margin-top:6px">메뉴에 없다면 <b>크롬</b>으로 열면 한 번에 설치할 수 있어요.</p>');
+  }
+  /* 크롬인데 설치 안내 이벤트가 아직 안 온 경우 (이미 설치돼 있거나, 잠시 뒤 나타남) */
+  return box('크롬', [
+    '오른쪽 위 <b>메뉴(⋮)</b>를 누르세요.',
+    '<b>「앱 설치」</b> 또는 <b>「홈 화면에 추가」</b>를 누르세요.'
+  ], '<p class="hint" style="margin-top:6px">이미 설치돼 있으면 이 항목이 안 보일 수 있어요. 그때는 홈 화면의 🌙 아이콘으로 열어주세요.</p>');
+}
+function renderInstallCard() {
+  var card = document.getElementById('installCard');
+  var body = document.getElementById('installBody');
+  if (!card || !body) return;
+  card.style.display = '';
+  if (isStandalone()) {
+    body.innerHTML = '<p>✅ 이미 <b>앱으로 설치</b>되어 실행 중이에요. 그대로 쓰시면 됩니다.</p>';
+    return;
+  }
+  body.innerHTML =
+    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면도 세로로 고정됩니다.</p>' +
+    (deferredInstall
+      ? '<button class="btn big xl" onclick="installApp()">📱 지금 설치하기</button>'
+      : installStepsHtml());
+}
+/* 아이폰 등에서 주소만 복사 — 다른 브라우저로 옮겨가야 할 때 */
+function copyAppLink() {
+  var url = location.origin + location.pathname;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function () { toast('주소를 복사했어요'); },
+      function () { toast(url); });
+  } else { toast(url); }
 }
 /* 인앱 브라우저(카톡·네이버·라인 등) 감지 — 구글이 앱 내장 브라우저(WebView) 로그인을
    정책으로 차단한다(403 disallowed_useragent). 감지되면 기본 브라우저로 안내한다. */
@@ -821,11 +914,15 @@ function renderAuth() {
       '<span class="hint" id="cloudMsg"></span>' +
       '</div>' +
       '<p class="hint">비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a></p>' +
-      (deferredInstall
-        ? '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">' +
-          '<button class="btn big" onclick="installApp()">📱 휴대폰에 앱으로 설치하기</button>' +
-          '<p class="hint" style="margin-top:6px">설치하면 홈 화면의 🌙 아이콘으로 바로 열 수 있어요.</p></div>'
-        : '');
+      (isStandalone() ? '' :
+        '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">' +
+        (deferredInstall
+          ? '<button class="btn big" onclick="installApp()">📱 휴대폰에 앱으로 설치하기</button>' +
+            '<p class="hint" style="margin-top:6px">설치하면 홈 화면의 🌙 아이콘으로 바로 열 수 있어요.</p>'
+          /* 원터치 설치가 안 되는 브라우저에서도 방법은 알려준다 */
+          : '<p class="hint">📱 홈 화면에 아이콘으로 두고 쓰시려면 → ' +
+            '<a class="link" onclick="showTab(\'archive\')">앱으로 설치하는 방법</a></p>') +
+        '</div>');
   }
 }
 function renderCloudCard() {

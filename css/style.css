@@ -147,6 +147,10 @@ table.duty th.cntcol { color: var(--sub); font-weight: 600; font-size: 12.5px; }
 .lockbtn { border: none; background: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 6px 0 0; vertical-align: -1px; }
 tr.locked td.name, tr.locked td.cntcol { background: var(--brand-soft); }
 
+/* 설치 안내 단계 */
+.installsteps { margin: 6px 0 0; padding-left: 24px; line-height: 1.85; }
+.installsteps li { margin-bottom: 4px; }
+
 /* 통계 — 표가 좁은 화면보다 넓으면 이 안에서만 옆으로 밀린다.
    (이게 없으면 표가 페이지 전체를 늘려서 화면이 옆으로 밀리고 잘린다) */
 .stat { margin-top: 24px; overflow-x: auto; }
