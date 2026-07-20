@@ -184,6 +184,10 @@ function renderAcctBtn() {
   if (!b) return;
   var u = window.Cloud && Cloud.enabled() && Cloud.getUser();
   b.style.display = u ? '' : 'none';
+  /* AI 분석은 로그인 사용자만 쓸 수 있다. 첫 세팅뿐 아니라 나중에도 다시 쓸 수 있게
+     머리글에 상설(2026-07-20) — 서버의 「세팅된 계정 차단」이 폐지되어 재사용이 가능해졌다. */
+  var ai = document.getElementById('aiBtn');
+  if (ai) ai.style.display = u ? '' : 'none';
 }
 /* 로그인 화면 전용 배치 — 월 달력·하단 탭·푸터를 감추고 여백을 줄여 한 화면에 담는다.
    (로그인 전에는 달력도 탭도 쓸 데가 없다) */
@@ -243,8 +247,18 @@ function renderPrep() {
   var p = ymParts(curYM);
   document.getElementById('prepStatus').innerHTML =
     '<span class="okmark">✔</span> 인원 <b>' + staff.length + '명</b> 등록됨 &nbsp;<a class="link" onclick="showTab(\'ward\')">고치기</a><br>' +
-    '<span class="okmark">✔</span> 근무 규칙 준비됨 <span class="hint">(그대로 두셔도 돼요)</span><br>' +
+    '<span class="okmark">✔</span> 근무 규칙 준비됨 &nbsp;<a class="link" onclick="editRules()">고치기</a> <span class="hint">(그대로 두셔도 돼요)</span><br>' +
     '<span class="star">★</span> ' + p.m + '월에 쉬고 싶은 날 <b>' + wishCount + '건</b> 표시됨';
+}
+
+/* 「근무 규칙 준비됨 → 고치기」 — 우리 병동 탭으로 가서 규칙 상자를 펼치고 그 자리로 데려간다.
+   (규칙 상자는 평소 접혀 있어서 탭만 옮기면 어디를 고쳐야 하는지 안 보인다) */
+function editRules() {
+  showTab('ward');
+  var box = document.getElementById('rulesBox');
+  if (!box) return;
+  box.open = true;
+  box.scrollIntoView({ block: 'start' });
 }
 
 /* ---- 근무표 그리드 ---- */
