@@ -752,6 +752,20 @@ function installApp() {
     renderInstallCard(); renderInstallBtn();
   });
 }
+/* 이미 홈 화면에 만들어져 있는가 — 브라우저 탭으로 열었을 때도 알 수 있다.
+   ★ 크롬은 이미 설치된 앱에는 beforeinstallprompt를 아예 보내지 않는다. 그래서
+   "원터치가 안 되는" 진짜 이유가 대개 이것이다. manifest의 related_applications(webapp)와
+   짝을 이뤄 동작한다(2026-07-20). */
+var alreadyInstalled = false, installCheckDone = false;
+function checkAlreadyInstalled() {
+  if (!navigator.getInstalledRelatedApps) { installCheckDone = true; return Promise.resolve(false); }
+  return navigator.getInstalledRelatedApps().then(function (apps) {
+    alreadyInstalled = !!(apps && apps.length);
+    installCheckDone = true;
+    renderInstallBtn(); renderInstallCard();
+    return alreadyInstalled;
+  }, function () { installCheckDone = true; return false; });
+}
 /* 이미 앱으로 실행 중인가 (설치본으로 열었으면 설치 안내가 필요 없다) */
 function isStandalone() {
   return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) ||
@@ -882,7 +896,8 @@ function renderBrowserGate() {
 function renderInstallBtn() {
   var b = document.getElementById('installBtn');
   if (!b) return;
-  b.style.display = isStandalone() ? 'none' : '';
+  /* 앱으로 실행 중이거나 이미 홈 화면에 만들어져 있으면 버튼 자체를 감춘다 */
+  b.style.display = (isStandalone() || alreadyInstalled) ? 'none' : '';
 }
 /* 버튼을 누르면 — 되도록 안내 없이 바로 만든다.
    크롬이 「설치 가능」 신호(beforeinstallprompt)를 늦게 주는 경우가 있어, 잠깐 기다렸다가
@@ -902,9 +917,14 @@ function installEntry() {
 }
 function openInstallModal() {
   var m = document.getElementById('installModal');
-  m.innerHTML = '<div class="ins-card"><h2>🔗 홈 화면에 바로가기 만들기</h2>' +
-    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면도 세로로 고정됩니다.</p>' +
-    installStepsHtml() +
+  var inner = alreadyInstalled
+    ? '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>'
+    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면도 세로로 고정됩니다.</p>' +
+      installStepsHtml();
+  /* 왜 원터치가 안 되는지 알려주는 작은 진단 표시 — 문제 보고용 */
+  var diag = '<p class="insdiag">진단: 원터치신호 ' + (deferredInstall ? '있음' : '없음') +
+    ' · 이미있음 ' + (navigator.getInstalledRelatedApps ? (alreadyInstalled ? '예' : '아니오') : '모름') + '</p>';
+  m.innerHTML = '<div class="ins-card"><h2>🔗 홈 화면에 바로가기 만들기</h2>' + inner + diag +
     '<div class="imp-actions"><button class="btn gray" onclick="closeInstallModal()">닫기</button></div></div>';
   m.className = 'on';
   m.onclick = function (ev) { if (ev.target === m) closeInstallModal(); };
@@ -920,6 +940,10 @@ function renderInstallCard() {
   card.style.display = '';
   if (isStandalone()) {
     body.innerHTML = '<p>✅ 이미 <b>바로가기로 실행</b> 중이에요. 그대로 쓰시면 됩니다.</p>';
+    return;
+  }
+  if (alreadyInstalled) {
+    body.innerHTML = '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>';
     return;
   }
   body.innerHTML =
@@ -1602,6 +1626,7 @@ renderMonthLabel();
 renderRules();
 bindRules();
 showTab('home');
+checkAlreadyInstalled();   // 이미 홈 화면에 있으면 버튼·안내를 그에 맞게 바꾼다
 /* 소셜 로그인 실패로 돌아온 경우 — URL의 error_description을 사람 말로 알려주고 주소를 정리한다 */
 (function () {
   var mch = (location.search + location.hash).match(/[?#&]error_description=([^&]+)/);
