@@ -827,15 +827,28 @@ function browserOk() {
   if (k === 'ios-safari') return true;      // 아이폰의 유일한 설치 경로
   return k === 'chrome';
 }
+/* 안드로이드에서 크롬을 콕 집어 여는 주소.
+   크롬이 없는 기기에서는 browser_fallback_url 덕에 그냥 평소 브라우저로 열린다(먹통 방지). */
+function chromeIntentUrl() {
+  var https = 'https://' + location.host + location.pathname;
+  return 'intent://' + location.host + location.pathname +
+    '#Intent;scheme=https;package=com.android.chrome;' +
+    'S.browser_fallback_url=' + encodeURIComponent(https) + ';end';
+}
+/* 어떤 방법으로 크롬을 열지 결정만 한다 (검증하기 쉽게 분리).
+   2026-07-20 수정: 예전엔 카톡·네이버일 때 openInBrowser()(=kakaotalk 외부열기)를 먼저 썼는데,
+   그건 크롬이 아니라 「기본 브라우저」를 연다. 기본값이 삼성 인터넷인 기기에서는
+   삼성 인터넷 → 안내막 → 다시 크롬, 이렇게 두 번을 눌러야 했다.
+   안드로이드면 인앱이든 아니든 크롬을 직접 지목한다. */
+function openInChromePlan() {
+  if (/Android/i.test(navigator.userAgent || '')) return { how: 'chrome-intent', url: chromeIntentUrl() };
+  if (inAppBrowser()) return { how: 'default-browser' };   // 아이폰 인앱 등 — 기본 브라우저로라도 탈출
+  return { how: 'copy-link' };
+}
 function openInChrome() {
-  var ua = navigator.userAgent || '';
-  var url = location.origin + location.pathname;
-  if (inAppBrowser()) { openInBrowser(); return; }   // 카톡·네이버는 전용 방식이 따로 있다
-  if (/Android/i.test(ua)) {
-    location.href = 'intent://' + location.host + location.pathname +
-      '#Intent;scheme=https;package=com.android.chrome;end';
-    return;
-  }
+  var plan = openInChromePlan();
+  if (plan.how === 'chrome-intent') { location.href = plan.url; return; }
+  if (plan.how === 'default-browser') { openInBrowser(); return; }
   copyAppLink();
   toast('주소를 복사했어요. 크롬을 열고 붙여넣어 주세요');
 }
