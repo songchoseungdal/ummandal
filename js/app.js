@@ -596,15 +596,27 @@ function generate() {
   var jobs = gs.map(function (g) {
     var gStaff = groupStaff(g);
     var cfg = engineConfig(curYM, g);
-    preIssues = preIssues.concat(E.preflight(gStaff, cfg));
+    var iss = E.preflight(gStaff, cfg);
+    iss.forEach(function (v) { v._g = g; });   // 소프트 메시지에 직군 라벨을 붙이기 위한 태그
+    preIssues = preIssues.concat(iss);
     return { g: g, staff: gStaff, cfg: cfg };
   });
-  if (preIssues.length) {
+  var hardIssues = preIssues.filter(function (v) { return !v.soft; });
+  if (hardIssues.length) {
     alert('만들기 전에 먼저 고쳐야 할 것이 있어요:\n\n' +
-      preIssues.slice(0, 6).map(function (v) { return '· ' + v.msg; }).join('\n') +
-      (preIssues.length > 6 ? '\n…외 ' + (preIssues.length - 6) + '건' : ''));
+      hardIssues.slice(0, 6).map(function (v) { return '· ' + v.msg; }).join('\n') +
+      (hardIssues.length > 6 ? '\n…외 ' + (hardIssues.length - 6) + '건' : ''));
     return;
   }
+  /* 소프트 경고(월 여력 부족) — 생성을 막지 않고 참고로만 안내.
+     다직군(간호사+조무사)이면 어느 직군인지 라벨을 붙인다. 중복 메시지는 제거. */
+  var multiGroup = gs.length > 1;
+  var softMsgs = [];
+  preIssues.forEach(function (v) {
+    if (!v.soft) return;
+    var m = (multiGroup ? groupNames[v._g] + ' — ' : '') + v.msg;
+    if (softMsgs.indexOf(m) < 0) softMsgs.push(m);
+  });
   pushUndo();
   var perMax = 1500, seed = Date.now() % 100000, t0 = Date.now();
   var totalMax = perMax * jobs.length;
@@ -612,7 +624,7 @@ function generate() {
   var bar = document.getElementById('genProgBar');
   var lbl = document.getElementById('genProgLbl');
   var info = document.getElementById('genInfo');
-  info.textContent = '';
+  info.textContent = softMsgs.map(function (m) { return '⚠️ ' + m; }).join('\n');
   prog.className = 'on';
   bar.style.width = '0%';
   var ji = 0, att = 0, doneAtt = 0, best = null;
@@ -621,7 +633,7 @@ function generate() {
   function failAll(msg) {
     prog.className = '';
     undoStack.pop();
-    alert(msg);
+    alert((softMsgs.length ? softMsgs.join('\n') + '\n\n' : '') + msg);
   }
   function finishAll() {
     prog.className = '';
@@ -634,9 +646,11 @@ function generate() {
     });
     save();
     renderHome();
-    info.textContent = '완성! (' + ((Date.now() - t0) / 1000).toFixed(1) + '초) ' +
-      (warn.length ? '⚠️ 다 지키진 못했어요(' + warn.join(', ') + ') — 빨간 칸을 확인해 주세요. ' : '') +
-      '맘에 안 들면 「다시 만들기」를 누르세요.';
+    var lines = ['완성! (' + ((Date.now() - t0) / 1000).toFixed(1) + '초)'];
+    if (warn.length) lines.push('⚠️ 다 지키진 못했어요(' + warn.join(', ') + ') — 빨간 칸을 확인해 주세요.');
+    softMsgs.forEach(function (m) { lines.push('⚠️ ' + m); });
+    lines.push('맘에 안 들면 「다시 만들기」를 누르세요.');
+    info.textContent = lines.join('\n');
     toast(warn.length ? '초안이 나왔어요 — 확인이 필요한 곳이 있어요' : '근무표 초안이 완성됐어요 🌙');
   }
   function batch() {

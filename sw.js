@@ -1,5 +1,5 @@
 /* 엄만달 서비스 워커 — 전 파일 캐시로 오프라인 동작 */
-var CACHE = 'ummandal-v5-7-2';
+var CACHE = 'ummandal-v5-8-0';
 var ASSETS = [
   './',
   './index.html',

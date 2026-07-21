@@ -121,6 +121,45 @@
     return true;
   }
 
+  /* ---------- 월 단위 여력 계산 (preflight 소프트 검사 ↔ tryOnce 예산 풀 공유) ----------
+   * 분류(누가 나이트/주간 풀인가)·집계(풀별 여력 합)까지 poolCapacities 한 곳에서 산출해
+   * 두 소비처가 반드시 같은 수치를 쓰게 한다(드리프트 방지 — [[기능-preflight개선]] 리스크 #3).
+   *  - monthMinDemand: 한 달 최소 근무 슬롯 합(N 계열 / D·E 계열 분리)
+   *  - capOfPerson: 한 사람이 휴무 목표(targetOff)를 지키며 설 수 있는 최대 근무일.
+   *    선입력된 비-O 휴식(V·CO·EDU)은 그만큼 근무 여력이 줄므로 제외(O는 목표에 기여하므로 안 뺌).
+   *    ※ 한계(의도된 하한): 유형별 실근무 가능일(상근=평일만·2교대=N불가·잠금행)을 세밀히 빼지
+   *      않아 Σ여력을 과대추정할 수 있다 → 소프트 경고는 "뜨면 확실, 안 떠도 안심 못 함"인
+   *      하한 신호. 과대추정은 경고를 '덜' 띄우는 방향이라 false positive는 없다.
+   *  - poolCapacities: 전담제면 {N,DE} 풀 분리, 아니면 {all} 통합. preflight·tryOnce 공용. */
+  function monthMinDemand(cfg) {
+    var mdN = 0, mdDE = 0;
+    for (var d = 1; d <= cfg.days; d++) {
+      var nd = cfg.isRestDay(d) ? cfg.required.holiday : cfg.required.weekday;
+      mdN += nd.N[0];
+      mdDE += nd.D[0] + nd.E[0];
+    }
+    return { N: mdN, DE: mdDE };
+  }
+  function capOfPerson(p, cfg) {
+    var preRestNonO = 0;
+    var row = cfg.pre[p.id] || {};
+    Object.keys(row).forEach(function (ds) { if (isRest(row[ds]) && row[ds] !== 'O') preRestNonO++; });
+    return Math.max(0, cfg.days - cfg.targetOff - preRestNonO);
+  }
+  function poolCapacities(staff, cfg) {
+    var md = monthMinDemand(cfg);
+    if (cfg.restrictNToNight) {
+      var capN = 0, capDE = 0;
+      staff.forEach(function (p) {
+        if (p.type === 'night') capN += capOfPerson(p, cfg); else capDE += capOfPerson(p, cfg);
+      });
+      return { restrict: true, md: md, capN: capN, capDE: capDE };
+    }
+    var capAll = 0;
+    staff.forEach(function (p) { capAll += capOfPerson(p, cfg); });
+    return { restrict: false, md: md, capAll: capAll };
+  }
+
   /* ---------- 사전 검사 (불능 입력 조기 검출) ----------
    * 선입력·희망오프·이력은 시도 간 불변이라, 여기 걸리는 모순은 재시도로 절대 해소되지 않는다.
    * 따라서 검출 즉시 사유를 반환해 maxAttempts 낭비와 "원인 없는 실패"를 막는다. */
@@ -255,6 +294,23 @@
         prev = c;
       }
     });
+
+    /* 월 단위 여력(off-budget) 소프트 검사 — 하드 위반이 아니라 "인원이 빠듯해 모두가
+       휴무 목표(targetOff)만큼 쉬긴 어렵다"는 조기 안내. Σ최소수요 > Σ여력이면 비둘기집
+       원리상 누군가는 목표 미달이 확정이라 false positive가 없다. 생성은 막지 않는다(soft:true).
+       분류·집계는 poolCapacities로 tryOnce 예산 풀과 공유(동일 수치 보장).
+       문구는 어르신 UX: 진단 숫자·'여력' 용어 대신 "빠듯하다 + 해결책"으로 간결하게. */
+    var off = '목표(한 달 휴무 약 ' + cfg.targetOff + '일)만큼 쉬기 어려울 수 있어요.';
+    var pc = poolCapacities(staff, cfg);
+    if (pc.restrict) {
+      if (pc.capN < pc.md.N)
+        issues.push({ day: null, pid: null, rule: '여력', soft: true, msg: '나이트가 빠듯해요 — 지금 나이트 인원으로는 ' + off + ' 나이트 전담을 늘리거나 나이트 최소 인원을 줄여보세요.' });
+      if (pc.capDE < pc.md.DE)
+        issues.push({ day: null, pid: null, rule: '여력', soft: true, msg: '주간이 빠듯해요 — 지금 주간(D·E) 인원으로는 ' + off + ' 주간 인원을 늘리거나 주간 최소 인원을 줄여보세요.' });
+    } else {
+      if (pc.capAll < pc.md.N + pc.md.DE)
+        issues.push({ day: null, pid: null, rule: '여력', soft: true, msg: '인원이 빠듯해요 — 지금 인원으로는 모두가 ' + off + ' 최소 인원을 줄이거나 사람을 늘리면 여유로워져요.' });
+    }
     return issues;
   }
 
@@ -367,7 +423,9 @@
   function generate(staff, config, seed) {
     var cfg = normalizeConfig(staff, config);
     var issues = preflight(staff, config);
-    if (issues.length) return { schedule: null, attempts: 0, violations: issues, infeasible: true };
+    var hardIssues = issues.filter(function (i) { return !i.soft; });
+    var warnings = issues.filter(function (i) { return i.soft; });   // 소프트는 violations에 안 섞고 warnings로만(안전 불변식)
+    if (hardIssues.length) return { schedule: null, attempts: 0, violations: hardIssues, warnings: warnings, infeasible: true };
     var best = null;
     for (var att = 0; att < cfg.maxAttempts; att++) {
       var rnd = mulberry32((seed || 1) * 7919 + att * 104729);
@@ -377,29 +435,32 @@
         var viol = validate(res, staff, config);
         var gap = nightGap(res, staff, cfg);
         if (viol.length === 0 && gap <= 2)
-          return { schedule: res, attempts: att + 1, violations: [] };
+          return { schedule: res, attempts: att + 1, violations: [], warnings: warnings };
         var key = viol.length * 100 + gap;
         if (!best || key < best.key) best = { schedule: res, attempts: att + 1, violations: viol, key: key };
       }
     }
-    if (best) { delete best.key; return best; }
+    if (best) { delete best.key; best.warnings = warnings; return best; }
     // 시도 전부 실패 — null 대신 사유를 담아 반환 (사용자에게 원인 없는 실패를 주지 않는다)
     return {
       schedule: null, attempts: cfg.maxAttempts, infeasible: false, exhausted: true,
-      violations: [{ day: null, pid: null, rule: '생성실패', msg: cfg.maxAttempts + '회 시도에도 조건을 만족하는 조합을 찾지 못했어요 — 인원 수와 최소 인원·연속 한도 규칙을 확인해 주세요' }]
+      violations: [{ day: null, pid: null, rule: '생성실패', msg: cfg.maxAttempts + '회 시도에도 조건을 만족하는 조합을 찾지 못했어요 — 인원 수와 최소 인원·연속 한도 규칙을 확인해 주세요' }],
+      warnings: warnings
     };
   }
 
   function attempt(staff, config, seed, att) {
     var cfg = normalizeConfig(staff, config);
     var issues = preflight(staff, config);
-    if (issues.length) return { schedule: null, violations: issues, infeasible: true };
+    var hardIssues = issues.filter(function (i) { return !i.soft; });
+    var warnings = issues.filter(function (i) { return i.soft; });   // 소프트는 violations에 안 섞고 warnings로만(안전 불변식)
+    if (hardIssues.length) return { schedule: null, violations: hardIssues, warnings: warnings, infeasible: true };
     var rnd = mulberry32((seed || 1) * 7919 + att * 104729);
     var temp = 8 + Math.floor(att / 10) * 30;
     var res = tryOnce(staff, cfg, rnd, temp);
     if (!res) return null;
     // nightGap: 전담 짝 N 격차 — generate의 수용 조건(≤2)과 같은 기준을 배치 루프(앱)도 쓰도록 노출
-    return { schedule: res, violations: validate(res, staff, config), nightGap: nightGap(res, staff, cfg) };
+    return { schedule: res, violations: validate(res, staff, config), nightGap: nightGap(res, staff, cfg), warnings: warnings };
   }
 
   function tryOnce(staff, cfg, rnd, temp) {
@@ -441,40 +502,20 @@
     var wishSet = {};
     staff.forEach(function (p) { wishSet[p.id] = cfg.wishSet[p.id] || {}; });
 
-    // 소프트 충원 전역 예산 — 풀 분리: 전담 나이트의 남는 capacity가 D/E 예산으로 새면
-    // 주간 인력이 과충원되어 O 하한(≈targetOff)이 무너진다.
-    var minDemandN = 0, minDemandDE = 0;
-    for (var d = 1; d <= days; d++) {
-      var nd = cfg.isRestDay(d) ? cfg.required.holiday : cfg.required.weekday;
-      minDemandN += nd.N[0];
-      minDemandDE += nd.D[0] + nd.E[0];
-    }
-    function capOf(p) {
-      var preRestNonO = 0;
-      var row = cfg.pre[p.id] || {};
-      Object.keys(row).forEach(function (ds) { if (isRest(row[ds]) && row[ds] !== 'O') preRestNonO++; });
-      return Math.max(0, days - cfg.targetOff - preRestNonO);
-    }
-    /* 소프트 충원 예산 풀.
-       - 전담제(restrictNToNight=true): N 슬롯은 전담자만 서므로 N/DE 풀을 나눠 각각의 여력을 따로 관리한다.
+    /* 소프트 충원 예산 풀 — 분류·집계는 poolCapacities로 preflight 소프트 검사와 공유(동일 수치).
+       - 전담제(restrict=true): N 슬롯은 전담자만 서므로 N/DE 풀을 나눠 각각의 여력을 따로 관리한다.
          전담의 남는 capacity가 D/E 예산으로 새면 주간이 과충원되어 O 하한(≈targetOff)이 무너지기 때문.
        - 전담 없음: 누구나 D/E/N을 설 수 있으므로 풀을 나누면 안 된다. 나누면 capN=0이라 N 예산이 0에 갇혀,
          규칙에서 N을 [2,3]으로 잡아도 최소치(2)를 절대 못 넘고 남는 여력이 전부 D/E로 흘러 주간만
          과충원된다(2026-07-20 적대 검토 확정). 하나의 풀로 합쳐 총 여력을 공유한다. */
+    var pc = poolCapacities(staff, cfg);
     var budgetPool, usedPool, poolOf;
-    if (cfg.restrictNToNight) {
-      var capN = 0, capDE = 0;
-      staff.forEach(function (p) {
-        if (p.type === 'night') capN += capOf(p);
-        else capDE += capOf(p);
-      });
-      budgetPool = { N: Math.max(0, capN - minDemandN), DE: Math.max(0, capDE - minDemandDE) };
+    if (pc.restrict) {
+      budgetPool = { N: Math.max(0, pc.capN - pc.md.N), DE: Math.max(0, pc.capDE - pc.md.DE) };
       usedPool = { N: 0, DE: 0 };
       poolOf = function (code) { return code === 'N' ? 'N' : 'DE'; };
     } else {
-      var capAll = 0;
-      staff.forEach(function (p) { capAll += capOf(p); });
-      budgetPool = { all: Math.max(0, capAll - (minDemandN + minDemandDE)) };
+      budgetPool = { all: Math.max(0, pc.capAll - (pc.md.N + pc.md.DE)) };
       usedPool = { all: 0 };
       poolOf = function () { return 'all'; };
     }

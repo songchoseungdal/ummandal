@@ -48,6 +48,8 @@ main { padding: 20px; max-width: 1500px; margin: 0 auto; }
         box-shadow: 0 2px 12px rgba(50, 46, 60, .06); border: 1px solid var(--line); }
 h2 { font-size: 21px; margin: 4px 0 14px; }
 .hint { color: var(--sub); font-size: 15.5px; }
+/* genInfo: 완성/여력 안내가 여러 줄이면 줄바꿈(\n)을 실제 줄로 — 어르신 가독성 */
+#genInfo { white-space: pre-line; display: block; line-height: 1.5; }
 .link { color: var(--brand-dk); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-weight: 700; }
 
 /* 버튼 */

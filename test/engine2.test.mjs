@@ -503,6 +503,72 @@ section('T8 경계 (일요일 시작·공휴일 없음·전담 1명·행 잠금 
   }
 }
 
+/* ========== T9. 월 단위 여력 소프트 경고 (preflight개선 item1) ========== */
+section('T9 월 여력 소프트 경고 (생성 막지 않음·warnings로만)');
+{
+  // a. 통합 풀(전담 없음)이 빠듯 — 소프트 경고 뜨되 infeasible 아님, violations엔 안 섞임
+  {
+    const staff = mkStaff(5, 0, 0);   // 삼교대 5명, 전담 없음 → 단일 풀
+    const cfg = {
+      days: 28, firstWeekday: 1, holidays: [], maxConsecWork: 6, maxConsecN: 3,
+      offAfterNights: 0, forbidBackward: false, maxAttempts: 1200, targetOff: 13,
+      required: { weekday: { D: [1, 2], E: [1, 2], N: [1, 1] }, holiday: { D: [1, 2], E: [1, 2], N: [1, 1] } },
+    };
+    // Σ최소수요 = 3×28 = 84, Σ여력 = 5×(28-13) = 75 → 84>75 소프트 확정
+    const pf = E2.preflight(staff, cfg);
+    ok(pf.some(i => i.soft && i.rule === '여력'), 'T9a preflight에 소프트 여력 경고');
+    ok(pf.filter(i => i.soft).every(i => i.rule === '여력'), 'T9a 소프트는 여력 규칙만');
+    const res = E2.generate(staff, cfg, 7);
+    ok(res && res.infeasible !== true, 'T9a 소프트는 생성을 막지 않음(infeasible 아님)');
+    ok(res && Array.isArray(res.warnings) && res.warnings.some(w => w.soft && w.rule === '여력'), 'T9a 결과 warnings에 소프트 경고');
+    ok(res && (res.violations || []).every(v => !v.soft), 'T9a 소프트가 violations에 안 섞임');
+  }
+  // b. 여유로운 병동 — 소프트 경고 없음(false positive 금지)
+  {
+    const staff = mkStaff(8, 0, 0);
+    const cfg = {
+      days: 28, firstWeekday: 1, holidays: [], ...BASE_RULES, maxAttempts: 600, targetOff: 8,
+      required: { weekday: { D: [1, 2], E: [1, 2], N: [1, 1] }, holiday: { D: [1, 2], E: [1, 2], N: [1, 1] } },
+    };
+    // Σ최소수요 = 84, Σ여력 = 8×(28-8) = 160 → 여유
+    const pf = E2.preflight(staff, cfg);
+    ok(!pf.some(i => i.soft), 'T9b 여유 병동은 소프트 경고 없음');
+    const res = E2.generate(staff, cfg, 7);
+    ok(res && res.violations.length === 0 && (!res.warnings || res.warnings.length === 0), 'T9b 여유 병동 위반0·경고0');
+  }
+  // c. 전담제 — 나이트 풀만 빠듯 → 나이트 메시지 (풀 분리 검증)
+  {
+    const staff = mkStaff(4, 2, 0);   // 삼교대 4 + 전담 2 → restrictNToNight
+    const cfg = {
+      days: 28, firstWeekday: 1, holidays: [], maxConsecWork: 6, maxConsecN: 3,
+      offAfterNights: 1, forbidBackward: false, maxAttempts: 1200, targetOff: 16,
+      required: { weekday: { D: [1, 2], E: [1, 2], N: [1, 1] }, holiday: { D: [1, 2], E: [1, 2], N: [1, 1] } },
+    };
+    // 나이트 풀: capN=2×(28-16)=24 < minDemandN=28 → 나이트 경고
+    // 주간 풀: capDE=4×12=48 ≥ minDemandDE=2×28=56? 56>48 이므로 주간도 뜰 수 있음 → 나이트 메시지 존재만 검증
+    const pf = E2.preflight(staff, cfg);
+    ok(pf.some(i => i.soft && i.rule === '여력' && i.msg.includes('나이트')), 'T9c 전담 나이트 풀 소프트 경고');
+    ok(pf.filter(i => !i.soft).length === 0, 'T9c 하드 위반 없음(선입력·가용 문제 아님)');
+  }
+  // d. 하드(min>max) + 소프트(빠듯) 동시 → infeasible이되 violations엔 soft 안 섞이고 warnings로 분리 (안전 불변식)
+  {
+    const staff = mkStaff(5, 0, 0);
+    const cfg = {
+      days: 28, firstWeekday: 1, holidays: [], maxConsecWork: 6, maxConsecN: 3,
+      offAfterNights: 0, forbidBackward: false, maxAttempts: 200, targetOff: 13,
+      required: { weekday: { D: [2, 2], E: [2, 1], N: [1, 1] }, holiday: { D: [1, 2], E: [1, 2], N: [1, 1] } },
+    };
+    // 평일 E min2>max1 = 하드(min>max), 동시에 Σ최소수요≫Σ여력 = 소프트
+    const res = E2.generate(staff, cfg, 3);
+    ok(res && res.infeasible === true, 'T9d 하드 있으면 infeasible');
+    ok(res && (res.violations || []).every(v => !v.soft), 'T9d infeasible violations에 soft 안 섞임');
+    ok(res && (res.violations || []).some(v => v.msg.includes('최대')), 'T9d violations에 하드(min>max) 유지');
+    ok(res && Array.isArray(res.warnings) && res.warnings.some(w => w.soft && w.rule === '여력'), 'T9d 소프트는 warnings로 분리');
+    const ra = E2.attempt(staff, cfg, 3, 0);
+    ok(ra && ra.infeasible === true && (ra.violations || []).every(v => !v.soft) && (ra.warnings || []).some(w => w.soft), 'T9d attempt도 하드/소프트 분리');
+  }
+}
+
 /* ========== 결과 ========== */
 console.log('');
 console.log(`결과: ${pass} 통과 / ${fail} 실패`);
