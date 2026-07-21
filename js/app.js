@@ -311,6 +311,16 @@ function renderGrid() {
     var gr = r.groups[g];
     var dayCnt = [];
     for (var d = 0; d <= days; d++) dayCnt.push({ D: 0, E: 0, N: 0 });
+    /* 형평성(상대): 같은 직군에서 '남들보다' 덜 쉰 사람만 강조.
+       절대 목표가 아니라 최대 휴무자 대비 — 전원 똑같이 쉬면(빠듯해도) 강조 안 함(그게 공평).
+       스케줄이 다 찬 사람끼리만 비교(부분 편집 중엔 비교 무의미). */
+    var restOf = {}, maxRest = 0;
+    gStaff.forEach(function (p) {
+      var rc = 0, fl = 0;
+      for (var d = 1; d <= days; d++) { var c = cellCode(p.id, d); if (c) { fl++; if (!E.fam(c)) rc++; } }
+      restOf[p.id] = { rest: rc, full: fl === days };
+      if (restOf[p.id].full && rc > maxRest) maxRest = rc;
+    });
     if (multi) html += '<tr class="grouprow"><td colspan="' + (days + 2) + '">' + groupNames[g] + ' (' + g + ')</td></tr>';
     gStaff.forEach(function (p) {
       var cnt = { D: 0, E: 0, N: 0, O: 0 };
@@ -336,7 +346,11 @@ function renderGrid() {
         '<button class="lockbtn" title="잠그면 다시 만들어도 그대로 유지돼요" onclick="toggleLock(event,\'' + p.id + '\')">' + (lk ? '🔒' : '🔓') + '</button>' +
         '<b>' + esc(p.name) + '</b><br><span class="typebadge">' + typeNames[p.type] + (p.pref ? ' · ' + prefNames[p.pref] : '') + '</span></td>' +
         '<td class="cntcol"><span style="color:var(--d)">' + cnt.D + '</span> <span style="color:var(--e)">' + cnt.E +
-        '</span> <span style="color:var(--n)">' + cnt.N + '</span> <span style="color:#868e96">' + cnt.O + '</span></td>' +
+        '</span> <span style="color:var(--n)">' + cnt.N + '</span> ' +
+        (restOf[p.id].full && gStaff.length >= 2 && maxRest - cnt.O >= 2
+          ? '<span class="off-low" title="같은 직군의 다른 분보다 덜 쉬었어요 (가장 많이 쉰 분은 ' + maxRest + '일)">' + cnt.O + '</span>'
+          : '<span style="color:#868e96">' + cnt.O + '</span>') +
+        '</td>' +
         cellsHtml + '</tr>';
     });
     if (hasAny()) {
@@ -638,10 +652,16 @@ function generate() {
   function finishAll() {
     prog.className = '';
     var m = month(curYM);
-    var warn = [];
+    var warn = [], short = [];
     jobs.forEach(function (job) {
       var r = results[job.g];
-      job.staff.forEach(function (p) { m.codes[p.id] = r.schedule[p.id]; });
+      // 형평성(상대): 같은 직군에서 최대 휴무자보다 2일+ 덜 쉰 사람만 — 전원 고르게 쉬면(빠듯해도) 안 잡음.
+      var rests = job.staff.map(function (p) {
+        m.codes[p.id] = r.schedule[p.id];
+        return { name: p.name, rest: r.schedule[p.id].filter(function (c) { return c && !E.fam(c); }).length };
+      });
+      var maxRest = rests.reduce(function (mx, x) { return Math.max(mx, x.rest); }, 0);
+      if (job.staff.length >= 2) rests.forEach(function (x) { if (maxRest - x.rest >= 2) short.push(x.name); });
       if (r.violations.length) warn.push(groupNames[job.g] + ' ' + r.violations.length + '건');
     });
     save();
@@ -649,6 +669,9 @@ function generate() {
     var lines = ['완성! (' + ((Date.now() - t0) / 1000).toFixed(1) + '초)'];
     if (warn.length) lines.push('⚠️ 다 지키진 못했어요(' + warn.join(', ') + ') — 빨간 칸을 확인해 주세요.');
     softMsgs.forEach(function (m) { lines.push('⚠️ ' + m); });
+    if (short.length) lines.push('⚖️ ' +
+      (short.length <= 3 ? short.join('·') + ' 님이' : short.length + '명이') +
+      ' 같은 직군의 다른 분들보다 덜 쉬었어요 — 표의 주황색 오프 숫자를 확인하고, 필요하면 근무를 바꿔주세요.');
     lines.push('맘에 안 들면 「다시 만들기」를 누르세요.');
     info.textContent = lines.join('\n');
     toast(warn.length ? '초안이 나왔어요 — 확인이 필요한 곳이 있어요' : '근무표 초안이 완성됐어요 🌙');
