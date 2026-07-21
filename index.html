@@ -102,7 +102,6 @@
         <button class="btn big" onclick="generate()">🔄 다시 만들기</button>
         <button class="btn gray" onclick="undo()">↩ 되돌리기</button>
         <button class="btn share" onclick="exportImage()">📤 이미지로 저장</button>
-        <button class="btn gray" onclick="printSchedule()">🖨 인쇄</button>
         <button class="btn gray" onclick="resetMonth()">🧹 초기화</button>
         <span class="hint" id="genInfo"></span>
       </div>
@@ -124,8 +123,13 @@
         <span class="lg-pin">📌 직접 고정한 칸</span>
       </div>
       <p class="hint" id="gridHint"></p>
-      <h1 id="printTitle"></h1>
-      <div class="gridwrap" id="gridArea"></div>
+      <div class="gridthumb" id="gridThumb" onclick="openGridFull()" role="button" tabindex="0"
+           title="탭하면 가로로 크게 볼 수 있어요"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGridFull();}">
+        <button class="gridfull-close" onclick="closeGridFull(event)" aria-label="닫기">✕ 닫기</button>
+        <div class="gridwrap" id="gridArea"></div>
+        <div class="gridthumb-cta"><span>🔍 크게 보기</span></div>
+      </div>
       <div class="stat" id="statArea"></div>
     </div>
   </div>

@@ -302,9 +302,6 @@ footer { text-align: center; color: var(--faint); padding: 26px; font-size: 14.5
          transition: opacity .25s, transform .25s; z-index: 60; white-space: nowrap; }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* 인쇄 제목 (평소엔 숨김) */
-#printTitle { display: none; }
-
 /* ===== 모바일 (하단 탭 바) ===== */
 @media (max-width: 768px) {
   header { padding: 10px 14px; gap: 8px; }
@@ -447,24 +444,32 @@ table.pttable select { font-size: 15px; padding: 6px 8px; border: 1.5px solid va
 .wz-nav .btn { flex: 1; min-width: 120px; font-size: 17px; padding: 14px 10px; }
 .wz-nav .btn.big { flex: 1.4; }
 
-/* ===== 인쇄 ===== */
-@page { size: A4 landscape; margin: 10mm; }
-@media print {
-  body { background: #fff; padding: 0; font-size: 12px; }
-  header, nav, footer, .toolbar, #banner, #genProgress, .legend, .hint, .stat,
-  #homePrep, #homeEmpty, #picker, #importReview, #toast { display: none !important; }
-  main { padding: 0; max-width: none; }
-  .card { border: none; box-shadow: none; padding: 0; }
-  #printTitle { display: block; font-size: 20px; margin: 0 0 8px; color: #000; }
-  .gridwrap { overflow: visible; }
-  table.duty { border-spacing: 1.5px; }
-  table.duty th { font-size: 8.5px; min-width: 0; padding: 1px; }
-  table.duty th.name, table.duty td.name { min-width: 64px; font-size: 10px; position: static; padding: 1px 4px; }
-  table.duty th.cntcol, table.duty td.cntcol { position: static; min-width: 0; font-size: 9px; padding: 0 4px; }
-  td.cell { height: 20px; min-width: 0; font-size: 10px; border-radius: 3px; box-shadow: none;
-            -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  tr.cntrow td { font-size: 8.5px; padding: 1px 0; }
-  tr.cntrow td.lbl { position: static; }
-  .lockbtn { display: none; }
-  .typebadge { display: none; }
-}
+/* ===== 근무표 미니맵(썸네일) + 가로 전체화면 ===== */
+.gridthumb { position: relative; border: 1.5px solid var(--line); border-radius: 14px;
+  overflow: hidden; cursor: pointer; background: var(--card); margin: 6px 0 4px;
+  -webkit-tap-highlight-color: transparent; }
+.gridthumb .gridwrap { overflow: hidden; pointer-events: none; }   /* 미니맵은 보기 전용 */
+.gridthumb-cta { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center;
+  background: var(--brand); color: #fff; font-size: 15.5px; font-weight: 800;
+  padding: 10px 16px; border-radius: 999px; box-shadow: 0 3px 12px rgba(50, 46, 60, .28);
+  pointer-events: none; }
+.gridthumb::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 44px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--card)); pointer-events: none; }
+.gridfull-close { display: none; }
+
+/* 열림 상태: #gridThumb를 화면 가득 채워 표를 정상 크기로 보여준다 */
+body.grid-open { overflow: hidden; }
+body.grid-open .gridthumb { position: fixed; inset: 0; z-index: 1000; height: 100vh; height: 100dvh;
+  margin: 0; border: none; border-radius: 0; overflow: auto; cursor: default;
+  padding: 56px 12px calc(16px + env(safe-area-inset-bottom)); background: var(--bg); }
+body.grid-open .gridthumb::after { display: none; }
+body.grid-open .gridthumb-cta { display: none; }
+body.grid-open .gridthumb .gridwrap { transform: none !important; overflow: auto; pointer-events: auto; }
+body.grid-open .gridfull-close { display: inline-flex; align-items: center; gap: 6px;
+  position: fixed; top: 10px; right: 12px; z-index: 1001; background: var(--card); color: var(--ink);
+  border: 1.5px solid var(--line); border-radius: 999px; font-size: 16px; font-weight: 800;
+  padding: 10px 18px; box-shadow: 0 2px 10px rgba(50, 46, 60, .18); cursor: pointer;
+  font-family: inherit; }
+/* 전체화면(z1000) 위로 올려야 편집판·안내가 그리드에 가리지 않는다 */
+body.grid-open #picker { position: fixed; z-index: 1010; }
+body.grid-open #toast { z-index: 1010; }

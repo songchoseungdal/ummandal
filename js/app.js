@@ -172,7 +172,6 @@ function moveMonth(dir) {
 function renderMonthLabel() {
   var p = ymParts(curYM);
   document.getElementById('curMonth').textContent = p.y + '년 ' + p.m + '월';
-  document.getElementById('printTitle').textContent = p.y + '년 ' + p.m + '월 근무표';
 }
 
 /* ---- 상태 판별 ---- */
@@ -203,7 +202,9 @@ function renderAcctBtn() {
 /* 로그인 화면 전용 배치 — 월 달력·하단 탭·푸터를 감추고 여백을 줄여 한 화면에 담는다.
    (로그인 전에는 달력도 탭도 쓸 데가 없다) */
 function setLoginView(on) {
-  document.body.className = on ? 'loginview' : '';
+  /* body.className을 통째로 바꾸면 다른 상태 클래스(예: 가로 전체화면 grid-open)가 지워진다 —
+     loginview만 토글해 보존한다(2026-07-22). */
+  document.body.classList.toggle('loginview', on);
   document.querySelector('header').className = on ? 'authonly' : '';
   var mn = document.getElementById('monthNav');
   if (mn) mn.style.display = on ? 'none' : '';
@@ -373,6 +374,7 @@ function renderGrid() {
   if (hi && document.activeElement !== hi) hi.value = m.holidays.join(', ');
   renderStats();
   renderBanner();
+  fitGridThumb();
 }
 function saveHolidays() {
   var hi = document.getElementById('holidayInput');
@@ -399,24 +401,31 @@ function toggleLock(ev, pid) {
    칸이 그 아래로 숨거나, 가로로 멀리 밀려 있으면 어디인지 못 찾는 문제가 있었다.
    고정 열 폭을 빼고 남는 영역의 한가운데로 직접 밀어준 뒤, 눈에 띄게 오래 깜빡인다. */
 function jumpTo(pid, day) {
+  /* 위반 칸은 큰 화면에서 짚어준다 — 세로 미니맵은 축소돼 있어 칸을 가리킬 수 없다.
+     2026-07-22: 세로면 먼저 가로 전체화면을 열고, 레이아웃이 잡힌 뒤 그 칸으로 데려간다. */
+  if (!document.body.classList.contains('grid-open')) {
+    openGridFull();
+    setTimeout(function () { jumpTo(pid, day); }, 280);
+    return;
+  }
   var el = document.getElementById('c_' + pid + '_' + day);
   if (!el) return;
-  var wrap = document.querySelector('.gridwrap');
+  var wrap = document.getElementById('gridArea');   // 가로 스크롤러(.gridwrap)
   if (wrap) {
     var nameCell = wrap.querySelector('td.name');
     var cntCell = wrap.querySelector('td.cntcol');
     var stick = (nameCell ? nameCell.offsetWidth : 0) + (cntCell ? cntCell.offsetWidth : 0);
     var wr = wrap.getBoundingClientRect(), er = el.getBoundingClientRect();
     var viewCenter = wr.left + stick + (wr.width - stick) / 2;
-    var delta = (er.left + er.width / 2) - viewCenter;
-    /* 부드러운 스크롤(scrollTo behavior:'smooth')은 브라우저에 따라 조용히 무시된다 —
-       실측으로 확인(2026-07-20). 확실하게 즉시 이동시키고, 대신 강조를 크게 준다. */
-    wrap.scrollLeft = Math.max(0, wrap.scrollLeft + delta);
+    /* 부드러운 스크롤은 브라우저에 따라 조용히 무시된다(2026-07-20 실측) — 즉시 이동 + 강조를 크게. */
+    wrap.scrollLeft = Math.max(0, wrap.scrollLeft + ((er.left + er.width / 2) - viewCenter));
   }
-  /* 세로는 페이지를 움직인다 — 칸이 화면 한가운데 오도록 */
-  var r = el.getBoundingClientRect();
-  var top = window.pageYOffset + r.top - window.innerHeight / 2 + r.height / 2;
-  window.scrollTo(0, Math.max(0, top));
+  /* 전체화면에선 세로 스크롤러가 #gridThumb다(본문 스크롤은 잠겨 있음) */
+  var vs = document.getElementById('gridThumb');
+  if (vs) {
+    var vr = vs.getBoundingClientRect(), r2 = el.getBoundingClientRect();
+    vs.scrollTop = Math.max(0, vs.scrollTop + (r2.top - vr.top) - vs.clientHeight / 2 + r2.height / 2);
+  }
   /* 도착한 자리에서 크게 깜빡여 어디인지 확실히 알린다 */
   el.animate([
     { boxShadow: 'inset 0 0 0 4px #e03131', transform: 'scale(1)' },
@@ -525,9 +534,24 @@ function tapCell(ev, pid, d) {
   pk.style.display = 'block';
   var rect = ev.target.getBoundingClientRect();
   var pkW = pk.offsetWidth || 410;   // 실제 폭으로 계산 — 고정값이면 좁은 폰에서 화면 밖으로 나간다
-  var x = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - pkW - 8);
-  pk.style.left = Math.max(8, x) + 'px';
-  pk.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  var pkH = pk.offsetHeight || 240;
+  if (document.body.classList.contains('grid-open')) {
+    /* 가로 전체화면: #picker가 뷰포트 기준(fixed)으로 뜨므로 스크롤 오프셋 없이 배치하고,
+       아래로 넘치면 칸 위로 띄운다(가로 화면은 세로가 짧아 아래 공간이 부족할 수 있다). */
+    var vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    var fx = rect.left;
+    var fy = rect.bottom + 6;
+    if (fy + pkH > vh - 8) fy = rect.top - pkH - 6;   // 아래로 넘치면 칸 위로
+    /* 어떤 경우에도 화면 밖으로 나가지 않게 최종 클램프 */
+    fx = Math.min(Math.max(8, fx), Math.max(8, vw - pkW - 8));
+    fy = Math.min(Math.max(8, fy), Math.max(8, vh - pkH - 8));
+    pk.style.left = fx + 'px';
+    pk.style.top = fy + 'px';
+  } else {
+    var x = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - pkW - 8);
+    pk.style.left = Math.max(8, x) + 'px';
+    pk.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  }
   ev.stopPropagation();
 }
 function hidePicker() {
@@ -1075,7 +1099,7 @@ function openInstallModal() {
   var m = document.getElementById('installModal');
   var inner = alreadyInstalled
     ? '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>'
-    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면도 세로로 고정됩니다.</p>' +
+    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
       installStepsHtml();
   /* 왜 원터치가 안 되는지 알려주는 작은 진단 표시 — 문제 보고용 */
   var diag = '<p class="insdiag">진단: 원터치신호 ' + (deferredInstall ? '있음' : '없음') +
@@ -1103,7 +1127,7 @@ function renderInstallCard() {
     return;
   }
   body.innerHTML =
-    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면도 세로로 고정됩니다.</p>' +
+    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
     (deferredInstall
       ? '<button class="btn big xl" onclick="installApp()">🔗 지금 만들기</button>'
       : installStepsHtml());
@@ -2004,13 +2028,6 @@ function exportImage() {
   });
 }
 
-/* ---- 인쇄 ---- */
-function printSchedule() {
-  if (!hasAny()) { alert('먼저 근무표를 만들어주세요.'); return; }
-  renderMonthLabel();
-  window.print();
-}
-
 /* ---- 토스트 ---- */
 var toastTimer = null;
 function toast(msg) {
@@ -2058,19 +2075,68 @@ if (window.Cloud && Cloud.enabled()) {
   Cloud.init();
 }
 
-/* 설치형 앱 세로 고정 보강 — manifest orientation은 기존 설치본에 소급되지 않으므로 앱에서 직접 잠근다.
-   2026-07-20 재검토: 예전엔 ①standalone일 때만 ②시작할 때 딱 한 번만 시도해서,
-   그 순간 실패하면(브라우저가 아직 안 받아주는 시점 등) 영영 다시 걸리지 않았다.
-   이제 조건 없이 시도하고, 화면이 돌아갈 때마다 다시 건다. (브라우저 탭에서는 거부돼도 무해) */
-function lockPortrait() {
-  try {
-    if (screen.orientation && screen.orientation.lock) {
-      screen.orientation.lock('portrait').catch(function () { });
-    }
-  } catch (e) { /* 미지원 기기 — 무시 */ }
+/* 근무표 보기: 세로에선 축소 미리보기(미니맵), 탭하면 가로 전체화면으로 크게 본다.
+   2026-07-22 개편: 예전엔 화면을 세로로 강제 고정(lockPortrait)해 자동회전이 아예 막혀 있었다
+   (앱을 열 때·회전할 때·다시 볼 때마다 세로로 되돌림). 이제 앱은 기기 방향을 따르고
+   (manifest orientation:any), '표를 크게 볼 때'만 가로로 잠갔다가 닫을 때 푼다. */
+
+/* 미니맵: 그리드 전체가 카드 폭에 들어오도록 축소해 '한 달 표가 있구나'를 한눈에 보여준다. */
+function fitGridThumb() {
+  var thumb = document.getElementById('gridThumb');
+  var area = document.getElementById('gridArea');
+  if (!thumb || !area) return;
+  if (document.body.classList.contains('grid-open')) return;   // 전체화면 중엔 축소 안 함
+  var table = area.querySelector('table.duty');
+  if (!table) { area.style.transform = ''; thumb.style.height = ''; return; }
+  area.style.transform = '';                    // 실측 위해 초기화
+  var w = table.scrollWidth, h = table.offsetHeight;
+  var avail = thumb.clientWidth;
+  if (!w || !avail) return;                      // 숨겨져 있으면(폭 0) 건너뜀
+  var s = Math.min(1, avail / w);
+  area.style.transformOrigin = 'top left';
+  area.style.transform = 'scale(' + s + ')';
+  /* 사람이 많아 표가 길면 미니맵이 화면을 다 먹지 않도록 높이 제한(아래는 페이드로 가려짐) */
+  thumb.style.height = Math.min(h * s, Math.round(window.innerHeight * 0.42)) + 'px';
 }
-lockPortrait();
-window.addEventListener('orientationchange', lockPortrait);
-document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'visible') lockPortrait();
+window.addEventListener('resize', fitGridThumb);
+
+/* 표를 가로 전체화면으로 크게 — #gridThumb를 화면 가득 채우고(클래스 토글) 가로로 잠근다. */
+function openGridFull() {
+  if (document.body.classList.contains('grid-open')) return;
+  if (!document.querySelector('#gridArea table.duty')) return;   // 아직 표가 없으면 무시
+  document.body.classList.add('grid-open');
+  var area = document.getElementById('gridArea');
+  if (area) area.style.transform = '';           // 축소 해제(정상 크기)
+  var thumb = document.getElementById('gridThumb');
+  if (thumb) { thumb.style.height = ''; thumb.scrollTop = 0; }
+  lockLandscape();
+}
+function closeGridFull(ev) {
+  if (ev) ev.stopPropagation();
+  document.body.classList.remove('grid-open');
+  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { }
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) { }
+  fitGridThumb();
+}
+/* 가로 잠금: 설치형 앱(안드로이드)에선 바로 되고, 브라우저 탭에서 거부되면 전체화면을 먼저 켜고 재시도.
+   iOS 사파리 등 미지원 기기에선 조용히 실패 — 세로 고정을 풀었으므로 사용자가 폰을 돌리면 가로가 된다. */
+function lockLandscape() {
+  try {
+    if (!(screen.orientation && screen.orientation.lock)) return;
+    screen.orientation.lock('landscape').catch(function () {
+      var el = document.documentElement;
+      if (el.requestFullscreen) {
+        el.requestFullscreen().then(function () {
+          try { screen.orientation.lock('landscape').catch(function () { }); } catch (e) { }
+        }).catch(function () { });
+      }
+    });
+  } catch (e) { /* 미지원 — 무시 */ }
+}
+/* Esc 또는 시스템이 전체화면을 해제하면 큰 화면도 닫는다 */
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && document.body.classList.contains('grid-open')) closeGridFull();
+});
+document.addEventListener('fullscreenchange', function () {
+  if (!document.fullscreenElement && document.body.classList.contains('grid-open')) closeGridFull();
 });
