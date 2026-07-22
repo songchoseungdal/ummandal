@@ -374,7 +374,8 @@ function renderGrid() {
   if (hi && document.activeElement !== hi) hi.value = m.holidays.join(', ');
   renderStats();
   renderBanner();
-  fitGridThumb();
+  if (document.body.classList.contains('grid-open')) { fitGridFull(); renderViewerPanel(); }
+  else fitGridThumb();
 }
 function saveHolidays() {
   var hi = document.getElementById('holidayInput');
@@ -401,37 +402,20 @@ function toggleLock(ev, pid) {
    칸이 그 아래로 숨거나, 가로로 멀리 밀려 있으면 어디인지 못 찾는 문제가 있었다.
    고정 열 폭을 빼고 남는 영역의 한가운데로 직접 밀어준 뒤, 눈에 띄게 오래 깜빡인다. */
 function jumpTo(pid, day) {
-  /* 위반 칸은 큰 화면에서 짚어준다 — 세로 미니맵은 축소돼 있어 칸을 가리킬 수 없다.
-     2026-07-22: 세로면 먼저 가로 전체화면을 열고, 레이아웃이 잡힌 뒤 그 칸으로 데려간다. */
+  /* 위반 칸으로 데려간다. 세로에선 먼저 가로 뷰어를 열고(레이아웃 잡힌 뒤 재호출), 표는 전체가 보이므로
+     스크롤 없이 그 칸을 '강한 애니메이션'으로 확 띄운다 — 표가 작아 빨강만으론 잘 안 보이니 큰 광채 펄스. */
   if (!document.body.classList.contains('grid-open')) {
     openGridFull();
-    setTimeout(function () { jumpTo(pid, day); }, 280);
+    setTimeout(function () { jumpTo(pid, day); }, 320);
     return;
   }
   var el = document.getElementById('c_' + pid + '_' + day);
   if (!el) return;
-  var wrap = document.getElementById('gridArea');   // 가로 스크롤러(.gridwrap)
-  if (wrap) {
-    var nameCell = wrap.querySelector('td.name');
-    var cntCell = wrap.querySelector('td.cntcol');
-    var stick = (nameCell ? nameCell.offsetWidth : 0) + (cntCell ? cntCell.offsetWidth : 0);
-    var wr = wrap.getBoundingClientRect(), er = el.getBoundingClientRect();
-    var viewCenter = wr.left + stick + (wr.width - stick) / 2;
-    /* 부드러운 스크롤은 브라우저에 따라 조용히 무시된다(2026-07-20 실측) — 즉시 이동 + 강조를 크게. */
-    wrap.scrollLeft = Math.max(0, wrap.scrollLeft + ((er.left + er.width / 2) - viewCenter));
-  }
-  /* 전체화면에선 세로 스크롤러가 #gridThumb다(본문 스크롤은 잠겨 있음) */
-  var vs = document.getElementById('gridThumb');
-  if (vs) {
-    var vr = vs.getBoundingClientRect(), r2 = el.getBoundingClientRect();
-    vs.scrollTop = Math.max(0, vs.scrollTop + (r2.top - vr.top) - vs.clientHeight / 2 + r2.height / 2);
-  }
-  /* 도착한 자리에서 크게 깜빡여 어디인지 확실히 알린다 */
-  el.animate([
-    { boxShadow: 'inset 0 0 0 4px #e03131', transform: 'scale(1)' },
-    { boxShadow: 'inset 0 0 0 4px #e03131', transform: 'scale(1.18)' },
-    { boxShadow: 'inset 0 0 0 4px rgba(224,49,49,0)', transform: 'scale(1)' }
-  ], { duration: 900, iterations: 3 });
+  el.classList.remove('viol-flash');
+  void el.offsetWidth;                 // 재클릭 시 애니메이션 재시작(리플로우 강제)
+  el.classList.add('viol-flash');
+  clearTimeout(el._flashT);
+  el._flashT = setTimeout(function () { el.classList.remove('viol-flash'); }, 3600);
 }
 function buildSchedule(gStaff) {
   var m = month(curYM);
@@ -487,6 +471,24 @@ function renderBanner() {
     }
     b.innerHTML = '⚠️ 확인이 필요한 곳이 <b>' + v.length + '건</b> 있어요.<br>' + list + more;
   }
+}
+/* 크게보기 뷰어 우측 라이브 패널 — 현재 규칙 위반을 실시간으로 보여주고, 항목을 누르면 그 칸으로 데려가
+   강한 애니메이션으로 위치를 확 띄운다. 편집할 때마다(renderGrid) 자동 갱신된다. (수정 추천은 다음 단계) */
+function renderViewerPanel() {
+  var panel = document.getElementById('viewerPanel');
+  if (!panel) return;
+  var v = currentViols();
+  if (!v.length) {
+    panel.innerHTML = '<div class="vp-ok">✅<br>규칙 위반이<br>없어요<span>이대로 쓰셔도 좋아요</span></div>';
+    return;
+  }
+  var html = '<div class="vp-head">⚠️ 확인할 곳 <b>' + v.length + '</b>곳</div>';
+  html += v.map(function (x, i) {
+    var num = '<span class="vp-num">' + (i + 1) + '</span><span class="vp-msg">' + esc(x.msg) + '</span>';
+    if (x.pid) return '<button class="vp-item" onclick="jumpTo(\'' + x.pid + '\',' + x.day + ')">' + num + '<span class="vp-go">보기›</span></button>';
+    return '<div class="vp-item vp-general">' + num + '</div>';
+  }).join('');
+  panel.innerHTML = html;
 }
 function renderStats() {
   var el = document.getElementById('statArea');
@@ -2097,38 +2099,35 @@ function fitGridThumb() {
   var area = document.getElementById('gridArea');
   if (!thumb || !area) return;
   if (document.body.classList.contains('grid-open')) return;   // 전체화면 중엔 미니맵 축소 안 함
-  area.style.width = ''; area.style.height = '';                // 뷰어에서 쓴 값 정리
+  area.style.transform = ''; area.style.width = ''; area.style.height = '';   // 남은 값 정리
   var table = area.querySelector('table.duty');
-  if (!table) { area.style.transform = ''; thumb.style.height = ''; return; }
-  area.style.transform = '';                    // 실측 위해 초기화
+  if (!table) { thumb.style.height = ''; return; }
+  table.style.transform = '';                    // 실측 위해 초기화(표를 직접 축소)
   var w = table.scrollWidth, h = table.offsetHeight;
   var avail = thumb.clientWidth;
   if (!w || !avail) return;                      // 숨겨져 있으면(폭 0) 건너뜀
   var s = Math.min(1, avail / w);
-  area.style.transformOrigin = 'top left';
-  area.style.transform = 'scale(' + s + ')';
+  table.style.transformOrigin = 'top left';
+  table.style.transform = 'scale(' + s + ')';
   /* 사람이 많아 표가 길면 미니맵이 화면을 다 먹지 않도록 높이 제한(아래는 페이드로 가려짐) */
   thumb.style.height = Math.min(h * s, Math.round(window.innerHeight * 0.42)) + 'px';
 }
 
-/* 뷰어(가로 전체화면): 표 '전체'가 한 화면에 들어오도록 축소해 가운데 보여준다(잘림 없음). */
+/* 뷰어(가로): 표 '전체'가 좌측 영역(#gridArea = 우측 패널 뺀 공간)에 들어오도록 축소해 가운데 보여준다.
+   #gridArea가 flex center이고 table을 중심 기준 scale로 줄인다(잘림 없음). 표를 꽉 채우진 않음(사람 많으면 그만큼 작아짐). */
 function fitGridFull() {
-  var thumb = document.getElementById('gridThumb');
   var area = document.getElementById('gridArea');
-  if (!thumb || !area) return;
-  if (!document.body.classList.contains('grid-open')) return;
+  if (!area || !document.body.classList.contains('grid-open')) return;
   var table = area.querySelector('table.duty');
   if (!table) return;
-  area.style.transform = ''; area.style.width = ''; area.style.height = '';   // 실측 위해 초기화
+  area.style.transform = '';
+  table.style.transform = '';                    // 실측 위해 초기화
   var tW = table.scrollWidth, tH = table.offsetHeight;
-  var availW = thumb.clientWidth - 16, availH = thumb.clientHeight - 16;       // 여백
+  var availW = area.clientWidth - 12, availH = area.clientHeight - 12;   // 좌측 표 영역
   if (!tW || !tH || availW <= 0 || availH <= 0) return;
   var s = Math.min(availW / tW, availH / tH);    // 가로·세로 둘 다 들어오는 배율 = 전체가 보임
-  /* #gridArea를 네이티브 크기 그대로 두고(폭/높이 안 건드림·overflow visible) 중심 기준으로 축소한다.
-     #gridThumb가 flex center라 네이티브 박스 중심이 화면 중심에 오고, 중심 기준 scale이라 전체가 가운데 정렬.
-     ⚠️ 폭/높이를 축소값으로 박고 overflow:hidden 하면 표가 먼저 그 폭으로 '잘린 뒤' 축소돼 잘림으로 보인다(v6.0.1 버그, v6.0.2 수정). */
-  area.style.transformOrigin = 'center center';
-  area.style.transform = 'scale(' + s + ')';
+  table.style.transformOrigin = 'center center';
+  table.style.transform = 'scale(' + s + ')';
 }
 
 /* 표를 가로 전체화면으로 크게 — #gridThumb를 화면 가득 채우고(클래스 토글) 가로로 잠근다. */
@@ -2138,14 +2137,18 @@ function openGridFull() {
   document.body.classList.add('grid-open');
   var thumb = document.getElementById('gridThumb');
   if (thumb) { thumb.style.height = ''; thumb.scrollTop = 0; }
+  var oarea = document.getElementById('gridArea');
+  if (oarea) oarea.style.transform = '';         // 미니맵에서 쓴 값 정리
   lockLandscape();
   fitGridFull();                                 // 회전 전 우선 적합, 회전 완료되면 재적합
+  renderViewerPanel();                           // 우측 라이브 오류 패널
 }
 function closeGridFull(ev) {
   if (ev) ev.stopPropagation();
   document.body.classList.remove('grid-open');
   var area = document.getElementById('gridArea');
-  if (area) { area.style.transform = ''; area.style.width = ''; area.style.height = ''; }
+  if (area) { area.style.transform = ''; area.style.width = ''; area.style.height = '';
+    var _t = area.querySelector('table.duty'); if (_t) _t.style.transform = ''; }
   /* 뷰어의 가로 잠금을 풀어 기기의 시스템 방향 설정을 다시 따르게 한다(세로 강제 아님 — 자동회전 존중).
      이 기기는 lock/unlock이 전체화면에서만 되므로, 전체화면 상태에서 unlock한 뒤 나간다. */
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { }
