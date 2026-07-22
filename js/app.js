@@ -1099,7 +1099,7 @@ function openInstallModal() {
   var m = document.getElementById('installModal');
   var inner = alreadyInstalled
     ? '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>'
-    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면은 세로로 고정돼요(근무표는 「크게 보기」로 가로로 볼 수 있어요).</p>' +
+    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 근무표는 「크게 보기」로 가로로 크게 볼 수 있어요.</p>' +
       installStepsHtml();
   /* 왜 원터치가 안 되는지 알려주는 작은 진단 표시 — 문제 보고용 */
   var diag = '<p class="insdiag">진단: 원터치신호 ' + (deferredInstall ? '있음' : '없음') +
@@ -1127,7 +1127,7 @@ function renderInstallCard() {
     return;
   }
   body.innerHTML =
-    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면은 세로로 고정돼요(근무표는 「크게 보기」로 가로로 볼 수 있어요).</p>' +
+    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 근무표는 「크게 보기」로 가로로 크게 볼 수 있어요.</p>' +
     (deferredInstall
       ? '<button class="btn big xl" onclick="installApp()">🔗 지금 만들기</button>'
       : installStepsHtml());
@@ -2076,27 +2076,16 @@ if (window.Cloud && Cloud.enabled()) {
 }
 
 /* 근무표 보기: 세로에선 축소 미리보기(미니맵), 탭하면 가로 전체화면으로 '표 전체'를 크게 본다.
-   2026-07-22 재수정(v6.0.1): 앱 화면 '세로 고정'은 의도된 설계다(v4.7.4 — 설치형 PWA가 시스템
-   회전 잠금을 무시해 어르신 사용자에게 화면이 멋대로 도는 게 불편). v6.0.0에서 이걸 통째로
-   풀었다가 그 문제가 재발 → 다시 세로 고정으로 복귀하되, '표 크게 보기' 뷰어에서만 가로로 잠근다.
-   그리고 뷰어는 표를 잘리지 않게 화면에 '전체가 들어오도록' 축소해 가운데 보여준다. */
+   2026-07-22 재정립(v6.0.5): 앱 화면 방향은 '기기의 시스템 자동회전 설정을 따른다' — 자동회전 끄면
+   세로 유지, 켜면 회전. 이를 위해 manifest에서 orientation을 뺐다(→ WebAPK screenOrientation=unspecified).
+   히스토리: v4.7.4에 manifest 'any'(=fullSensor, 시스템 잠금 무시하고 회전)를 막으려 'portrait'(항상 세로)로
+   고정했으나 이는 '자동회전 켜도 세로'라 과했다. 진짜 요구 = 시스템 설정 존중이라 orientation을 뗀다.
+   ⚠️ 설치형 WebAPK는 manifest 변경이 즉시 반영 안 됨 — Chrome이 재빌드하거나 재설치해야 새 orientation 적용.
+   앱을 JS로 세로 강제(lockPortrait 등)하지 않는다(시스템을 거스르므로). '크게 보기' 뷰어에서만 가로로 잠근다. */
 
-/* 앱 세로 고정 — 로드·회전·복귀 때마다 다시 건다. 단, 표 뷰어가 열려 있으면(가로) 건드리지 않는다. */
-function lockPortrait() {
-  if (document.body.classList.contains('grid-open')) return;   // 뷰어는 가로 유지
-  try {
-    if (screen.orientation && screen.orientation.lock) {
-      screen.orientation.lock('portrait').catch(function () { });
-    }
-  } catch (e) { /* 미지원 기기 — 무시 */ }
-}
-lockPortrait();
 window.addEventListener('orientationchange', function () {
-  if (document.body.classList.contains('grid-open')) setTimeout(fitGridFull, 250);  // 회전 후 뷰포트 확정되면 재적합
-  else lockPortrait();
-});
-document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'visible') lockPortrait();
+  if (document.body.classList.contains('grid-open')) setTimeout(fitGridFull, 250);  // 뷰어: 회전 후 재적합
+  // 일반 화면은 시스템 방향을 그대로 따른다 — 강제하지 않는다.
 });
 window.addEventListener('resize', function () {
   if (document.body.classList.contains('grid-open')) fitGridFull(); else fitGridThumb();
@@ -2157,19 +2146,10 @@ function closeGridFull(ev) {
   document.body.classList.remove('grid-open');
   var area = document.getElementById('gridArea');
   if (area) { area.style.transform = ''; area.style.width = ''; area.style.height = ''; }
-  /* 세로 복귀: 이 기기는 orientation.lock이 '전체화면'에서만 된다 — 전체화면을 나가기 '전에'
-     portrait로 잠근 뒤 나간다(나간 뒤 잠그면 SecurityError로 가로에 갇힘 — 실기기 확인 2026-07-22).
-     lock('portrait')은 직전 landscape 잠금을 대체하며 AbortError를 던질 수 있으나 방향은 세로로 바뀌고,
-     그 상태로 exitFullscreen하면 세로가 유지된다(실기기 실험 확인). */
-  var exitFs = function () { try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) { } };
-  try {
-    if (document.fullscreenElement && screen.orientation && screen.orientation.lock) {
-      screen.orientation.lock('portrait').then(exitFs, exitFs);
-    } else {
-      try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait').catch(function () { }); } catch (e) { }
-      exitFs();
-    }
-  } catch (e) { exitFs(); }
+  /* 뷰어의 가로 잠금을 풀어 기기의 시스템 방향 설정을 다시 따르게 한다(세로 강제 아님 — 자동회전 존중).
+     이 기기는 lock/unlock이 전체화면에서만 되므로, 전체화면 상태에서 unlock한 뒤 나간다. */
+  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { }
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) { }
   fitGridThumb();
 }
 /* 가로 잠금: 이 기기(안드로이드 Chrome/WebAPK)는 orientation.lock에 '전체화면'이 필수(SecurityError) —
