@@ -1099,7 +1099,7 @@ function openInstallModal() {
   var m = document.getElementById('installModal');
   var inner = alreadyInstalled
     ? '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>'
-    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
+    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면은 세로로 고정돼요(근무표는 「크게 보기」로 가로로 볼 수 있어요).</p>' +
       installStepsHtml();
   /* 왜 원터치가 안 되는지 알려주는 작은 진단 표시 — 문제 보고용 */
   var diag = '<p class="insdiag">진단: 원터치신호 ' + (deferredInstall ? '있음' : '없음') +
@@ -1127,7 +1127,7 @@ function renderInstallCard() {
     return;
   }
   body.innerHTML =
-    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
+    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 화면은 세로로 고정돼요(근무표는 「크게 보기」로 가로로 볼 수 있어요).</p>' +
     (deferredInstall
       ? '<button class="btn big xl" onclick="installApp()">🔗 지금 만들기</button>'
       : installStepsHtml());
@@ -2075,17 +2075,40 @@ if (window.Cloud && Cloud.enabled()) {
   Cloud.init();
 }
 
-/* 근무표 보기: 세로에선 축소 미리보기(미니맵), 탭하면 가로 전체화면으로 크게 본다.
-   2026-07-22 개편: 예전엔 화면을 세로로 강제 고정(lockPortrait)해 자동회전이 아예 막혀 있었다
-   (앱을 열 때·회전할 때·다시 볼 때마다 세로로 되돌림). 이제 앱은 기기 방향을 따르고
-   (manifest orientation:any), '표를 크게 볼 때'만 가로로 잠갔다가 닫을 때 푼다. */
+/* 근무표 보기: 세로에선 축소 미리보기(미니맵), 탭하면 가로 전체화면으로 '표 전체'를 크게 본다.
+   2026-07-22 재수정(v6.0.1): 앱 화면 '세로 고정'은 의도된 설계다(v4.7.4 — 설치형 PWA가 시스템
+   회전 잠금을 무시해 어르신 사용자에게 화면이 멋대로 도는 게 불편). v6.0.0에서 이걸 통째로
+   풀었다가 그 문제가 재발 → 다시 세로 고정으로 복귀하되, '표 크게 보기' 뷰어에서만 가로로 잠근다.
+   그리고 뷰어는 표를 잘리지 않게 화면에 '전체가 들어오도록' 축소해 가운데 보여준다. */
 
-/* 미니맵: 그리드 전체가 카드 폭에 들어오도록 축소해 '한 달 표가 있구나'를 한눈에 보여준다. */
+/* 앱 세로 고정 — 로드·회전·복귀 때마다 다시 건다. 단, 표 뷰어가 열려 있으면(가로) 건드리지 않는다. */
+function lockPortrait() {
+  if (document.body.classList.contains('grid-open')) return;   // 뷰어는 가로 유지
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(function () { });
+    }
+  } catch (e) { /* 미지원 기기 — 무시 */ }
+}
+lockPortrait();
+window.addEventListener('orientationchange', function () {
+  if (document.body.classList.contains('grid-open')) setTimeout(fitGridFull, 250);  // 회전 후 뷰포트 확정되면 재적합
+  else lockPortrait();
+});
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') lockPortrait();
+});
+window.addEventListener('resize', function () {
+  if (document.body.classList.contains('grid-open')) fitGridFull(); else fitGridThumb();
+});
+
+/* 미니맵(세로): 그리드 전체가 카드 폭에 들어오도록 축소해 '한 달 표가 있구나'를 한눈에 보여준다. */
 function fitGridThumb() {
   var thumb = document.getElementById('gridThumb');
   var area = document.getElementById('gridArea');
   if (!thumb || !area) return;
-  if (document.body.classList.contains('grid-open')) return;   // 전체화면 중엔 축소 안 함
+  if (document.body.classList.contains('grid-open')) return;   // 전체화면 중엔 미니맵 축소 안 함
+  area.style.width = ''; area.style.height = '';                // 뷰어에서 쓴 값 정리
   var table = area.querySelector('table.duty');
   if (!table) { area.style.transform = ''; thumb.style.height = ''; return; }
   area.style.transform = '';                    // 실측 위해 초기화
@@ -2098,36 +2121,57 @@ function fitGridThumb() {
   /* 사람이 많아 표가 길면 미니맵이 화면을 다 먹지 않도록 높이 제한(아래는 페이드로 가려짐) */
   thumb.style.height = Math.min(h * s, Math.round(window.innerHeight * 0.42)) + 'px';
 }
-window.addEventListener('resize', fitGridThumb);
+
+/* 뷰어(가로 전체화면): 표 '전체'가 한 화면에 들어오도록 축소해 가운데 보여준다(잘림 없음). */
+function fitGridFull() {
+  var thumb = document.getElementById('gridThumb');
+  var area = document.getElementById('gridArea');
+  if (!thumb || !area) return;
+  if (!document.body.classList.contains('grid-open')) return;
+  var table = area.querySelector('table.duty');
+  if (!table) return;
+  area.style.transform = ''; area.style.width = ''; area.style.height = '';   // 실측 위해 초기화
+  var tW = table.scrollWidth, tH = table.offsetHeight;
+  var availW = thumb.clientWidth - 16, availH = thumb.clientHeight - 16;       // 여백
+  if (!tW || !tH || availW <= 0 || availH <= 0) return;
+  var s = Math.min(availW / tW, availH / tH);    // 가로·세로 둘 다 들어오는 배율 = 전체가 보임
+  area.style.transformOrigin = 'top left';
+  area.style.transform = 'scale(' + s + ')';
+  area.style.width = (tW * s) + 'px';            // 레이아웃 박스를 축소 크기에 맞춰 가운데 정렬되게
+  area.style.height = (tH * s) + 'px';
+}
 
 /* 표를 가로 전체화면으로 크게 — #gridThumb를 화면 가득 채우고(클래스 토글) 가로로 잠근다. */
 function openGridFull() {
   if (document.body.classList.contains('grid-open')) return;
   if (!document.querySelector('#gridArea table.duty')) return;   // 아직 표가 없으면 무시
   document.body.classList.add('grid-open');
-  var area = document.getElementById('gridArea');
-  if (area) area.style.transform = '';           // 축소 해제(정상 크기)
   var thumb = document.getElementById('gridThumb');
   if (thumb) { thumb.style.height = ''; thumb.scrollTop = 0; }
   lockLandscape();
+  fitGridFull();                                 // 회전 전 우선 적합, 회전 완료되면 재적합
 }
 function closeGridFull(ev) {
   if (ev) ev.stopPropagation();
   document.body.classList.remove('grid-open');
-  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { }
+  var area = document.getElementById('gridArea');
+  if (area) { area.style.transform = ''; area.style.width = ''; area.style.height = ''; }
   try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) { }
+  lockPortrait();     // 기본은 세로 고정 — 닫으면 세로로 되돌린다
   fitGridThumb();
 }
 /* 가로 잠금: 설치형 앱(안드로이드)에선 바로 되고, 브라우저 탭에서 거부되면 전체화면을 먼저 켜고 재시도.
-   iOS 사파리 등 미지원 기기에선 조용히 실패 — 세로 고정을 풀었으므로 사용자가 폰을 돌리면 가로가 된다. */
+   iOS 사파리 등 미지원 기기에선 조용히 실패 — 표는 그대로 축소돼 전체가 보이므로 세로로도 열람은 된다. */
 function lockLandscape() {
   try {
     if (!(screen.orientation && screen.orientation.lock)) return;
-    screen.orientation.lock('landscape').catch(function () {
+    screen.orientation.lock('landscape').then(function () {
+      setTimeout(fitGridFull, 250);   // 회전 완료 후 새(가로) 뷰포트로 재적합
+    }).catch(function () {
       var el = document.documentElement;
       if (el.requestFullscreen) {
         el.requestFullscreen().then(function () {
-          try { screen.orientation.lock('landscape').catch(function () { }); } catch (e) { }
+          try { screen.orientation.lock('landscape').then(function () { setTimeout(fitGridFull, 250); }).catch(function () { }); } catch (e) { }
         }).catch(function () { });
       }
     });

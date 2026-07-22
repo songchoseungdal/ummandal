@@ -460,11 +460,13 @@ table.pttable select { font-size: 15px; padding: 6px 8px; border: 1.5px solid va
 /* 열림 상태: #gridThumb를 화면 가득 채워 표를 정상 크기로 보여준다 */
 body.grid-open { overflow: hidden; }
 body.grid-open .gridthumb { position: fixed; inset: 0; z-index: 1000; height: 100vh; height: 100dvh;
-  margin: 0; border: none; border-radius: 0; overflow: auto; cursor: default;
-  padding: 56px 12px calc(16px + env(safe-area-inset-bottom)); background: var(--bg); }
+  margin: 0; border: none; border-radius: 0; overflow: hidden; cursor: default;
+  display: flex; align-items: center; justify-content: center;
+  padding: 8px; background: var(--bg); }
 body.grid-open .gridthumb::after { display: none; }
 body.grid-open .gridthumb-cta { display: none; }
-body.grid-open .gridthumb .gridwrap { transform: none !important; overflow: auto; pointer-events: auto; }
+/* 뷰어에선 표가 fitGridFull로 전체가 들어오게 축소됨 — 스크롤 없이 가운데 정렬만 */
+body.grid-open .gridthumb .gridwrap { overflow: hidden; pointer-events: auto; transform-origin: top left; }
 body.grid-open .gridfull-close { display: inline-flex; align-items: center; gap: 6px;
   position: fixed; top: 10px; right: 12px; z-index: 1001; background: var(--card); color: var(--ink);
   border: 1.5px solid var(--line); border-radius: 999px; font-size: 16px; font-weight: 800;
