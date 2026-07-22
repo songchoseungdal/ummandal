@@ -2157,26 +2157,38 @@ function closeGridFull(ev) {
   document.body.classList.remove('grid-open');
   var area = document.getElementById('gridArea');
   if (area) { area.style.transform = ''; area.style.width = ''; area.style.height = ''; }
-  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) { }
-  lockPortrait();     // 기본은 세로 고정 — 닫으면 세로로 되돌린다
+  /* 세로 복귀: 이 기기는 orientation.lock이 '전체화면'에서만 된다 — 전체화면을 나가기 '전에'
+     portrait로 잠근 뒤 나간다(나간 뒤 잠그면 SecurityError로 가로에 갇힘 — 실기기 확인 2026-07-22).
+     lock('portrait')은 직전 landscape 잠금을 대체하며 AbortError를 던질 수 있으나 방향은 세로로 바뀌고,
+     그 상태로 exitFullscreen하면 세로가 유지된다(실기기 실험 확인). */
+  var exitFs = function () { try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) { } };
+  try {
+    if (document.fullscreenElement && screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').then(exitFs, exitFs);
+    } else {
+      try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait').catch(function () { }); } catch (e) { }
+      exitFs();
+    }
+  } catch (e) { exitFs(); }
   fitGridThumb();
 }
-/* 가로 잠금: 설치형 앱(안드로이드)에선 바로 되고, 브라우저 탭에서 거부되면 전체화면을 먼저 켜고 재시도.
-   iOS 사파리 등 미지원 기기에선 조용히 실패 — 표는 그대로 축소돼 전체가 보이므로 세로로도 열람은 된다. */
+/* 가로 잠금: 이 기기(안드로이드 Chrome/WebAPK)는 orientation.lock에 '전체화면'이 필수(SecurityError) —
+   전체화면을 먼저 켜고 landscape로 잠근다. iOS 등 전체화면/lock 미지원이면 조용히 실패하고,
+   표는 그대로 (세로에서도) 전체가 축소되어 보인다(fitGridFull). */
 function lockLandscape() {
-  try {
-    if (!(screen.orientation && screen.orientation.lock)) return;
-    screen.orientation.lock('landscape').then(function () {
-      setTimeout(fitGridFull, 250);   // 회전 완료 후 새(가로) 뷰포트로 재적합
-    }).catch(function () {
-      var el = document.documentElement;
-      if (el.requestFullscreen) {
-        el.requestFullscreen().then(function () {
-          try { screen.orientation.lock('landscape').then(function () { setTimeout(fitGridFull, 250); }).catch(function () { }); } catch (e) { }
-        }).catch(function () { });
+  var lockLand = function () {
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').then(function () { setTimeout(fitGridFull, 200); },
+                                                   function () { setTimeout(fitGridFull, 200); });
       }
-    });
-  } catch (e) { /* 미지원 — 무시 */ }
+    } catch (e) { /* 무시 */ }
+  };
+  try {
+    var el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen().then(lockLand, lockLand);
+    else lockLand();
+  } catch (e) { lockLand(); }
 }
 /* Esc 또는 시스템이 전체화면을 해제하면 큰 화면도 닫는다 */
 document.addEventListener('keydown', function (e) {
