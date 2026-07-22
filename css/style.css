@@ -502,10 +502,48 @@ body.grid-open #toast { z-index: 1010; }
 .vp-item.vp-general .vp-num { background: var(--brand); }
 .vp-msg { flex: 1; }
 .vp-go { flex: 0 0 auto; color: var(--danger); font-weight: 800; font-size: 12.5px; align-self: center; white-space: nowrap; }
+/* 위반 + (있으면) 그 아래 초록 '제안' — 한 덩어리로 붙인다 */
+.vp-block { margin-bottom: 9px; }
+.vp-block .vp-item { margin-bottom: 0; }
+.vp-item.has-fix { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.vp-fix { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; cursor: pointer;
+  background: var(--ok-soft); border: 1.5px solid #c4e7d0; border-top: none;
+  border-radius: 0 0 12px 12px; padding: 8px 11px; font-family: inherit; font-size: 13px;
+  color: #1f7a34; line-height: 1.4; }
+.vp-fix:active { transform: scale(.985); }
+.vp-fixtag { flex: 0 0 auto; background: var(--ok); color: #fff; font-size: 10.5px; font-weight: 800;
+  padding: 2px 8px; border-radius: 999px; letter-spacing: .3px; }
+.vp-fixmsg { flex: 1; }
+.vp-fixgo { flex: 0 0 auto; color: var(--ok); font-weight: 800; font-size: 12px; white-space: nowrap; }
 
-/* 오류 위치 강조 — 표가 작으니 색 대비 + 큰 광채 펄스로 확 띄운다 */
-@keyframes violBeacon {
-  0%, 100% { box-shadow: 0 0 0 3px #ff2d55, 0 0 0 6px rgba(255, 45, 85, .85), 0 0 28px 12px rgba(255, 45, 85, .7); transform: scale(1.2); }
-  50%      { box-shadow: 0 0 0 4px #ffd400, 0 0 0 10px rgba(255, 212, 0, .6), 0 0 46px 22px rgba(255, 45, 85, .95); transform: scale(1.55); }
+/* 오류 위치 강조 — 애플식 절제: 단색(빨강) 포커스 링이 스프링으로 부드럽게 떠올라 잔잔히 머물다
+   빠지는 class가 사라지면 아래 td.cell의 transition으로 스르륵 사라진다(요란한 광채·노랑 깜빡임 제거).
+   fix-flash는 같은 결의 초록 — 제안을 적용해 '고쳐진' 칸을 한눈에 확인시킨다. */
+td.cell { transition: box-shadow .3s ease, transform .3s cubic-bezier(.22, 1, .36, 1); }
+@keyframes violFocus {
+  from { box-shadow: 0 0 0 2px rgba(224, 49, 49, 0); transform: scale(1); }
+  60%  { transform: scale(1.18); }
+  to   { box-shadow: 0 0 0 3px rgba(224, 49, 49, .92), 0 6px 16px rgba(224, 49, 49, .24); transform: scale(1.1); }
 }
-td.cell.viol-flash { position: relative; z-index: 8; border-radius: 6px; animation: violBeacon .55s ease-in-out 6; }
+td.cell.viol-flash {
+  position: relative; z-index: 8; border-radius: 6px;
+  box-shadow: 0 0 0 3px rgba(224, 49, 49, .92), 0 6px 16px rgba(224, 49, 49, .24);
+  transform: scale(1.1);
+  animation: violFocus .5s cubic-bezier(.34, 1.36, .5, 1) 1;
+}
+@keyframes fixFocus {
+  from { box-shadow: 0 0 0 2px rgba(43, 138, 62, 0); transform: scale(1); }
+  60%  { transform: scale(1.18); }
+  to   { box-shadow: 0 0 0 3px rgba(43, 138, 62, .9), 0 6px 16px rgba(43, 138, 62, .24); transform: scale(1.1); }
+}
+td.cell.fix-flash {
+  position: relative; z-index: 8; border-radius: 6px;
+  box-shadow: 0 0 0 3px rgba(43, 138, 62, .9), 0 6px 16px rgba(43, 138, 62, .24);
+  transform: scale(1.1);
+  animation: fixFocus .45s cubic-bezier(.34, 1.36, .5, 1) 1;
+}
+/* 동작 줄이기: 확대/축소 모션까지 끄고, 강조는 색 링(box-shadow)만으로 유지 */
+@media (prefers-reduced-motion: reduce) {
+  td.cell { transition: box-shadow .2s ease; }
+  td.cell.viol-flash, td.cell.fix-flash { animation: none; transform: none; }
+}

@@ -401,9 +401,26 @@ function toggleLock(ev, pid) {
    2026-07-20 수정: scrollIntoView만으로는 이름·개수 열이 고정(sticky)으로 왼쪽을 덮고 있어
    칸이 그 아래로 숨거나, 가로로 멀리 밀려 있으면 어디인지 못 찾는 문제가 있었다.
    고정 열 폭을 빼고 남는 영역의 한가운데로 직접 밀어준 뒤, 눈에 띄게 오래 깜빡인다. */
+/* 하이라이트는 '한 번에 한 칸'만 — 이전에 켜둔 칸은 끄고 새 칸만 켠다.
+   (예전엔 칸마다 개별 타이머라, 한 곳을 켠 채 다른 곳을 누르면 둘이 동시에 반짝여 헷갈렸다.) */
+var activeFlash = null;
+function flashCellEl(el, cls, ms) {
+  if (activeFlash && activeFlash.el) {
+    activeFlash.el.classList.remove('viol-flash', 'fix-flash');
+    clearTimeout(activeFlash.t);
+  }
+  el.classList.remove(cls);
+  void el.offsetWidth;                 // 재클릭 시 애니메이션 재시작(리플로우 강제)
+  el.classList.add(cls);
+  var t = setTimeout(function () {
+    el.classList.remove(cls);
+    if (activeFlash && activeFlash.el === el) activeFlash = null;
+  }, ms);
+  activeFlash = { el: el, t: t };
+}
 function jumpTo(pid, day) {
   /* 위반 칸으로 데려간다. 세로에선 먼저 가로 뷰어를 열고(레이아웃 잡힌 뒤 재호출), 표는 전체가 보이므로
-     스크롤 없이 그 칸을 '강한 애니메이션'으로 확 띄운다 — 표가 작아 빨강만으론 잘 안 보이니 큰 광채 펄스. */
+     스크롤 없이 그 칸을 애플식 포커스 링으로 잔잔히 띄운다. */
   if (!document.body.classList.contains('grid-open')) {
     openGridFull();
     setTimeout(function () { jumpTo(pid, day); }, 320);
@@ -411,11 +428,7 @@ function jumpTo(pid, day) {
   }
   var el = document.getElementById('c_' + pid + '_' + day);
   if (!el) return;
-  el.classList.remove('viol-flash');
-  void el.offsetWidth;                 // 재클릭 시 애니메이션 재시작(리플로우 강제)
-  el.classList.add('viol-flash');
-  clearTimeout(el._flashT);
-  el._flashT = setTimeout(function () { el.classList.remove('viol-flash'); }, 3600);
+  flashCellEl(el, 'viol-flash', 2400);
 }
 function buildSchedule(gStaff) {
   var m = month(curYM);
@@ -432,8 +445,9 @@ function currentViols() {
   if (!hasAny()) return [];
   var out = [];
   groupsPresent().forEach(function (g) {
-    var gStaff = groupStaff(g);
-    out = out.concat(E.validate(buildSchedule(gStaff), gStaff, engineConfig(curYM, g)));
+    var vs = E.validate(buildSchedule(groupStaff(g)), groupStaff(g), engineConfig(curYM, g));
+    vs.forEach(function (v) { v._g = g; });   // 제안 계산이 어느 직군인지 알 수 있게 태그
+    out = out.concat(vs);
   });
   return out;
 }
@@ -460,8 +474,8 @@ function renderBanner() {
        알 수도, 눌러서 갈 수도 없었다(2026-07-20). */
     var shown = violExpanded ? v : v.slice(0, 4);
     var list = shown.map(function (x) {
-      if (x.pid) return '<span class="viol-item" onclick="jumpTo(\'' + x.pid + '\',' + x.day + ')">· ' + x.msg + ' →</span>';
-      return '<span>· ' + x.msg + '</span>';
+      if (x.pid) return '<span class="viol-item" onclick="jumpTo(\'' + x.pid + '\',' + x.day + ')">· ' + esc(x.msg) + ' →</span>';
+      return '<span>· ' + esc(x.msg) + '</span>';
     }).join('<br>');
     var more = '';
     if (v.length > 4) {
@@ -472,23 +486,125 @@ function renderBanner() {
     b.innerHTML = '⚠️ 확인이 필요한 곳이 <b>' + v.length + '건</b> 있어요.<br>' + list + more;
   }
 }
-/* 크게보기 뷰어 우측 라이브 패널 — 현재 규칙 위반을 실시간으로 보여주고, 항목을 누르면 그 칸으로 데려가
-   강한 애니메이션으로 위치를 확 띄운다. 편집할 때마다(renderGrid) 자동 갱신된다. (수정 추천은 다음 단계) */
+/* ---- 제안(수정 추천) ----
+   위반 1건을 '한 칸'만 바꿔 없앨 수 있는지 엔진으로 시뮬레이션한다. 후보를 실제 적용해 재검증하고,
+   ① 그 위반이 사라지고 ② 전체 위반 수가 '진짜 줄어드는'(다른 곳을 새로 만들지 않는) 안전한 수정만
+   돌려준다 — "고치면 이 오류가 사라진다"가 보장되는 것만 보여줘 헛제안을 막는다. 엔진은 읽기만 한다. */
+var _sugMemo = {};
+function _groupCtx(g) {
+  if (_sugMemo[g]) return _sugMemo[g];
+  var gStaff = groupStaff(g);
+  var cfg = engineConfig(curYM, g);
+  var base = buildSchedule(gStaff);
+  var baseCount = E.validate(base, gStaff, cfg).length;
+  return (_sugMemo[g] = { gStaff: gStaff, cfg: cfg, base: base, baseCount: baseCount });
+}
+function _famCountOn(sched, staff, d, f) {
+  var n = 0;
+  staff.forEach(function (p) { if (E.fam(sched[p.id][d - 1]) === f) n++; });
+  return n;
+}
+function suggestForViol(v) {
+  if (!v || v._g == null) return null;
+  var ctx = _groupCtx(v._g);
+  var gStaff = ctx.gStaff, cfg = ctx.cfg, base = ctx.base;
+  var cands = [];
+  var staffing = (!v.pid && v.rule === '인원' && v.day);
+  var needFam = null, needRange = null;
+  if (v.pid && v.day) {                                          // 사람 지정 위반 → 그 칸 자체를 바꾼다
+    var cur = (base[v.pid] || [])[v.day - 1];
+    if (v.rule === '선입력') {                                   // 미리 정한 값으로 되돌리기
+      var pin = ((month(curYM).pins || {})[v.pid] || {})[v.day];
+      if (pin != null && pin !== cur) cands.push({ pid: v.pid, day: v.day, code: pin, kind: 'restore' });
+    }
+    if (cur !== 'O') cands.push({ pid: v.pid, day: v.day, code: 'O', kind: 'self' });  // 오프로 — 대부분 해소
+    if (v.rule === '전환') cands.push({ pid: v.pid, day: v.day, code: 'E', kind: 'self' });  // 이브닝(일손 유지)
+  } else if (staffing) {                                         // 그 날 '그 계열'의 부족/초과만 겨냥
+    /* 위반 당사자 계열은 msg에서 뽑는다(엔진이 만드는 고정 형식 "…일 D 계열 …명"). 인원수(msg의 '명')로는
+       목표 해소를 판정하지 않는다 — 초과/부족이 2 이상이면 한 칸 바꿔도 여전히 범위 밖이라, 반드시 아래에서
+       '그 계열이 실제로 최소~최대 범위 안에 드는가'로 확인한다(거짓 약속 방지). */
+    var mm = /([DEN]) 계열/.exec(v.msg);
+    needFam = mm ? mm[1] : null;
+    if (!needFam) return null;
+    var nc = E.normalizeConfig(gStaff, cfg);
+    var d = v.day;
+    needRange = (nc.isRestDay(d) ? nc.required.holiday : nc.required.weekday)[needFam];
+    if (v.msg.indexOf('초과') >= 0)                              // 초과 → 그 계열 근무자를 오프로
+      gStaff.forEach(function (p) { if (E.fam(base[p.id][d - 1]) === needFam) cands.push({ pid: p.id, day: d, code: 'O', kind: 'trim' }); });
+    else                                                         // 부족 → 쉬는 사람을 그 계열로
+      gStaff.forEach(function (p) { if (!E.fam(base[p.id][d - 1])) cands.push({ pid: p.id, day: d, code: needFam, kind: 'fill' }); });
+  }
+  var best = null;
+  for (var ci = 0; ci < cands.length; ci++) {
+    var cd = cands[ci];
+    var trial = {}; for (var k in base) trial[k] = base[k];
+    trial[cd.pid] = base[cd.pid].slice();
+    trial[cd.pid][cd.day - 1] = cd.code;
+    var nv = E.validate(trial, gStaff, cfg);
+    var cleared = staffing
+      ? (function () { var c = _famCountOn(trial, gStaff, v.day, needFam); return c >= needRange[0] && c <= needRange[1]; })()
+      : !nv.some(function (x) { return x.rule === v.rule && x.pid === v.pid && x.day === v.day; });
+    if (!cleared) continue;                                      // 목표가 실제로 해소돼야 함
+    var delta = ctx.baseCount - nv.length;
+    if (delta <= 0) continue;                                    // 전체가 줄지 않으면(다른 곳을 새로 만들면) 버림
+    var score = delta * 100 + (E.isRest(cd.code) ? 10 : 0) + (cd.kind === 'restore' ? 5 : 0);
+    if (!best || score > best.score) best = { cd: cd, score: score };
+    if (staffing) break;                                         // 인원은 첫 유효안이면 충분(누굴 빼든/넣든 동등) — 시뮬 절약
+  }
+  if (!best) return null;
+  var cd = best.cd;
+  var pName = (gStaff.filter(function (p) { return p.id === cd.pid; })[0] || {}).name || '';
+  var label;
+  if (cd.kind === 'restore') label = '이 칸을 원래 정한 ' + codeDisp[cd.code] + '(으)로 되돌리면 이 문제가 사라져요';
+  else if (cd.kind === 'self') label = '이 칸을 ' + codeDisp[cd.code] + '(' + (codeLabels[cd.code] || '') + ')(으)로 바꾸면 이 문제가 사라져요';
+  else if (cd.kind === 'fill') label = esc(pName) + ' 님 ' + cd.day + '일을 ' + codeDisp[cd.code] + '(으)로 바꾸면 인원이 채워져요';
+  else label = esc(pName) + ' 님 ' + cd.day + '일을 －(오프)로 바꾸면 인원이 맞춰져요';
+  return { pid: cd.pid, day: cd.day, code: cd.code, label: label };
+}
+
+/* 크게보기 뷰어 우측 라이브 패널 — 현재 규칙 위반을 실시간으로 보여주고(항목을 누르면 그 칸으로 데려가
+   포커스 링으로 띄운다), 안전한 수정이 있으면 아래에 초록 '제안'을 달아 원탭으로 고친다.
+   편집할 때마다(renderGrid) 자동 갱신된다. */
+var viewerSuggestions = [];
 function renderViewerPanel() {
   var panel = document.getElementById('viewerPanel');
   if (!panel) return;
   var v = currentViols();
   if (!v.length) {
+    viewerSuggestions = [];
     panel.innerHTML = '<div class="vp-ok">✅<br>규칙 위반이<br>없어요<span>이대로 쓰셔도 좋아요</span></div>';
     return;
   }
+  _sugMemo = {};                       // 이번 렌더 동안만 직군별 기준표를 재사용
+  viewerSuggestions = [];
+  /* 위반이 아주 많으면(초안이 크게 어긋난 상태) 한 칸 제안으로 풀 단계가 아니라 '다시 만들기'가 답 —
+     매 편집마다 도는 시뮬레이션 비용도 크므로 이때는 제안 계산을 건너뛴다. */
+  var withSug = v.length <= 40;
   var html = '<div class="vp-head">⚠️ 확인할 곳 <b>' + v.length + '</b>곳</div>';
   html += v.map(function (x, i) {
+    var sug = withSug ? suggestForViol(x) : null;
     var num = '<span class="vp-num">' + (i + 1) + '</span><span class="vp-msg">' + esc(x.msg) + '</span>';
-    if (x.pid) return '<button class="vp-item" onclick="jumpTo(\'' + x.pid + '\',' + x.day + ')">' + num + '<span class="vp-go">보기›</span></button>';
-    return '<div class="vp-item vp-general">' + num + '</div>';
+    var head = x.pid
+      ? '<button class="vp-item' + (sug ? ' has-fix' : '') + '" onclick="jumpTo(\'' + x.pid + '\',' + x.day + ')">' + num + '<span class="vp-go">보기›</span></button>'
+      : '<div class="vp-item vp-general' + (sug ? ' has-fix' : '') + '">' + num + '</div>';
+    var fix = '';
+    if (sug) {
+      var si = viewerSuggestions.push(sug) - 1;
+      fix = '<button class="vp-fix" onclick="applySuggest(' + si + ')"><span class="vp-fixtag">제안</span>' +
+        '<span class="vp-fixmsg">' + sug.label + '</span><span class="vp-fixgo">고치기›</span></button>';
+    }
+    return '<div class="vp-block">' + head + fix + '</div>';
   }).join('');
   panel.innerHTML = html;
+}
+/* 제안 적용 — 손으로 그 칸을 고른 것과 동일(고정됨). 고친 칸을 초록으로 잠깐 띄워 확인시킨다. */
+function applySuggest(i) {
+  var s = viewerSuggestions[i];
+  if (!s) return;
+  setCell(s.pid, s.day, s.code);       // save + renderHome(→renderGrid→renderViewerPanel 자동 갱신)
+  var el = document.getElementById('c_' + s.pid + '_' + s.day);
+  if (el) flashCellEl(el, 'fix-flash', 1500);
+  toast(currentViols().length ? '고쳤어요 — 남은 곳을 확인해 주세요' : '규칙 위반이 모두 없어졌어요 🌙');
 }
 function renderStats() {
   var el = document.getElementById('statArea');
