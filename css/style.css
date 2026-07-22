@@ -465,8 +465,14 @@ body.grid-open .gridthumb { position: fixed; inset: 0; z-index: 1000; height: 10
   padding: 8px; background: var(--bg); }
 body.grid-open .gridthumb::after { display: none; }
 body.grid-open .gridthumb-cta { display: none; }
-/* 뷰어에선 표가 fitGridFull로 전체가 들어오게 축소됨 — 스크롤 없이 가운데 정렬만 */
-body.grid-open .gridthumb .gridwrap { overflow: hidden; pointer-events: auto; transform-origin: top left; }
+/* 뷰어에선 표가 fitGridFull로 전체가 들어오게 축소됨 — #gridArea는 네이티브 크기 유지(overflow visible),
+   중심 기준 scale로 축소되고 부모(#gridThumb) flex center가 가운데 정렬. overflow:hidden 주면 축소 전에 잘림. */
+body.grid-open .gridthumb .gridwrap { overflow: visible; pointer-events: auto; }
+/* 뷰어는 표 전체가 한눈에 보이므로 이름·개수 열 고정(sticky) 불필요 — transform과 충돌해 열 순서가
+   깨지니(1~8일이 이름 뒤로 숨음) static으로 되돌린다. grid-open 해제 시 CSS라 자동 복귀. */
+body.grid-open table.duty th.name, body.grid-open table.duty td.name,
+body.grid-open table.duty th.cntcol, body.grid-open table.duty td.cntcol,
+body.grid-open tr.cntrow td.lbl { position: static; }
 body.grid-open .gridfull-close { display: inline-flex; align-items: center; gap: 6px;
   position: fixed; top: 10px; right: 12px; z-index: 1001; background: var(--card); color: var(--ink);
   border: 1.5px solid var(--line); border-radius: 999px; font-size: 16px; font-weight: 800;

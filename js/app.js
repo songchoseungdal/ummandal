@@ -2135,10 +2135,11 @@ function fitGridFull() {
   var availW = thumb.clientWidth - 16, availH = thumb.clientHeight - 16;       // 여백
   if (!tW || !tH || availW <= 0 || availH <= 0) return;
   var s = Math.min(availW / tW, availH / tH);    // 가로·세로 둘 다 들어오는 배율 = 전체가 보임
-  area.style.transformOrigin = 'top left';
+  /* #gridArea를 네이티브 크기 그대로 두고(폭/높이 안 건드림·overflow visible) 중심 기준으로 축소한다.
+     #gridThumb가 flex center라 네이티브 박스 중심이 화면 중심에 오고, 중심 기준 scale이라 전체가 가운데 정렬.
+     ⚠️ 폭/높이를 축소값으로 박고 overflow:hidden 하면 표가 먼저 그 폭으로 '잘린 뒤' 축소돼 잘림으로 보인다(v6.0.1 버그, v6.0.2 수정). */
+  area.style.transformOrigin = 'center center';
   area.style.transform = 'scale(' + s + ')';
-  area.style.width = (tW * s) + 'px';            // 레이아웃 박스를 축소 크기에 맞춰 가운데 정렬되게
-  area.style.height = (tH * s) + 'px';
 }
 
 /* 표를 가로 전체화면으로 크게 — #gridThumb를 화면 가득 채우고(클래스 토글) 가로로 잠근다. */
