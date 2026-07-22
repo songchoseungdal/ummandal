@@ -448,7 +448,9 @@ table.pttable select { font-size: 15px; padding: 6px 8px; border: 1.5px solid va
 .gridthumb { position: relative; border: 1.5px solid var(--line); border-radius: 14px;
   overflow: hidden; cursor: pointer; background: var(--card); margin: 6px 0 4px;
   -webkit-tap-highlight-color: transparent; }
-.gridthumb .gridwrap { overflow: hidden; pointer-events: none; }   /* 미니맵은 보기 전용 */
+/* 미니맵은 보기 전용. overflow visible여야 표가 (축소 전에) 카드 폭으로 잘리지 않고 전체 달이 보인다
+   — hidden이면 fitGridFull과 같은 '먼저 잘린 뒤 축소' 버그로 1~2일치만 보였다(v6.0.4 수정). 세로 클립은 #gridThumb가 담당. */
+.gridthumb .gridwrap { overflow: visible; pointer-events: none; }
 .gridthumb-cta { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center;
   background: var(--brand); color: #fff; font-size: 15.5px; font-weight: 800;
   padding: 10px 16px; border-radius: 999px; box-shadow: 0 3px 12px rgba(50, 46, 60, .28);
