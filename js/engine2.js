@@ -33,6 +33,13 @@
   function isRest(c) { return !!REST[c]; }
   function isWork(c) { return !!FAM[c]; }
 
+  /* 사용자 표시용 근무 이름 — 위반 문구에 약자만 쓰면 못 알아듣는다(2026-07-25 초승달 지시).
+     D 계열엔 MD, E 계열엔 E2가 포함되지만 문구는 대표 이름으로 짧게 쓴다. */
+  var FAM_DISP = { D: 'D(데이)', E: 'E(이브닝)', N: 'N(나이트)' };
+  var CODE_DISP = { D: 'D(데이)', MD: 'MD(미들)', E: 'E(이브닝)', E2: 'E2(이브닝2)', N: 'N(나이트)',
+                    O: '－(오프)', V: '휴(연차)', CO: '대(대휴)', EDU: '교(교육)' };
+  function codeDisp(c) { return CODE_DISP[c] || c; }
+
   function isWeekend(day, firstWeekday) {
     var wd = (firstWeekday + day - 1) % 7;
     return wd === 0 || wd === 6;
@@ -173,7 +180,7 @@
       ['D', 'E', 'N'].forEach(function (f) {
         var r = cfg.required[kind][f];
         if (r[0] > r[1])
-          issues.push({ day: null, pid: null, rule: '사전검사', msg: (kind === 'weekday' ? '평일' : '휴일') + ' ' + f + ' — 최소 ' + r[0] + '명이 최대 ' + r[1] + '명보다 큽니다' });
+          issues.push({ day: null, pid: null, rule: '사전검사', msg: (kind === 'weekday' ? '평일' : '휴일') + ' ' + FAM_DISP[f] + ' — 최소 ' + r[0] + '명이 최대 ' + r[1] + '명보다 큽니다' });
       });
     });
 
@@ -226,7 +233,7 @@
         issues.push({ day: d, pid: null, rule: '사전검사', msg: d + '일 — 주간(D·E) 가능 인원 ' + (famPre.D + famPre.E + availDE) + '명 < 최소 ' + (need.D[0] + need.E[0]) + '명' });
       ['D', 'E', 'N'].forEach(function (f) {
         if (famPre[f] > need[f][1])
-          issues.push({ day: d, pid: null, rule: '사전검사', msg: d + '일 — ' + f + ' 계열 선입력 ' + famPre[f] + '명 > 최대 ' + need[f][1] + '명' });
+          issues.push({ day: d, pid: null, rule: '사전검사', msg: d + '일 — ' + FAM_DISP[f] + ' 선입력 ' + famPre[f] + '명 > 최대 ' + need[f][1] + '명' });
       });
     }
 
@@ -257,13 +264,13 @@
           prev = c; continue;
         }
         if (!typeAllows(p.type, c))
-          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 이 사람 유형은 ' + c + ' 선입력 불가' });
+          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 이 사람 유형은 ' + codeDisp(c) + ' 선입력 불가' });
         if (p.type === 'day' && isWork(c) && cfg.isRestDay(d))
           issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 상근은 휴일 근무 선입력 불가' });
         if (cfg.restrictNToNight && fam(c) === 'N' && !cfg.nightStaffIds[p.id])
           issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 나이트는 전담 인원만 설 수 있어요 (선입력 충돌)' });
         if (wish[d] && !WISH_OK[c])
-          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 희망 오프일과 ' + c + ' 선입력 충돌' });
+          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 희망 오프일과 ' + codeDisp(c) + ' 선입력 충돌' });
         if (d <= spill && isWork(c))
           issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 지난달 말 나이트 후 휴식 기간에 근무 선입력' });
         if (isWork(c)) { runPre++; if (runPre > cfg.maxConsecWork) issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 선입력·이력만으로 연속 근무 ' + runPre + '일 초과' }); }
@@ -272,7 +279,7 @@
         else nrunPre = 0;
         if (prev !== undefined) {
           if (fam(prev) === 'N' && isWork(c) && fam(c) !== 'N')
-            issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 나이트 다음날 ' + c + ' 선입력 불가' });
+            issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 나이트 다음날 ' + codeDisp(c) + ' 선입력 불가' });
           if (cfg.forbidBackward && fam(prev) === 'E' && fam(c) === 'D')
             issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 이브닝 다음날 데이 선입력 불가' });
         }
@@ -326,10 +333,11 @@
         if (f) cnt[f]++;
       });
       ['D', 'E', 'N'].forEach(function (f) {
+        /* fam·over 필드 = 제안(suggestForViol)이 문구 파싱 없이 계열·방향을 아는 구조화 통로(2026-07-25) */
         if (cnt[f] < need[f][0])
-          v.push({ day: d, pid: null, rule: '인원', msg: d + '일 ' + f + ' 계열 ' + cnt[f] + '명 (최소 ' + need[f][0] + '명 부족)' });
+          v.push({ day: d, pid: null, rule: '인원', fam: f, over: false, msg: d + '일 ' + FAM_DISP[f] + ' 근무 ' + cnt[f] + '명 (최소 ' + need[f][0] + '명 부족)' });
         if (cnt[f] > need[f][1])
-          v.push({ day: d, pid: null, rule: '인원', msg: d + '일 ' + f + ' 계열 ' + cnt[f] + '명 (최대 ' + need[f][1] + '명 초과)' });
+          v.push({ day: d, pid: null, rule: '인원', fam: f, over: true, msg: d + '일 ' + FAM_DISP[f] + ' 근무 ' + cnt[f] + '명 (최대 ' + need[f][1] + '명 초과)' });
       });
     }
     staff.forEach(function (p) {
@@ -340,7 +348,7 @@
       for (var i = off0; i < seq.length; i++) {
         var day = i - off0 + 1, c = seq[i];
         if (!typeAllows(p.type, c))
-          v.push({ day: day, pid: p.id, rule: '유형', msg: p.name + ' ' + day + '일 — 이 사람은 ' + c + ' 근무를 설 수 없어요' });
+          v.push({ day: day, pid: p.id, rule: '유형', msg: p.name + ' ' + day + '일 — 이 사람은 ' + codeDisp(c) + ' 근무를 설 수 없어요' });
         if (p.type === 'day' && cfg.isRestDay(day) && isWork(c))
           v.push({ day: day, pid: p.id, rule: '유형', msg: p.name + ' ' + day + '일 — 상근은 휴일에 쉬어야 해요' });
         if (cfg.restrictNToNight && fam(c) === 'N' && !cfg.nightStaffIds[p.id])
@@ -351,7 +359,7 @@
         var day = i - off0 + 1;
         if (day < 1) continue;
         if (fam(a) === 'N' && isWork(b) && fam(b) !== 'N')
-          v.push({ day: day, pid: p.id, rule: '전환', msg: p.name + ' ' + day + '일 — 나이트 다음날 ' + b + ' 근무는 안 돼요' });
+          v.push({ day: day, pid: p.id, rule: '전환', msg: p.name + ' ' + day + '일 — 나이트 다음날 ' + codeDisp(b) + ' 근무는 안 돼요' });
         if (cfg.forbidBackward && fam(a) === 'E' && fam(b) === 'D')
           v.push({ day: day, pid: p.id, rule: '전환', msg: p.name + ' ' + day + '일 — 이브닝 다음날 데이는 안 돼요' });
       }
@@ -390,7 +398,7 @@
         Object.keys(row).forEach(function (ds) {
           var d = ds | 0;
           if (d >= 1 && d <= cfg.days && schedule[p.id][d - 1] !== row[d])
-            v.push({ day: d, pid: p.id, rule: '선입력', msg: p.name + ' ' + d + '일 — 미리 정한 ' + row[d] + '가 바뀌었어요' });
+            v.push({ day: d, pid: p.id, rule: '선입력', msg: p.name + ' ' + d + '일 — 미리 ' + codeDisp(row[d]) + '(으)로 정해둔 칸이 바뀌었어요' });
         });
       }
     });

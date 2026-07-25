@@ -569,6 +569,25 @@ section('T9 월 여력 소프트 경고 (생성 막지 않음·warnings로만)')
   }
 }
 
+/* ========== T10 위반 문구 — 약자에 한글 병기 + 구조화 fam 필드 (2026-07-25) ========== */
+{
+  // 2일짜리 미니 검증: 1일 D 0명(최소 1 부족) + 전담 아닌 사람 N + 나이트 다음날 E
+  const staff = mkStaff(2, 1, 0);   // t0·t1 삼교대, n0 전담
+  const cfg = {
+    days: 2, firstWeekday: 1, holidays: [], maxConsecWork: 6, maxConsecN: 3,
+    offAfterNights: 0, forbidBackward: false,
+    required: { weekday: { D: [1, 2], E: [0, 2], N: [0, 2] }, holiday: { D: [1, 2], E: [0, 2], N: [0, 2] } },
+  };
+  const sched = { t0: ['N', 'E'], t1: ['O', 'D'], n0: ['O', 'O'] };
+  const vs = E2.validate(sched, staff, cfg);
+  const under = vs.find(v => v.rule === '인원' && v.day === 1);
+  ok(under && under.fam === 'D', 'T10a 인원 위반에 구조화 fam 필드 (실제 ' + (under && under.fam) + ')');
+  ok(under && under.msg.includes('D(데이)'), 'T10a 인원 문구 D(데이) 병기 (실제 ' + (under && under.msg) + ')');
+  ok(vs.some(v => v.rule === '전담' || v.rule === '유형'), 'T10b 비전담 N 검출');
+  const turn = vs.find(v => v.rule === '전환');
+  ok(turn && turn.msg.includes('E(이브닝)'), 'T10c 전환 문구 E(이브닝) 병기 (실제 ' + (turn && turn.msg) + ')');
+}
+
 /* ========== 결과 ========== */
 console.log('');
 console.log(`결과: ${pass} 통과 / ${fail} 실패`);

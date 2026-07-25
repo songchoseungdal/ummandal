@@ -520,16 +520,17 @@ function suggestForViol(v) {
     if (cur !== 'O') cands.push({ pid: v.pid, day: v.day, code: 'O', kind: 'self' });  // 오프로 — 대부분 해소
     if (v.rule === '전환') cands.push({ pid: v.pid, day: v.day, code: 'E', kind: 'self' });  // 이브닝(일손 유지)
   } else if (staffing) {                                         // 그 날 '그 계열'의 부족/초과만 겨냥
-    /* 위반 당사자 계열은 msg에서 뽑는다(엔진이 만드는 고정 형식 "…일 D 계열 …명"). 인원수(msg의 '명')로는
-       목표 해소를 판정하지 않는다 — 초과/부족이 2 이상이면 한 칸 바꿔도 여전히 범위 밖이라, 반드시 아래에서
+    /* 계열은 엔진이 위반에 실어주는 구조화 필드(v.fam)로 안다 — 예전 msg 정규식 파싱은 문구를
+       사람 말로 바꾸는 순간 깨지므로 폐기(2026-07-25). 인원수(msg의 '명')로는 목표 해소를 판정하지
+       않는다 — 초과/부족이 2 이상이면 한 칸 바꿔도 여전히 범위 밖이라, 반드시 아래에서
        '그 계열이 실제로 최소~최대 범위 안에 드는가'로 확인한다(거짓 약속 방지). */
-    var mm = /([DEN]) 계열/.exec(v.msg);
-    needFam = mm ? mm[1] : null;
+    needFam = v.fam || null;
     if (!needFam) return null;
     var nc = E.normalizeConfig(gStaff, cfg);
     var d = v.day;
     needRange = (nc.isRestDay(d) ? nc.required.holiday : nc.required.weekday)[needFam];
-    if (v.msg.indexOf('초과') >= 0)                              // 초과 → 그 계열 근무자를 오프로
+    var isOver = (v.over != null) ? v.over : v.msg.indexOf('초과') >= 0;   // 방향도 구조화 필드 우선(문구 결합 제거)
+    if (isOver)                                                  // 초과 → 그 계열 근무자를 오프로
       gStaff.forEach(function (p) { if (E.fam(base[p.id][d - 1]) === needFam) cands.push({ pid: p.id, day: d, code: 'O', kind: 'trim' }); });
     else                                                         // 부족 → 쉬는 사람을 그 계열로
       gStaff.forEach(function (p) { if (!E.fam(base[p.id][d - 1])) cands.push({ pid: p.id, day: d, code: needFam, kind: 'fill' }); });
@@ -554,10 +555,12 @@ function suggestForViol(v) {
   if (!best) return null;
   var cd = best.cd;
   var pName = (gStaff.filter(function (p) { return p.id === cd.pid; })[0] || {}).name || '';
+  /* 문구의 근무 이름은 항상 "약자(한글)" — 약자만 쓰면 못 알아듣는다(2026-07-25 초승달 지시) */
+  var full = codeDisp[cd.code] + (codeLabels[cd.code] ? '(' + codeLabels[cd.code] + ')' : '');
   var label;
-  if (cd.kind === 'restore') label = '이 칸을 원래 정한 ' + codeDisp[cd.code] + '(으)로 되돌리면 이 문제가 사라져요';
-  else if (cd.kind === 'self') label = '이 칸을 ' + codeDisp[cd.code] + '(' + (codeLabels[cd.code] || '') + ')(으)로 바꾸면 이 문제가 사라져요';
-  else if (cd.kind === 'fill') label = esc(pName) + ' 님 ' + cd.day + '일을 ' + codeDisp[cd.code] + '(으)로 바꾸면 인원이 채워져요';
+  if (cd.kind === 'restore') label = '이 칸을 원래 정한 ' + full + '(으)로 되돌리면 이 문제가 사라져요';
+  else if (cd.kind === 'self') label = '이 칸을 ' + full + '(으)로 바꾸면 이 문제가 사라져요';
+  else if (cd.kind === 'fill') label = esc(pName) + ' 님 ' + cd.day + '일을 ' + full + '(으)로 바꾸면 인원이 채워져요';
   else label = esc(pName) + ' 님 ' + cd.day + '일을 －(오프)로 바꾸면 인원이 맞춰져요';
   return { pid: cd.pid, day: cd.day, code: cd.code, label: label };
 }
