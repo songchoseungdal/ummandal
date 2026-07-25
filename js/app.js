@@ -586,7 +586,8 @@ function renderViewerPanel() {
   /* 위반이 아주 많으면(초안이 크게 어긋난 상태) 한 칸 제안으로 풀 단계가 아니라 '다시 만들기'가 답 —
      매 편집마다 도는 시뮬레이션 비용도 크므로 이때는 제안 계산을 건너뛴다. */
   var withSug = v.length <= 40;
-  var html = '<div class="vp-head">⚠️ 확인할 곳 <b>' + v.length + '</b>곳</div>';
+  var html = '<button class="vp-head" onclick="showAllViols()">⚠️ 확인할 곳 <b>' + v.length + '</b>곳' +
+    '<span class="vp-headgo">한눈에 보기›</span></button>';
   html += v.map(function (x, i) {
     var sug = withSug ? suggestForViol(x) : null;
     var num = '<span class="vp-num">' + (i + 1) + '</span><span class="vp-msg">' + esc(x.msg) + '</span>';
@@ -603,6 +604,31 @@ function renderViewerPanel() {
     return '<div class="vp-block">' + head + fix + '</div>';
   }).join('');
   panel.innerHTML = html;
+}
+/* '확인할 곳' 머리글 탭 = 전체 조망 — 줌을 전체 보기로 되돌리고 위반 칸 전부에 빨간 링을
+   동시에 띄워, 어디어디를 확인해야 하는지 한눈에 보여준다(하나씩은 각 항목의 '보기›'로 줌인).
+   상시 표시(td.cell.viol의 얇은 안쪽 테두리)는 전체 축소 배율에선 1px 수준이라 잘 안 보이기 때문. */
+var violsAllT = null;
+function showAllViols() {
+  vzFocus = null;
+  vzReset(); fitGridFull();                        // 표 전체가 보이는 배율에서
+  if (activeFlash) {                               // 단일 플래시가 켜져 있으면 정리(타이머 충돌 방지)
+    activeFlash.el.classList.remove('viol-flash', 'fix-flash');
+    clearTimeout(activeFlash.t); activeFlash = null;
+  }
+  clearTimeout(violsAllT);
+  var els = [];
+  Object.keys(currentViolMap()).forEach(function (k) {
+    var el = document.getElementById('c_' + k);
+    if (el) els.push(el);
+  });
+  if (!els.length) return;
+  els.forEach(function (el) { el.classList.remove('viol-flash'); });
+  void els[0].offsetWidth;                         // 재탭 시 애니메이션 재시작
+  els.forEach(function (el) { el.classList.add('viol-flash'); });
+  violsAllT = setTimeout(function () {
+    els.forEach(function (el) { el.classList.remove('viol-flash'); });
+  }, 4000);
 }
 /* 제안 문구 탭 = 미리보기 — 적용하지 않고, 바뀔 칸("이 칸")으로 줌인해 초록 링으로 보여준다.
    제안 대상은 위반 칸과 다른 사람 칸일 수도 있어(인원 초과를 남의 칸으로 푸는 경우) 더 필요하다. */
