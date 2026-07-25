@@ -21,6 +21,107 @@ function groupsPresent() {
 }
 function groupStaff(g) { return staffList().filter(function (p) { return staffGroup(p) === g; }); }
 
+/* ===== 단색 선형 SVG 아이콘 (UI_SPEC §5 — 컬러 이모지 대신) ===== */
+var ICONS = {
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7.5 14h.01M12 14h.01M16.5 14h.01M7.5 17.5h.01M12 17.5h.01"/>',
+  people: '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.8 20c.6-3.4 3.1-5.5 6.2-5.5s5.6 2.1 6.2 5.5"/><path d="M15.5 5.6a3.5 3.5 0 0 1 0 5.8M17.6 14.8c2 .8 3.3 2.6 3.6 5.2"/>',
+  archive: '<rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M9.5 13h5"/>',
+  chevR: '<path d="M9 5l7 7-7 7"/>',
+  chevL: '<path d="M15 5l-7 7 7 7"/>',
+  back: '<path d="M15 4l-8 8 8 8"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M4.5 12.5l5 5L19.5 7"/>',
+  bang: '<path d="M12 5v9M12 18.5h.01"/>',
+  camera: '<path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5z"/><circle cx="12" cy="13.5" r="3.4"/>',
+  sheet: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 9v12"/>',
+  edit: '<path d="M4 20h4.5L20 8.5a2.1 2.1 0 0 0-3-3L5.5 17 4 20z"/><path d="M14.5 7l3 3"/>',
+  "import": '<path d="M12 3v11M7.5 10L12 14.5 16.5 10"/><path d="M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/>',
+  doc: '<path d="M6.5 3h7L18.5 8v11a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M13 3v6h6M8.5 13h7M8.5 16.5h7"/>',
+  cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.4-9A5.5 5.5 0 0 1 17.3 11 3.8 3.8 0 0 1 17 18.5H7z"/>',
+  scale: '<path d="M12 4v16M7 20h10M12 6H5.5M12 6h6.5M5.5 6L3 12h5L5.5 6zM18.5 6L16 12h5l-2.5-6z"/><path d="M3 12a2.5 2.5 0 0 0 5 0M16 12a2.5 2.5 0 0 0 5 0"/>',
+  pin: '<path d="M12 21s-6.5-6.2-6.5-10.7a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z"/><circle cx="12" cy="10" r="2.3"/>',
+  calstar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M12 12.2l.95 1.9 2.1.3-1.5 1.5.35 2.1-1.9-1-1.9 1 .35-2.1-1.5-1.5 2.1-.3z"/>',
+  close: '<path d="M5 5l14 14M19 5L5 19"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  refresh: '<path d="M20 12a8 8 0 1 1-2.6-5.9M20 3v4h-4"/>',
+  link: '<path d="M9.5 14.5l5-5M8 11l-2.3 2.3a3.5 3.5 0 0 0 5 5L13 16M11 8l2.3-2.3a3.5 3.5 0 0 1 5 5L16 13"/>',
+  kebab: '<path d="M12 5.5h.01M12 12h.01M12 18.5h.01"/>'
+};
+function ic(name, extra) {
+  return '<svg class="svgi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' + (extra || '') + '>' + (ICONS[name] || '') + '</svg>';
+}
+/* data-ic 속성이 붙은 정적 요소를 아이콘으로 채운다(시작 시 1회) */
+function renderIcons(root) {
+  (root || document).querySelectorAll('[data-ic]').forEach(function (el) {
+    if (!el.innerHTML) el.innerHTML = ic(el.getAttribute('data-ic'));
+  });
+}
+
+/* ===== 바텀시트 공통 ===== */
+function openSheet(html) {
+  var w = document.getElementById('sheetWrap');
+  document.getElementById('sheet').innerHTML = '<div class="sh-grip"></div>' + html;
+  w.className = 'on';
+  w.onclick = function (ev) { if (ev.target === w) closeSheet(); };
+}
+function closeSheet() {
+  var w = document.getElementById('sheetWrap');
+  w.className = ''; document.getElementById('sheet').innerHTML = '';
+  sheetCtx = null;
+}
+var sheetCtx = null;   // 열려 있는 시트의 작업 상태(구성원 편집·근무 선택 등)
+
+/* ===== 부속 화면(뒤로가기 헤더) 공통 — 08 규칙 · 14 데이터 · 15 희망휴무 ===== */
+var openScreenId = null;
+function openScreen(id) {
+  closeSheet();
+  openScreenId = id;
+  document.body.classList.add('nonav');
+  document.getElementById(id).classList.add('on');
+  document.getElementById(id).scrollTop = 0;
+}
+function closeScreen() {
+  if (!openScreenId) return;
+  document.getElementById(openScreenId).classList.remove('on');
+  openScreenId = null;
+  document.body.classList.remove('nonav');
+}
+function ssTop(title, doneLabel, doneFn) {
+  return '<div class="ss-top"><button class="ss-back" onclick="' + (doneFn || 'closeScreen()') + '" aria-label="뒤로">' + ic('back') + '</button>' +
+    '<span class="ss-title">' + title + '</span>' +
+    '<button class="ss-done" onclick="' + (doneFn || 'closeScreen()') + '">' + (doneLabel || '완료') + '</button></div>';
+}
+
+/* ===== 머리글 ⋮ 메뉴 ===== */
+function toggleKebab(ev) {
+  ev.stopPropagation();
+  var m = document.getElementById('kebabMenu');
+  if (m.classList.contains('on')) { m.classList.remove('on'); return; }
+  var u = window.Cloud && Cloud.enabled() && Cloud.getUser();
+  var items = '';
+  if (!isStandalone() && !alreadyInstalled)
+    items += '<button onclick="hideKebab();installEntry()">' + ic('link') + ' 홈 화면에 바로가기 만들기</button>';
+  if (u) items += '<button onclick="hideKebab();aiImportStart()">' + ic('camera') + ' 사진·PDF로 근무표 읽기</button>';
+  items += '<button onclick="hideKebab();forceUpdate()">' + ic('refresh') + ' 최신으로 새로고침</button>';
+  items += '<div class="km-ver"><span class="appver"></span></div>';
+  m.innerHTML = items;
+  var v = document.querySelector('footer .appver');
+  var kv = m.querySelector('.appver');
+  if (v && kv) kv.textContent = v.textContent;
+  var btn = document.getElementById('kebabBtn');
+  var r = btn.getBoundingClientRect();
+  m.style.top = (r.bottom + 4) + 'px';
+  m.style.right = '14px'; m.style.left = 'auto';
+  m.classList.add('on');
+}
+function hideKebab() { document.getElementById('kebabMenu').classList.remove('on'); }
+document.addEventListener('click', function (ev) {
+  var m = document.getElementById('kebabMenu');
+  if (m.classList.contains('on') && !m.contains(ev.target)) hideKebab();
+});
+
 function save() {
   db.currentMonth = curYM;
   db._updatedAt = Date.now();
@@ -151,27 +252,28 @@ function engineConfig(ym, g) {
 
 /* ---- 탭 ---- */
 function showTab(t) {
-  hidePicker();
+  closeSheet();
+  closeScreen();
+  hideKebab();
   ['home', 'ward', 'archive'].forEach(function (x) {
     document.getElementById('tab-' + x).style.display = x === t ? '' : 'none';
     document.getElementById('tabBtn-' + x).className = x === t ? 'on' : '';
   });
   if (t !== 'home') setLoginView(false);   // 다른 탭에서는 로그인 전용 배치를 풀어둔다
   if (t === 'home') renderHome();
-  if (t === 'ward') { renderStaff(); renderRules(); }
+  if (t === 'ward') renderStaff();
   if (t === 'archive') { renderArchive(); renderCloudCard(); renderInstallCard(); }
-  renderInstallBtn();
   renderBrowserGate();
   window.scrollTo(0, 0);
 }
 function moveMonth(dir) {
-  hidePicker();
+  closeSheet();
   curYM = prevYM(curYM, -dir);
   save(); renderMonthLabel(); renderHome();
 }
 function renderMonthLabel() {
   var p = ymParts(curYM);
-  document.getElementById('curMonth').textContent = p.y + '년 ' + p.m + '월';
+  document.querySelectorAll('.mn-cur').forEach(function (el) { el.textContent = p.y + '년 ' + p.m + '월'; });
 }
 
 /* ---- 상태 판별 ---- */
@@ -186,28 +288,24 @@ function hasAny() {
   var m = month(curYM);
   return staffList().some(function (p) { return (m.codes[p.id] || []).some(function (c) { return c; }); });
 }
+/* 홈 상태 판정용: 초안이 있는가 — 손으로 미리 찍은 📌 고정만 있는 달은 아직 '준비' 단계다.
+   (고정 몇 칸 찍었다고 「초안 완성」 화면으로 넘어가면 만들기 버튼이 사라져 헤맨다) */
+function hasDraft() {
+  var m = month(curYM);
+  return staffList().some(function (p) {
+    var pins = m.pins[p.id] || {};
+    return (m.codes[p.id] || []).some(function (c, i) { return c && !pins[i + 1]; });
+  });
+}
 
 /* ---- 홈 화면 (상태에 따라 바뀜) ---- */
-/* 머리글 로그아웃 버튼 — 로그인 상태에서만 표시 */
-function renderAcctBtn() {
-  var b = document.getElementById('acctBtn');
-  if (!b) return;
-  var u = window.Cloud && Cloud.enabled() && Cloud.getUser();
-  b.style.display = u ? '' : 'none';
-  /* AI 분석은 로그인 사용자만 쓸 수 있다. 첫 세팅뿐 아니라 나중에도 다시 쓸 수 있게
-     머리글에 상설(2026-07-20) — 서버의 「세팅된 계정 차단」이 폐지되어 재사용이 가능해졌다. */
-  var ai = document.getElementById('aiBtn');
-  if (ai) ai.style.display = u ? '' : 'none';
-}
-/* 로그인 화면 전용 배치 — 월 달력·하단 탭·푸터를 감추고 여백을 줄여 한 화면에 담는다.
-   (로그인 전에는 달력도 탭도 쓸 데가 없다) */
+/* 구버전 머리글 계정 버튼 자리 — 로그아웃은 「데이터 및 계정」(14)으로 이동 */
+function renderAcctBtn() { }
+/* 로그인 화면 전용 배치 — 머리글·하단 탭·푸터를 감추고 한 화면에 담는다 */
 function setLoginView(on) {
   /* body.className을 통째로 바꾸면 다른 상태 클래스(예: 가로 전체화면 grid-open)가 지워진다 —
      loginview만 토글해 보존한다(2026-07-22). */
   document.body.classList.toggle('loginview', on);
-  document.querySelector('header').className = on ? 'authonly' : '';
-  var mn = document.getElementById('monthNav');
-  if (mn) mn.style.display = on ? 'none' : '';
 }
 /* 보고 있는 달(과 다음 달)의 공휴일을 서버에서 받아온다 — 받아오면 화면을 다시 그린다.
    대체·임시공휴일이 새로 지정돼도 따라가려면 앱에 박아두면 안 되고 매번 물어봐야 한다. */
@@ -224,67 +322,106 @@ function ensureHolidays(ym) {
 }
 function renderHome() {
   renderMonthLabel();
-  renderAcctBtn();
   ensureHolidays(curYM);
   var staff = staffList();
   var empty = document.getElementById('homeEmpty');
   var prep = document.getElementById('homePrep');
-  var tools = document.getElementById('homeTools');
-  var gridCard = document.getElementById('gridCard');
+  var done = document.getElementById('homeDone');
   var loginCard = document.getElementById('homeLoginCard');
-  /* 로그인 안 된 상태(처음 연 사람 + 로그아웃 직후)에는 인원 유무와 상관없이 로그인 카드만 보여준다. */
+  /* 로그인 안 된 상태(처음 연 사람 + 로그아웃 직후)에는 인원 유무와 상관없이 로그인 화면만 보여준다. */
   var showLogin = window.Cloud && Cloud.enabled() && !Cloud.getUser() && !loginSkippedNow;
   setLoginView(showLogin);
+  loginCard.style.display = showLogin ? '' : 'none';
   if (showLogin) {
-    loginCard.style.display = '';
-    empty.style.display = 'none';
-    prep.style.display = 'none';
-    gridCard.style.display = 'none';
+    empty.style.display = 'none'; prep.style.display = 'none'; done.style.display = 'none';
     authTarget = 'homeLoginBody'; cloudView = 'main'; renderAuth();
     return;
   }
-  loginCard.style.display = 'none';
   if (!staff.length) {
-    empty.style.display = '';
-    prep.style.display = 'none';
-    gridCard.style.display = 'none';
+    empty.style.display = ''; prep.style.display = 'none'; done.style.display = 'none';
     return;
   }
   empty.style.display = 'none';
-  gridCard.style.display = '';
-  var filled = hasAny();
+  var filled = hasDraft();
   prep.style.display = filled ? 'none' : '';
-  tools.style.display = filled ? '' : 'none';
+  done.style.display = filled ? '' : 'none';
   if (!filled) renderPrep();
-  document.getElementById('gridHint').textContent = filled
-    ? '칸을 누르면 선택판이 떠서 바로 고칠 수 있어요. 이름 옆에서 사람별 개수, 맨 아래에서 날짜별 인원을 확인하세요.'
-    : '칸을 눌러 ★(쉬고 싶은 날)이나 미리 정해진 근무를 표시해 둘 수 있어요.';
-  renderGrid();
+  else { renderDoneHead(); renderGrid(); }
 }
 /* 「로그인 없이 쓰기」는 이번 실행에서만 유효하다(저장하지 않음).
    예전처럼 db.loginSkipped에 영구 저장하면, 한 번 누른 뒤로는 로그아웃해도 로그인 화면이 영영 안 뜬다. */
 var loginSkippedNow = false;
 function skipLogin() { loginSkippedNow = true; renderHome(); }
+
+/* ---- 상태 2: 자동 생성 준비(09) — 체크리스트 ---- */
 function renderPrep() {
   var staff = staffList();
   var m = month(curYM);
-  var wishCount = 0;
-  staff.forEach(function (p) { wishCount += (m.wish[p.id] || []).length; });
+  var wishCount = 0, pinCount = 0;
+  staff.forEach(function (p) {
+    wishCount += (m.wish[p.id] || []).length;
+    pinCount += Object.keys(m.pins[p.id] || {}).length;
+  });
   var p = ymParts(curYM);
+  document.getElementById('prepTitle').textContent = p.m + '월 근무표 만들기';
+  var gs = groupsPresent();
+  var grpTx = gs.map(function (g) { return groupNames[g]; }).join('·');
+  var wpTx = [];
+  if (wishCount) wpTx.push('희망 휴무 ' + wishCount + '건');
+  if (pinCount) wpTx.push('고정 근무 ' + pinCount + '건');
+  var wpDone = wishCount + pinCount > 0;
+  function row(iconOk, title, sub, go, fn) {
+    return '<button class="preprow" onclick="' + fn + '">' +
+      '<span class="pr-ico ' + (iconOk ? 'ok' : 'warn') + '">' + ic(iconOk ? 'check' : 'bang') + '</span>' +
+      '<span class="pr-tx"><b>' + title + '</b><span class="pr-sub">' + sub + '</span></span>' +
+      '<span class="pr-go">' + go + ic('chevR') + '</span></button>';
+  }
   document.getElementById('prepStatus').innerHTML =
-    '<span class="okmark">✔</span> 인원 <b>' + staff.length + '명</b> 등록됨 &nbsp;<a class="link" onclick="showTab(\'ward\')">고치기</a><br>' +
-    '<span class="okmark">✔</span> 근무 규칙 준비됨 &nbsp;<a class="link" onclick="editRules()">고치기</a> <span class="hint">(그대로 두셔도 돼요)</span><br>' +
-    '<span class="star">★</span> ' + p.m + '월에 쉬고 싶은 날 <b>' + wishCount + '건</b> 표시됨';
+    row(true, '병동 구성', staff.length + '명 준비됨', '확인', "showTab('ward')") +
+    row(true, '근무 규칙', grpTx + ' 설정됨', '확인', 'openRulesScreen()') +
+    row(wpDone, '희망 휴무·고정 근무', wpDone ? wpTx.join(' · ') + ' 입력됨' : '아직 입력한 날이 없어요', '입력', 'openWishScreen()');
+  /* 형평성 안내 — 지난 기록이 있어야 이어받는다 */
+  var hasHist = [1, 2].some(function (back) {
+    var rec = (db.months || {})[prevYM(curYM, back)];
+    return rec && rec.codes && Object.keys(rec.codes).length;
+  });
+  document.getElementById('fairnoteTx').innerHTML = hasHist
+    ? '지난 2개월 기록을 반영해<br>나이트와 휴일 근무를 고르게 배정해요.'
+    : '근무표를 만들수록 지난 기록이 쌓여<br>나이트와 휴일 근무가 더 고르게 배정돼요.';
 }
+function editRules() { openRulesScreen(); }
 
-/* 「근무 규칙 준비됨 → 고치기」 — 우리 병동 탭으로 가서 규칙 상자를 펼치고 그 자리로 데려간다.
-   (규칙 상자는 평소 접혀 있어서 탭만 옮기면 어디를 고쳐야 하는지 안 보인다) */
-function editRules() {
-  showTab('ward');
-  var box = document.getElementById('rulesBox');
-  if (!box) return;
-  box.open = true;
-  box.scrollIntoView({ block: 'start' });
+/* ---- 상태 3: 완성(11) — 제목·상태 칩 ---- */
+function renderDoneHead() {
+  var p = ymParts(curYM);
+  document.getElementById('doneTitle').textContent = p.m + '월 근무표 초안이 완성됐어요';
+  var v = currentViols();
+  var chips = v.length
+    ? '<button class="chip red" onclick="openGridFull()">확인할 곳 ' + v.length + '곳</button>'
+    : '<span class="chip green">' + ic('check') + ' 규칙 위반 없음</span>';
+  /* 형평성(상대): 같은 직군에서 최대 휴무자보다 2일+ 덜 쉰 사람이 있는가 */
+  var short = fairnessShortNames();
+  chips += short.length
+    ? '<button class="chip red" onclick="openGridFull()">공평성 확인 ' + short.length + '명</button>'
+    : '<span class="chip green">공평성 양호</span>';
+  document.getElementById('doneChips').innerHTML = chips;
+}
+/* 같은 직군에서 남들(최대 휴무자)보다 2일+ 덜 쉰 사람 이름 목록 */
+function fairnessShortNames() {
+  var out = [];
+  var days = daysInYM(curYM);
+  groupsPresent().forEach(function (g) {
+    var gStaff = groupStaff(g);
+    if (gStaff.length < 2) return;
+    var rests = [], maxRest = 0;
+    gStaff.forEach(function (p) {
+      var rc = 0, fl = 0;
+      for (var d = 1; d <= days; d++) { var c = cellCode(p.id, d); if (c) { fl++; if (!E.fam(c)) rc++; } }
+      if (fl === days) { rests.push({ name: p.name, rest: rc }); if (rc > maxRest) maxRest = rc; }
+    });
+    rests.forEach(function (x) { if (maxRest - x.rest >= 2) out.push(x.name); });
+  });
+  return out;
 }
 
 /* ---- 근무표 그리드 ---- */
@@ -373,7 +510,7 @@ function renderGrid() {
   var hi = document.getElementById('holidayInput');
   if (hi && document.activeElement !== hi) hi.value = m.holidays.join(', ');
   renderStats();
-  renderBanner();
+  renderDoneHead();
   if (document.body.classList.contains('grid-open')) { fitGridFull(); renderViewerPanel(); }
   else fitGridThumb();
 }
@@ -460,34 +597,9 @@ function currentViolMap() {
   });
   return map;
 }
-var violExpanded = false;   // 위반 목록을 모두 펼쳤는가
-function toggleViols() { violExpanded = !violExpanded; renderBanner(); }
-function renderBanner() {
-  var b = document.getElementById('banner');
-  if (!hasAny()) { b.className = ''; b.style.display = 'none'; return; }
-  b.style.display = '';
-  var v = currentViols();
-  if (!v.length) {
-    b.className = 'ok';
-    b.innerHTML = '✅ 규칙 위반이 없습니다. 이대로 쓰셔도 좋아요!';
-  } else {
-    b.className = 'bad';
-    /* 기본은 4건만. 「모두 보기」를 누르면 전부 펼친다 — 예전엔 "…외 N건"이 어떤 항목인지
-       알 수도, 눌러서 갈 수도 없었다(2026-07-20). */
-    var shown = violExpanded ? v : v.slice(0, 4);
-    var list = shown.map(function (x) {
-      if (x.pid) return '<span class="viol-item" onclick="jumpTo(\'' + x.pid + '\',' + x.day + ')">· ' + esc(x.msg) + ' →</span>';
-      return '<span>· ' + esc(x.msg) + '</span>';
-    }).join('<br>');
-    var more = '';
-    if (v.length > 4) {
-      more = violExpanded
-        ? '<br><a class="link violmore" onclick="toggleViols()">↑ 접기</a>'
-        : '<br><a class="link violmore" onclick="toggleViols()">…외 ' + (v.length - 4) + '건 — 모두 보기</a>';
-    }
-    b.innerHTML = '⚠️ 확인이 필요한 곳이 <b>' + v.length + '건</b> 있어요.<br>' + list + more;
-  }
-}
+/* 위반 상세 목록은 뷰어 우측 패널(renderViewerPanel)에서 본다.
+   홈에는 상태 칩(renderDoneHead)만 — 옛 배너는 v7 개편으로 없앴다. */
+var violExpanded = false;   // (구버전 잔재 — 미사용)
 /* ---- 제안(수정 추천) ----
    위반 1건을 '한 칸'만 바꿔 없앨 수 있는지 엔진으로 시뮬레이션한다. 후보를 실제 적용해 재검증하고,
    ① 그 위반이 사라지고 ② 전체 위반 수가 '진짜 줄어드는'(다른 곳을 새로 만들지 않는) 안전한 수정만
@@ -698,65 +810,70 @@ function renderStats() {
   el.innerHTML = html;
 }
 
-/* ---- 선택판 ---- */
-var pickerTarget = null;
+/* ---- 근무 선택(16) — 바텀시트: 코드 + 고정 여부를 함께 편집 ---- */
+function hidePicker() { closeSheet(); }
 function tapCell(ev, pid, d) {
   vzFocus = null;                      // 편집을 시작하면 '보기' 자동 줌의 재중앙은 해제
-  var pk = document.getElementById('picker');
-  pickerTarget = { pid: pid, d: d };
-  var p = staffList().filter(function (x) { return x.id === pid; })[0];
-  pk.innerHTML = '<div class="who"><b>' + esc(p ? p.name : '') + '</b> · ' + ymParts(curYM).m + '월 ' + d + '일 <span class="hint">직접 고른 칸은 📌 고정돼요</span></div>' +
-    '<div class="row">' +
-    '<button class="pk-D" onclick="pickCode(\'D\')">D<br><span style="font-size:12px">데이</span></button>' +
-    '<button class="pk-D" onclick="pickCode(\'MD\')">MD<br><span style="font-size:12px">미들</span></button>' +
-    '<button class="pk-E" onclick="pickCode(\'E\')">E<br><span style="font-size:12px">이브닝</span></button>' +
-    '<button class="pk-E" onclick="pickCode(\'E2\')">E2<br><span style="font-size:12px">이브닝2</span></button>' +
-    '<button class="pk-N" onclick="pickCode(\'N\')">N<br><span style="font-size:12px">나이트</span></button>' +
-    '</div><div class="row">' +
-    '<button class="pk-O" onclick="pickCode(\'O\')">－<br><span style="font-size:12px">오프</span></button>' +
-    '<button class="pk-V" onclick="pickCode(\'V\')">휴<br><span style="font-size:12px">연차</span></button>' +
-    '<button class="pk-V" onclick="pickCode(\'CO\')">대<br><span style="font-size:12px">대휴</span></button>' +
-    '<button class="pk-V" onclick="pickCode(\'EDU\')">교<br><span style="font-size:12px">교육</span></button>' +
-    '<button class="pk-W" onclick="pickCode(\'W\')">★<br><span style="font-size:12px">희망</span></button>' +
-    '<button class="pk-X" onclick="pickCode(\'\')">✕<br><span style="font-size:12px">지움</span></button>' +
-    '</div>';
-  pk.style.display = 'block';
-  var rect = ev.target.getBoundingClientRect();
-  var pkW = pk.offsetWidth || 410;   // 실제 폭으로 계산 — 고정값이면 좁은 폰에서 화면 밖으로 나간다
-  var pkH = pk.offsetHeight || 240;
-  if (document.body.classList.contains('grid-open')) {
-    /* 가로 전체화면: #picker가 뷰포트 기준(fixed)으로 뜨므로 스크롤 오프셋 없이 배치하고,
-       아래로 넘치면 칸 위로 띄운다(가로 화면은 세로가 짧아 아래 공간이 부족할 수 있다). */
-    var vw = document.documentElement.clientWidth, vh = window.innerHeight;
-    var fx = rect.left;
-    var fy = rect.bottom + 6;
-    if (fy + pkH > vh - 8) fy = rect.top - pkH - 6;   // 아래로 넘치면 칸 위로
-    /* 어떤 경우에도 화면 밖으로 나가지 않게 최종 클램프 */
-    fx = Math.min(Math.max(8, fx), Math.max(8, vw - pkW - 8));
-    fy = Math.min(Math.max(8, fy), Math.max(8, vh - pkH - 8));
-    pk.style.left = fx + 'px';
-    pk.style.top = fy + 'px';
-  } else {
-    var x = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - pkW - 8);
-    pk.style.left = Math.max(8, x) + 'px';
-    pk.style.top = (rect.bottom + window.scrollY + 6) + 'px';
-  }
   ev.stopPropagation();
+  openCodeSheet(pid, d, null);
 }
-function hidePicker() {
-  document.getElementById('picker').style.display = 'none';
-  pickerTarget = null;
+var CODE_SHEET_ROWS = [
+  ['D', 'E', 'N', 'O'],
+  ['V', 'CO', 'EDU', 'W'],
+  ['MD', 'E2', 'X']
+];
+var codeBig = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', CO: '대', EDU: '교', W: '★', X: '✕' };
+var codeSheetLbl = { D: '데이', MD: '미들', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육', W: '희망 휴무', X: '지움' };
+/* opts.pinOnly = 희망 화면의 「고정 근무」 입력 — 고정이 전제라 토글·희망을 숨긴다 */
+function openCodeSheet(pid, d, opts) {
+  opts = opts || {};
+  var p = staffList().filter(function (x) { return x.id === pid; })[0];
+  var cur = cellCode(pid, d);
+  var sel = cur || (isWish(pid, d) ? 'W' : '');
+  sheetCtx = { kind: 'code', pid: pid, d: d, sel: sel || null, pinOnly: !!opts.pinOnly, after: opts.after || null };
+  var codes = [];
+  CODE_SHEET_ROWS.forEach(function (r) {
+    r.forEach(function (c) {
+      if (opts.pinOnly && c === 'W') return;   // 고정 입력에선 ★(희망)은 달력에서 직접 찍는다
+      codes.push(c);
+    });
+  });
+  var grid = codes.map(function (c) {
+    return '<button class="codebtn c' + c + (sheetCtx.sel === c ? ' on' : '') + '" id="cbtn_' + c + '" ' +
+      'onclick="codeSheetPick(\'' + c + '\')"><span class="cb-big">' + codeBig[c] + '</span>' +
+      '<span class="cb-lbl">' + codeSheetLbl[c] + '</span></button>';
+  }).join('');
+  var pinRow = opts.pinOnly ? '' :
+    '<div class="pinrow"><span class="pin-tx"><b>이 근무를 고정하기</b>' +
+    '<span class="pin-sub">다시 만들어도 이 칸은 바뀌지 않아요.</span></span>' +
+    '<label class="tgl"><input type="checkbox" id="codePin" checked><span class="knob"></span></label></div>';
+  openSheet(
+    '<div class="sh-head center"><h3>근무 선택</h3></div>' +
+    '<p class="sh-sub">' + esc(p ? p.name : '') + ' · ' + ymParts(curYM).m + '월 ' + d + '일</p>' +
+    '<div class="codegrid">' + grid + '</div>' + pinRow +
+    '<div class="btnrow"><button class="btn outline" onclick="closeSheet()">취소</button>' +
+    '<button class="btn big" onclick="codeSheetApply()">적용</button></div>'
+  );
 }
-document.addEventListener('click', function (ev) {
-  var pk = document.getElementById('picker');
-  if (pk.style.display === 'block' && !pk.contains(ev.target)) hidePicker();
-});
-function pickCode(code) {
-  if (!pickerTarget) return;
-  setCell(pickerTarget.pid, pickerTarget.d, code);
-  hidePicker();
+function codeSheetPick(c) {
+  if (!sheetCtx || sheetCtx.kind !== 'code') return;
+  sheetCtx.sel = c;
+  document.querySelectorAll('.codebtn').forEach(function (el) { el.classList.remove('on'); });
+  var el = document.getElementById('cbtn_' + c);
+  if (el) el.classList.add('on');
 }
-function setCell(pid, d, code) {
+function codeSheetApply() {
+  var c = sheetCtx && sheetCtx.sel;
+  if (!sheetCtx || c == null) { closeSheet(); return; }
+  var ctx = sheetCtx;
+  var pinEl = document.getElementById('codePin');
+  var noPin = !ctx.pinOnly && pinEl && !pinEl.checked;
+  closeSheet();
+  if (c === 'X') setCell(ctx.pid, ctx.d, '');
+  else setCell(ctx.pid, ctx.d, c, noPin);
+  if (ctx.after) ctx.after();
+}
+function setCell(pid, d, code, noPin) {
   var m = month(curYM);
   pushUndo();
   if (code === 'W') {
@@ -767,13 +884,13 @@ function setCell(pid, d, code) {
     m.codes[pid] = m.codes[pid] || [];
     m.codes[pid][d - 1] = code;
     m.pins[pid] = m.pins[pid] || {};
-    if (code) m.pins[pid][d] = code;      // 손으로 고른 칸 = 선입력(재생성에도 그대로)
-    else {
+    if (code && !noPin) m.pins[pid][d] = code;      // 손으로 고른 칸 = 선입력(재생성에도 그대로)
+    else if (!code) {
       delete m.pins[pid][d];
       var w = m.wish[pid] || [];
       var i = w.indexOf(d);
       if (i >= 0) w.splice(i, 1);
-    }
+    } else delete m.pins[pid][d];                    // 고정 끄고 적용 = 이번만 바꾸기
   }
   save(); renderHome();
 }
@@ -847,23 +964,19 @@ function generate() {
   pushUndo();
   var perMax = 1500, seed = Date.now() % 100000, t0 = Date.now();
   var totalMax = perMax * jobs.length;
-  var prog = document.getElementById('genProgress');
-  var bar = document.getElementById('genProgBar');
-  var lbl = document.getElementById('genProgLbl');
+  genShow(staff.length);
   var info = document.getElementById('genInfo');
   info.textContent = softMsgs.map(function (m) { return '⚠️ ' + m; }).join('\n');
-  prog.className = 'on';
-  bar.style.width = '0%';
   var ji = 0, att = 0, doneAtt = 0, best = null;
   var results = {};
   function accept(r) { return r.violations.length === 0 && (r.nightGap || 0) <= 2; }
   function failAll(msg) {
-    prog.className = '';
+    genHide();
     undoStack.pop();
     alert((softMsgs.length ? softMsgs.join('\n') + '\n\n' : '') + msg);
   }
   function finishAll() {
-    prog.className = '';
+    genHide();
     var m = month(curYM);
     var warn = [], short = [];
     jobs.forEach(function (job) {
@@ -890,6 +1003,7 @@ function generate() {
     toast(warn.length ? '초안이 나왔어요 — 확인이 필요한 곳이 있어요' : '근무표 초안이 완성됐어요 🌙');
   }
   function batch() {
+    if (genCanceled) { failAllQuiet(); return; }
     var job = jobs[ji];
     var end = Math.min(att + 40, perMax);
     for (; att < end; att++) {
@@ -913,51 +1027,176 @@ function generate() {
       ji++; att = 0; best = null;
       if (ji >= jobs.length) { finishAll(); return; }
     }
-    var cur = doneAtt + att;
-    bar.style.width = Math.round(cur / totalMax * 100) + '%';
-    lbl.textContent = (jobs.length > 1 ? groupNames[jobs[Math.min(ji, jobs.length - 1)].g] + ' — ' : '') +
-      '조합을 찾는 중… (' + cur.toLocaleString() + ')';
+    genUpdate((doneAtt + att) / totalMax);
     setTimeout(batch, 0);
+  }
+  function failAllQuiet() {   // 사용자가 「생성 취소」 — 조용히 원상 복구
+    genHide();
+    undoStack.pop();
+    toast('만들기를 취소했어요');
   }
   setTimeout(batch, 30);
 }
 
-/* ---- 인원 ---- */
+/* ---- 자동 생성 진행 화면(10) — 원형 진행률 + 실제 처리 단계 ---- */
+var genCanceled = false;
+var GEN_R = 76, GEN_CIRC = Math.round(2 * Math.PI * 76);
+function genShow(nStaff) {
+  genCanceled = false;
+  var el = document.getElementById('genScreen');
+  el.innerHTML = '<div class="gs-in">' +
+    '<div class="ring"><svg width="168" height="168" viewBox="0 0 168 168">' +
+    '<circle class="track" cx="84" cy="84" r="' + GEN_R + '" fill="none" stroke-width="13"/>' +
+    '<circle class="bar" id="genRing" cx="84" cy="84" r="' + GEN_R + '" fill="none" stroke-width="13" ' +
+    'stroke-dasharray="' + GEN_CIRC + '" stroke-dashoffset="' + GEN_CIRC + '"/></svg>' +
+    '<span class="pct" id="genPct">0%</span></div>' +
+    '<h2>근무표를 만들고 있어요</h2>' +
+    '<p class="gs-sub">' + nStaff + '명의 한 달 근무를 규칙에 맞게 조합하고 있어요.</p>' +
+    '<div class="gsteps">' +
+    ['인원 배치', '규칙 확인', '공평성 조정'].map(function (t, i) {
+      return '<div class="gstep" id="gstep_' + i + '"><span class="g-ico">' + ic('check') + '</span>' + t +
+        '<span class="g-state"></span></div>';
+    }).join('') + '</div>' +
+    '<p class="gs-warn">지난달 기록과 희망 휴무도 함께 반영하고 있어요.<br><b>화면을 닫지 말아 주세요.</b></p>' +
+    '<button class="gs-cancel" onclick="genCancel()">생성 취소</button>' +
+    '</div>';
+  el.className = 'on';
+  genUpdate(0);
+}
+function genUpdate(frac) {
+  frac = Math.max(0, Math.min(1, frac));
+  var ring = document.getElementById('genRing');
+  var pct = document.getElementById('genPct');
+  if (!ring || !pct) return;
+  ring.style.strokeDashoffset = Math.round(GEN_CIRC * (1 - frac));
+  pct.textContent = Math.round(frac * 100) + '%';
+  /* 실제 처리 순서(배치 시도 → 규칙 검사 → 형평성 비교)를 단계로 보여준다 */
+  var states = frac < 0.12 ? ['doing', '', ''] : frac < 0.82 ? ['done', 'doing', ''] : ['done', 'done', 'doing'];
+  var labels = { doing: '진행 중', done: '완료', '': '대기' };
+  states.forEach(function (s, i) {
+    var el = document.getElementById('gstep_' + i);
+    if (!el) return;
+    el.className = 'gstep ' + s;
+    el.querySelector('.g-state').textContent = labels[s];
+  });
+}
+function genHide() {
+  var el = document.getElementById('genScreen');
+  el.className = ''; el.innerHTML = '';
+}
+function genCancel() { genCanceled = true; }
+
+/* ---- 우리 병동(06) — 이름·요약 목록, 행을 누르면 편집 바텀시트(07) ---- */
 function renderStaff() {
   var el = document.getElementById('staffList');
   var staff = staffList();
-  el.innerHTML = staff.map(function (p, i) {
-    return '<div class="staffrow"><span class="nm"><b>' + esc(p.name) + '</b></span>' +
-      '<select onchange="chgGroup(' + i + ', this.value)" title="직군">' +
-      ['RN', 'NA'].map(function (g) {
-        return '<option value="' + g + '"' + (staffGroup(p) === g ? ' selected' : '') + '>' + groupNames[g] + '</option>';
-      }).join('') + '</select>' +
-      '<select onchange="chgType(' + i + ', this.value)" title="근무 형태">' +
-      TYPE_ORDER.map(function (t) {
-        return '<option value="' + t + '"' + (p.type === t ? ' selected' : '') + '>' + typeNames[t] + '</option>';
-      }).join('') + '</select>' +
-      '<select onchange="chgPref(' + i + ', this.value)" title="선호 근무">' +
-      ['', 'D', 'E'].map(function (v) {
-        return '<option value="' + v + '"' + ((p.pref || '') === v ? ' selected' : '') + '>' + prefNames[v] + '</option>';
-      }).join('') + '</select>' +
-      '<button class="btn warn" onclick="delStaff(' + i + ')">삭제</button></div>';
-  }).join('') || '<p class="hint">아직 등록된 사람이 없어요.</p>';
-  document.getElementById('sampleHint').style.display = staff.length ? 'none' : '';
-}
-function addStaff() {
-  var name = document.getElementById('newName').value.trim();
-  if (!name) { alert('이름을 입력해주세요.'); return; }
-  staffList().push({
-    id: 'p' + Date.now() + Math.floor(Math.random() * 1000), name: name,
-    type: document.getElementById('newType').value,
-    group: document.getElementById('newGroup').value, pref: ''
+  document.getElementById('wardCount').textContent = staff.length + '명';
+  var html = '';
+  groupsPresent().forEach(function (g) {
+    var gStaff = groupStaff(g);
+    html += '<div class="grouplabel">' + groupNames[g] + '<span>' + gStaff.length + '명</span></div>';
+    gStaff.forEach(function (p) {
+      var i = staff.indexOf(p);
+      html += '<button class="listrow personrow" onclick="openStaffSheet(' + i + ')">' +
+        '<span class="lr-ico">' + ic('people') + '</span>' +
+        '<span class="lr-tx"><b>' + esc(p.name) + '</b><span class="lr-sub">' +
+        typeNames[p.type] + ' · ' + (prefNames[p.pref || ''] || '자동') + '</span></span>' +
+        '<span class="lr-go">' + ic('chevR') + '</span></button>';
+    });
   });
-  document.getElementById('newName').value = '';
-  save(); renderStaff();
-  toast(name + ' 님을 추가했어요');
+  el.innerHTML = html || '<p class="hint" style="margin:8px 0 14px">아직 등록된 사람이 없어요. 위 「사람 추가」나 「기존 근무표 불러오기」로 시작해보세요.</p>';
+  document.getElementById('sampleHint').style.display = staff.length ? 'none' : '';
+  renderPatternMemo();
 }
-function chgGroup(i, g) { staffList()[i].group = g; save(); renderStaff(); toast('바꿨어요 ✓'); }
-function chgPref(i, v) { staffList()[i].pref = v; save(); renderStaff(); toast('바꿨어요 ✓'); }
+/* 구성원 편집 바텀시트(07). i = staff 인덱스, -1 = 새로 추가 */
+function openStaffSheet(i) {
+  var isNew = i < 0;
+  var p = isNew ? { name: '', group: 'RN', type: 'three', pref: '' } : staffList()[i];
+  if (!p) return;
+  sheetCtx = { kind: 'staff', i: i, group: staffGroup(p), type: p.type, pref: p.pref || '' };
+  function segBtn(field, val, label) {
+    return '<button id="sf_' + field + '_' + val + '" class="' + (sheetCtx[field] === val ? 'on' : '') + '" ' +
+      'onclick="staffSheetSeg(\'' + field + '\',\'' + val + '\')">' + label + '</button>';
+  }
+  var typeCards = TYPE_ORDER.map(function (t) {
+    return '<button class="radiocard' + (sheetCtx.type === t ? ' on' : '') + '" id="sf_type_' + t + '" onclick="staffSheetType(\'' + t + '\')">' +
+      typeNames[t] + '<span class="rc-dot">' + ic('check') + '</span></button>';
+  }).join('');
+  openSheet(
+    '<div class="sh-head"><h3>' + (isNew ? '사람 추가' : '구성원 편집') + '</h3>' +
+    '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
+    '<div class="sh-label">이름</div>' +
+    '<input type="text" class="sh-input" id="sfName" value="' + esc(p.name) + '" placeholder="이름을 입력하세요">' +
+    '<div class="sh-label">직군</div>' +
+    '<div class="seg">' + segBtn('group', 'RN', '간호사') + segBtn('group', 'NA', '조무사') + '</div>' +
+    '<div class="sh-label">근무 형태</div>' + typeCards +
+    '<div class="sh-label">근무 성향</div>' +
+    '<div class="seg">' + segBtn('pref', '', '자동') + segBtn('pref', 'D', '데이 위주') + segBtn('pref', 'E', '이브닝 위주') + '</div>' +
+    '<button class="btn big xl" style="margin-top:18px" onclick="staffSheetSave()">저장</button>' +
+    (isNew ? '' : '<button class="sh-danger" onclick="staffSheetDelete()">구성원 삭제</button>')
+  );
+  if (isNew) setTimeout(function () { var e = document.getElementById('sfName'); if (e) e.focus(); }, 50);
+}
+function staffSheetSeg(field, val) {
+  if (!sheetCtx || sheetCtx.kind !== 'staff') return;
+  sheetCtx[field] = val;
+  ['RN', 'NA', '', 'D', 'E'].forEach(function (v) {
+    var el = document.getElementById('sf_' + field + '_' + v);
+    if (el) el.className = sheetCtx[field] === v ? 'on' : '';
+  });
+}
+function staffSheetType(t) {
+  if (!sheetCtx || sheetCtx.kind !== 'staff') return;
+  sheetCtx.type = t;
+  TYPE_ORDER.forEach(function (x) {
+    var el = document.getElementById('sf_type_' + x);
+    if (el) el.className = 'radiocard' + (x === t ? ' on' : '');
+  });
+}
+function staffSheetSave() {
+  if (!sheetCtx || sheetCtx.kind !== 'staff') return;
+  var name = (document.getElementById('sfName').value || '').trim();
+  if (!name) { alert('이름을 입력해주세요.'); return; }
+  if (sheetCtx.i < 0) {
+    staffList().push({ id: 'p' + Date.now() + Math.floor(Math.random() * 1000), name: name,
+      group: sheetCtx.group, type: sheetCtx.type, pref: sheetCtx.pref });
+    toast(name + ' 님을 추가했어요');
+  } else {
+    var p = staffList()[sheetCtx.i];
+    p.name = name; p.group = sheetCtx.group; p.type = sheetCtx.type; p.pref = sheetCtx.pref;
+    toast('저장했어요 ✓');
+  }
+  closeSheet();
+  save(); renderStaff();
+}
+function staffSheetDelete() {
+  if (!sheetCtx || sheetCtx.kind !== 'staff' || sheetCtx.i < 0) return;
+  var p = staffList()[sheetCtx.i];
+  if (!p) return;
+  if (!confirm(p.name + ' 님을 삭제할까요?')) return;
+  staffList().splice(sheetCtx.i, 1);
+  closeSheet();
+  save(); renderStaff();
+  toast('삭제했어요');
+}
+/* 기존 근무표 불러오기 — 방법 선택 시트(사진·PDF·엑셀) */
+function openImportSheet() {
+  openSheet(
+    '<div class="sh-head"><h3>기존 근무표 불러오기</h3>' +
+    '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
+    '<div class="onboard-opts">' +
+    '<button class="onboard-card" onclick="closeSheet();aiImportStart()">' +
+    '<span class="ob-ico">' + ic('camera') + '</span>' +
+    '<span class="ob-txt"><b>사진으로 불러오기</b><span class="ob-sub">찍거나 앨범에서 고르면 자동으로 읽어요 (최대 3장)</span></span></button>' +
+    '<button class="onboard-card" onclick="closeSheet();aiImportPdfStart()">' +
+    '<span class="ob-ico">' + ic('doc') + '</span>' +
+    '<span class="ob-txt"><b>PDF로 불러오기</b><span class="ob-sub">PDF 근무표 파일을 자동으로 읽어요</span></span></button>' +
+    '<button class="onboard-card" onclick="closeSheet();document.getElementById(\'importFileXlsx\').click()">' +
+    '<span class="ob-ico">' + ic('sheet') + '</span>' +
+    '<span class="ob-txt"><b>엑셀 파일 불러오기</b><span class="ob-sub">사용하던 엑셀(.xlsx)을 그대로 가져와요</span></span></button>' +
+    '</div>'
+  );
+}
 function trySample() {
   var names3 = ['김영희', '이순자', '박미경', '최정숙', '정혜란', '강민지', '조수연', '윤서현'];
   var namesN = ['한나래', '오지은'];
@@ -969,42 +1208,230 @@ function trySample() {
   toast('예시 인원 12명을 넣었어요');
   showTab('home');
 }
-function chgType(i, t) { staffList()[i].type = t; save(); renderStaff(); toast('바꿨어요 ✓'); }
-function delStaff(i) {
-  var p = staffList()[i];
-  if (!confirm(p.name + ' 님을 삭제할까요?')) return;
-  staffList().splice(i, 1);
-  save(); renderStaff();
-}
 
-/* ---- 규칙 (자동 저장, 직군별 범위) ---- */
-var RULE_KINDS = [['wd', '평일'], ['hd', '주말·공휴일']];
+/* ---- 근무 규칙 화면(08) — 직군 탭 + 스테퍼, 바꾸면 바로 저장 ---- */
+var RULE_KINDS = [['wd', '평일'], ['hd', '휴일·공휴일']];
 var RULE_FAMS = [['D', '데이'], ['E', '이브닝'], ['N', '나이트']];
-function renderRules() {
+var rsGroup = 'RN';   // 규칙 화면에서 보고 있는 직군
+function openRulesScreen() {
+  var gs = groupsPresent();
+  rsGroup = gs.length ? (gs.indexOf(rsGroup) >= 0 ? rsGroup : gs[0]) : 'RN';
+  renderRulesScreen();
+  openScreen('screen-rules');
+}
+function renderRules() {   // 구버전 이름 호환 — 규칙 화면이 열려 있으면 다시 그린다
+  if (openScreenId === 'screen-rules') renderRulesScreen();
+}
+function stepperHtml(id, val, unit) {
+  return '<span class="stepper">' +
+    '<button onclick="ruleStep(\'' + id + '\',-1)" aria-label="줄이기">−</button>' +
+    '<span class="st-val">' + val + unit + '</span>' +
+    '<button onclick="ruleStep(\'' + id + '\',1)" aria-label="늘리기">＋</button></span>';
+}
+function renderRulesScreen() {
   var r = rules2();
   var gs = groupsPresent();
   if (!gs.length) gs = ['RN'];
-  var html = gs.map(function (g) {
-    var gr = r.groups[g];
-    return '<div class="rulegroup">' +
-      (gs.length > 1 || g === 'NA' ? '<h3>' + groupNames[g] + '(' + g + ') 하루 인원</h3>' : '<h3>하루 인원</h3>') +
-      RULE_KINDS.map(function (kd) {
-        return '<div class="rulerow"><span class="lbl">' + kd[1] + '</span>' +
-          RULE_FAMS.map(function (fm) {
-            var v = gr[kd[0]][fm[0]];
-            return fm[1] + ' <input type="number" min="0" max="20" id="r2_' + g + '_' + kd[0] + '_' + fm[0] + '_0" value="' + v[0] + '">' +
-              '~<input type="number" min="0" max="20" id="r2_' + g + '_' + kd[0] + '_' + fm[0] + '_1" value="' + v[1] + '">';
-          }).join(' ') + '</div>';
+  if (gs.indexOf(rsGroup) < 0) rsGroup = gs[0];
+  var seg = gs.length > 1
+    ? '<div class="seg" style="margin-bottom:6px">' + gs.map(function (g) {
+        return '<button class="' + (rsGroup === g ? 'on' : '') + '" onclick="rsGroup=\'' + g + '\';renderRulesScreen()">' + groupNames[g] + '</button>';
+      }).join('') + '</div>'
+    : '';
+  var gr = r.groups[rsGroup] || r.groups.RN;
+  var need = RULE_KINDS.map(function (kd) {
+    return '<div class="rulesec">' + kd[1] + '</div><div class="rulecard">' +
+      RULE_FAMS.map(function (fm) {
+        var v = gr[kd[0]][fm[0]];
+        return '<div class="rrow"><span class="rr-lbl">' + fm[1] + '</span>' +
+          stepperHtml(rsGroup + '.' + kd[0] + '.' + fm[0] + '.0', v[0], '명') +
+          '<span class="rr-tilde">~</span>' +
+          stepperHtml(rsGroup + '.' + kd[0] + '.' + fm[0] + '.1', v[1], '명') + '</div>';
       }).join('') + '</div>';
-  }).join('') +
-    '<p class="hint">최소~최대 인원이에요. 딱 정해진 수면 두 칸에 같은 숫자를 넣으세요.</p>' +
-    '<div class="rulerow"><span class="lbl">연속으로 일할 수 있는 최대 일수</span><input type="number" id="r_maxWork" min="1" max="7" value="' + r.maxWork + '"></div>' +
-    '<div class="rulerow"><span class="lbl">연속으로 설 수 있는 나이트 최대 개수</span><input type="number" id="r_maxN" min="1" max="5" value="' + r.maxN + '"></div>' +
-    '<div class="rulerow"><span class="lbl">나이트가 끝나면 쉬는 날 수</span><input type="number" id="r_offAfterN" min="0" max="3" value="' + r.offAfterN + '"></div>' +
-    '<div class="rulerow"><span class="lbl">이브닝 다음날 데이 금지 (역행 금지)</span>' +
-    '<select id="r_backward"><option value="1"' + (+r.backward ? ' selected' : '') + '>금지</option><option value="0"' + (+r.backward ? '' : ' selected') + '>허용</option></select></div>';
-  document.getElementById('rulesArea').innerHTML = html;
-  renderPatternMemo();
+  }).join('');
+  var limits = '<div class="rulesec">근무 제한</div><div class="rulecard">' +
+    '<div class="rrow"><span class="rr-lbl">최대 연속 근무</span>' + stepperHtml('g.maxWork', r.maxWork, '일') + '</div>' +
+    '<div class="rrow"><span class="rr-lbl">최대 연속 나이트</span>' + stepperHtml('g.maxN', r.maxN, '개') + '</div>' +
+    '<div class="rrow"><span class="rr-lbl">나이트 후 휴식</span>' + stepperHtml('g.offAfterN', r.offAfterN, '일') + '</div>' +
+    '<div class="rrow"><span class="rr-lbl">이브닝 다음날 데이 금지<span class="hint">역행 근무를 막아요</span></span>' +
+    '<label class="tgl"><input type="checkbox"' + (+r.backward ? ' checked' : '') + ' onchange="ruleBackward(this.checked)"><span class="knob"></span></label></div>' +
+    '</div>';
+  document.getElementById('rulesScreenBody').innerHTML =
+    ssTop('근무 규칙', '완료') + seg +
+    '<div class="rulesec" style="margin-top:8px">하루 필요 인원 <span class="hint" style="font-weight:400">— 최소~최대예요. 바꾸면 바로 저장돼요.</span></div>' +
+    need + limits;
+}
+function ruleStep(path, delta) {
+  var r = rules2();
+  var a = path.split('.');
+  if (a[0] === 'g') {
+    var lim = { maxWork: [1, 7], maxN: [1, 5], offAfterN: [0, 3] }[a[1]];
+    r[a[1]] = Math.max(lim[0], Math.min(lim[1], (+r[a[1]] || 0) + delta));
+  } else {
+    var v = r.groups[a[0]][a[1]][a[2]];
+    var i = +a[3];
+    v[i] = Math.max(0, Math.min(20, v[i] + delta));
+    if (i === 0 && v[1] < v[0]) v[1] = v[0];   // 최소를 올리면 최대도 따라온다
+    if (i === 1 && v[1] < v[0]) v[0] = v[1];   // 최대를 내리면 최소도 따라온다
+  }
+  save();
+  renderRulesScreen();
+}
+function ruleBackward(on) {
+  rules2().backward = on ? 1 : 0;
+  save();
+  toast(on ? '이브닝 다음날 데이를 금지해요' : '이브닝 다음날 데이를 허용해요');
+}
+
+/* ---- 희망 휴무·고정 근무 화면(15) — 사람별 달력 입력 ---- */
+var wsIdx = 0, wsMode = 'wish';   // wish | pin
+function openWishScreen() {
+  if (!staffList().length) { showTab('ward'); return; }
+  wsIdx = 0; wsMode = 'wish';
+  renderWishScreen();
+  openScreen('screen-wish');
+}
+function closeWishScreen() { closeScreen(); renderHome(); }
+function renderWishScreen() {
+  var staff = staffList();
+  if (!staff.length) { closeWishScreen(); return; }
+  if (wsIdx >= staff.length) wsIdx = staff.length - 1;
+  var p = staff[wsIdx];
+  var m = month(curYM);
+  var pt = ymParts(curYM);
+  var wishes = m.wish[p.id] || [];
+  var pins = m.pins[p.id] || {};
+  var days = daysInYM(curYM), fw = firstWeekdayYM(curYM);
+  /* 달력 */
+  var cal = '<table><tr>' + ['일', '월', '화', '수', '목', '금', '토'].map(function (w, i) {
+    return '<th class="' + (i === 0 ? 'sun' : i === 6 ? 'sat' : '') + '">' + w + '</th>';
+  }).join('') + '</tr><tr>';
+  for (var b = 0; b < fw; b++) cal += '<td></td>';
+  for (var d = 1; d <= days; d++) {
+    var wd = (fw + d - 1) % 7;
+    if (d > 1 && wd === 0) cal += '</tr><tr>';
+    var cls = 'day' + (wd === 0 ? ' sun' : wd === 6 ? ' sat' : '') + (m.holidays.indexOf(d) >= 0 ? ' hol' : '');
+    var badge = '';
+    if (wishes.indexOf(d) >= 0) cls += ' wish';
+    if (pins[d]) { cls += ' pin'; badge = '<span class="pcode">' + codeDisp[pins[d]] + '</span>'; }
+    cal += '<td><button class="' + cls + '" onclick="wishTapDay(' + d + ')">' + d + badge + '</button></td>';
+  }
+  cal += '</tr></table>';
+  var isLast = wsIdx >= staff.length - 1;
+  document.getElementById('wishScreenBody').innerHTML =
+    ssTop('희망 휴무·고정 근무', '완료', 'closeWishScreen()') +
+    '<div class="wz-month" style="margin:0">' + pt.y + '년 ' + pt.m + '월</div>' +
+    '<button class="wp-person" onclick="openWishPersonSheet()">' +
+    '<span class="wpp-av">' + esc(p.name.charAt(0)) + '</span>' +
+    '<span class="wpp-tx"><b>' + esc(p.name) + '</b><span class="wpp-sub">희망 휴무 ' + wishes.length + '건 · 고정 근무 ' + Object.keys(pins).length + '건</span></span>' +
+    '<span class="lr-go">' + ic('chevR') + '</span></button>' +
+    '<p class="wp-guide">날짜를 눌러 표시하세요</p>' +
+    '<div class="wcal">' + cal + '</div>' +
+    '<div class="modeseg">' +
+    '<button class="mwish' + (wsMode === 'wish' ? ' on' : '') + '" onclick="wsMode=\'wish\';renderWishScreen()">' + ic('calstar') + ' 희망 휴무</button>' +
+    '<button class="mpin' + (wsMode === 'pin' ? ' on' : '') + '" onclick="wsMode=\'pin\';renderWishScreen()">' + ic('pin') + ' 고정 근무</button>' +
+    '</div>' +
+    '<div class="wp-legend"><span class="lg"><span class="dotw"></span>희망 휴무</span>' +
+    '<span class="lg"><span class="dotp"></span>고정 근무</span><br>' +
+    '희망 휴무는 자동 배정에서 쉬는 날로 우선 반영해요.</div>' +
+    '<button class="btn big xl" onclick="' + (isLast ? 'closeWishScreen()' : 'wsIdx++;renderWishScreen()') + '">' +
+    (isLast ? '입력 끝내기' : '다음 사람') + '</button>' +
+    '<p class="wp-count">' + (wsIdx + 1) + ' / ' + staff.length + '명</p>';
+}
+function wishTapDay(d) {
+  var p = staffList()[wsIdx];
+  if (!p) return;
+  if (wsMode === 'wish') {
+    setCell(p.id, d, 'W');
+    renderWishScreen();
+  } else {
+    var pins = month(curYM).pins[p.id] || {};
+    if (pins[d]) {   // 이미 고정된 날 다시 누르면 바로 해제(어르신 동선 단축)
+      setCell(p.id, d, '');
+      renderWishScreen();
+      return;
+    }
+    openCodeSheet(p.id, d, { pinOnly: true, after: renderWishScreen });
+  }
+}
+function openWishPersonSheet() {
+  var staff = staffList();
+  var m = month(curYM);
+  openSheet(
+    '<div class="sh-head"><h3>사람 고르기</h3>' +
+    '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
+    staff.map(function (p, i) {
+      var w = (m.wish[p.id] || []).length, pn = Object.keys(m.pins[p.id] || {}).length;
+      return '<button class="listrow" onclick="wsIdx=' + i + ';closeSheet();renderWishScreen()">' +
+        '<span class="lr-ico" style="border-radius:999px">' + esc(p.name.charAt(0)) + '</span>' +
+        '<span class="lr-tx"><b>' + esc(p.name) + '</b><span class="lr-sub">희망 ' + w + '건 · 고정 ' + pn + '건</span></span>' +
+        (i === wsIdx ? '<span class="lr-val" style="color:var(--brand);font-weight:800">보는 중</span>' : '') +
+        '</button>';
+    }).join('')
+  );
+}
+
+/* ---- 데이터 및 계정 화면(14) ---- */
+function openDataScreen() { renderDataScreen(); openScreen('screen-data'); }
+function renderDataScreen() {
+  var u = window.Cloud && Cloud.enabled() && Cloud.getUser();
+  var savedAt = db._updatedAt ? new Date(db._updatedAt) : null;
+  var savedTx = savedAt
+    ? (savedAt.getMonth() + 1) + '월 ' + savedAt.getDate() + '일 ' +
+      String(savedAt.getHours()).padStart(2, '0') + ':' + String(savedAt.getMinutes()).padStart(2, '0')
+    : '아직 없음';
+  var syncCard =
+    '<div class="rulesec">동기화</div><div class="datacard">' +
+    '<div class="datarow"><span class="dr-tx"><b>서버 동기화</b><span class="dr-sub">로그인한 기기에서 같은 근무표를 이어서 쓸 수 있어요.</span></span>' +
+    '<span class="dr-val">' + (u ? '저장됨<span class="okdot"></span>' : '로그인 안 됨') + '</span></div>' +
+    '<div class="datarow"><span class="dr-tx"><b>마지막 저장</b></span><span class="dr-val">' + savedTx + '</span></div>' +
+    '</div>';
+  var fileCard =
+    '<div class="rulesec">파일 백업</div><div class="datacard">' +
+    '<button class="datarow" onclick="exportData()">' +
+    '<span class="dr-tx"><b>파일로 백업하기</b><span class="dr-sub">현재 인원·규칙·근무표를 저장해요</span></span>' +
+    '<span class="dr-go">' + ic('chevR') + '</span></button>' +
+    '<button class="datarow" onclick="document.getElementById(\'importFile\').click()">' +
+    '<span class="dr-tx"><b>백업 불러오기</b><span class="dr-sub">이전에 저장한 파일로 복원해요</span></span>' +
+    '<span class="dr-go">' + ic('chevR') + '</span></button>' +
+    '</div>' +
+    '<input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">';
+  var acctCard = u
+    ? '<div class="rulesec">계정</div><div class="datacard">' +
+      '<div class="datarow"><span class="dr-tx"><b>로그인 계정</b></span><span class="dr-val">' + esc(u.email || '') + '</span></div>' +
+      '<button class="datarow" onclick="openPwChangeSheet()">' +
+      '<span class="dr-tx"><b>비밀번호 변경</b></span><span class="dr-go">' + ic('chevR') + '</span></button>' +
+      '</div>' +
+      '<button class="logoutbtn" onclick="cloudLogout()">로그아웃</button>'
+    : '';
+  document.getElementById('dataScreenBody').innerHTML =
+    ssTop('데이터 및 계정', '완료') + syncCard + fileCard + acctCard;
+}
+function openPwChangeSheet() {
+  openSheet(
+    '<div class="sh-head"><h3>비밀번호 변경</h3>' +
+    '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
+    '<div class="sh-label">새 비밀번호 (6자 이상)</div>' +
+    '<input type="password" class="sh-input" id="pwNew1">' +
+    '<div class="sh-label">한 번 더</div>' +
+    '<input type="password" class="sh-input" id="pwNew2">' +
+    '<span class="authmsg" id="pwMsg"></span>' +
+    '<button class="btn big xl" onclick="pwChangeApply()">바꾸기</button>'
+  );
+}
+function pwChangeApply() {
+  var pw = document.getElementById('pwNew1').value;
+  var pw2 = document.getElementById('pwNew2').value;
+  var msg = document.getElementById('pwMsg');
+  if (pw.length < 6) { msg.textContent = '비밀번호는 6자 이상으로 해주세요.'; return; }
+  if (pw !== pw2) { msg.textContent = '비밀번호 두 칸이 서로 달라요. 같게 넣어주세요.'; return; }
+  msg.textContent = '바꾸는 중…';
+  Cloud.setPassword(pw).then(function (res) {
+    if (res.error) { msg.textContent = cloudErrMsg(res.error); return; }
+    Cloud.signOutOthers().catch(function () { });
+    closeSheet();
+    toast('비밀번호를 바꿨어요 ✓');
+  });
 }
 /* 우리 병동 습관 메모 — AI가 읽어 저장한 참고 목록. 자동 강제 없음(초안 참고용).
    저장된 게 없으면 카드 자체를 숨긴다(빈 카드가 화면을 어지럽히지 않게). */
@@ -1030,35 +1457,6 @@ function removePattern(id) {
   save();
   renderPatternMemo();
   toast('메모를 지웠어요');
-}
-function numVal(id, fallback) {
-  var el = document.getElementById(id);
-  if (!el) return fallback;
-  var n = parseInt(el.value, 10);
-  return isNaN(n) ? fallback : n;
-}
-function saveRulesAuto() {
-  var r = rules2();
-  Object.keys(r.groups).forEach(function (g) {
-    RULE_KINDS.forEach(function (kd) {
-      RULE_FAMS.forEach(function (fm) {
-        var v = r.groups[g][kd[0]][fm[0]];
-        v[0] = numVal('r2_' + g + '_' + kd[0] + '_' + fm[0] + '_0', v[0]);
-        v[1] = numVal('r2_' + g + '_' + kd[0] + '_' + fm[0] + '_1', v[1]);
-        if (v[1] < v[0]) v[1] = v[0];
-      });
-    });
-  });
-  r.maxWork = numVal('r_maxWork', r.maxWork);
-  r.maxN = numVal('r_maxN', r.maxN);
-  r.offAfterN = numVal('r_offAfterN', r.offAfterN);
-  r.backward = numVal('r_backward', r.backward);
-  save();
-  renderRules();
-  toast('규칙이 저장됐어요 ✓');
-}
-function bindRules() {
-  document.getElementById('rulesArea').addEventListener('change', saveRulesAuto);
 }
 
 /* ---- 보관함 ---- */
@@ -1194,7 +1592,7 @@ function installStepsHtml() {
   return box('크롬', [
     '오른쪽 위 <b>메뉴(⋮)</b>를 누르세요.',
     '<b>「홈 화면에 추가」</b>를 누르세요.'
-  ], '<p class="hint" style="margin-top:6px">이미 만들어져 있으면 이 항목이 안 보일 수 있어요. 그때는 홈 화면의 🌙 아이콘으로 열어주세요.</p>');
+  ], '<p class="hint" style="margin-top:6px">이미 만들어져 있으면 이 항목이 안 보일 수 있어요. 그때는 홈 화면의 달 모양 아이콘으로 열어주세요.</p>');
 }
 /* ---- 비지원 브라우저 안내막 ----
    2026-07-20 사용자 결정: 크롬 외 브라우저에서 로그인·기능을 쓰면 정체 모를 오류가 난다
@@ -1249,7 +1647,7 @@ function renderBrowserGate() {
      로그인 없이 기능을 쓰게 되어 데이터가 어긋난다. 크롬·사파리 외에는 완전 차단. */
   var ios = browserKind() === 'ios-other' || (cloudBroken() && /iPhone|iPad|iPod/i.test(navigator.userAgent || ''));
   g.innerHTML =
-    '<div class="gate-in"><div class="gate-moon">🌙</div>' +
+    '<div class="gate-in"><div class="gate-moon"><svg class="moon" viewBox="0 0 48 48" aria-hidden="true"><use href="#moonlogo"/></svg></div>' +
     '<h2>' + (ios ? '사파리에서 열어주세요' : '크롬에서 열어주세요') + '</h2>' +
     '<p>지금 브라우저에서는 <b>로그인이 되지 않아</b><br>근무표가 어긋날 수 있어요.<br>' +
     (ios ? '아이폰은 <b>사파리</b>에서 써주세요.' : '<b>크롬</b>에서 열면 문제없이 쓸 수 있어요.') + '</p>' +
@@ -1288,12 +1686,12 @@ function openInstallModal() {
   var m = document.getElementById('installModal');
   var inner = alreadyInstalled
     ? '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>'
-    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 근무표는 「크게 보기」로 가로로 크게 볼 수 있어요.</p>' +
+    : '<p>홈 화면에 달 모양 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
       installStepsHtml();
   /* 왜 원터치가 안 되는지 알려주는 작은 진단 표시 — 문제 보고용 */
   var diag = '<p class="insdiag">진단: 원터치신호 ' + (deferredInstall ? '있음' : '없음') +
     ' · 이미있음 ' + (navigator.getInstalledRelatedApps ? (alreadyInstalled ? '예' : '아니오') : '모름') + '</p>';
-  m.innerHTML = '<div class="ins-card"><h2>🔗 홈 화면에 바로가기 만들기</h2>' + inner + diag +
+  m.innerHTML = '<div class="ins-card"><h2>홈 화면에 바로가기 만들기</h2>' + inner + diag +
     '<div class="imp-actions"><button class="btn gray" onclick="closeInstallModal()">닫기</button></div></div>';
   m.className = 'on';
   m.onclick = function (ev) { if (ev.target === m) closeInstallModal(); };
@@ -1306,19 +1704,17 @@ function renderInstallCard() {
   var card = document.getElementById('installCard');
   var body = document.getElementById('installBody');
   if (!card || !body) return;
+  /* 이미 바로가기(PWA)로 실행 중이면 설치 안내 카드를 아예 띄우지 않는다(UI_SPEC §10) */
+  if (isStandalone()) { card.style.display = 'none'; body.innerHTML = ''; return; }
   card.style.display = '';
-  if (isStandalone()) {
-    body.innerHTML = '<p>✅ 이미 <b>바로가기로 실행</b> 중이에요. 그대로 쓰시면 됩니다.</p>';
-    return;
-  }
   if (alreadyInstalled) {
     body.innerHTML = '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>';
     return;
   }
   body.innerHTML =
-    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 근무표는 「크게 보기」로 가로로 크게 볼 수 있어요.</p>' +
+    '<p>홈 화면에 달 모양 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
     (deferredInstall
-      ? '<button class="btn big xl" onclick="installApp()">🔗 지금 만들기</button>'
+      ? '<button class="btn big xl" onclick="installApp()">지금 만들기</button>'
       : installStepsHtml());
 }
 /* 아이폰 등에서 주소만 복사 — 다른 브라우저로 옮겨가야 할 때 */
@@ -1343,12 +1739,22 @@ function openInBrowser() {
   if (/Android/i.test(ua)) { location.href = 'intent://' + location.host + location.pathname + '#Intent;scheme=https;end'; return; }
   toast('화면 아래 ⋯ 메뉴에서 「다른 브라우저로 열기」를 눌러주세요');
 }
-function pwInput(id, ph) {
-  return '<input type="password" id="' + id + '" placeholder="' + ph + '" style="width:170px;font-size:19px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;font-family:inherit">';
+/* ---- 인증 화면 공통 조각 ---- */
+function authField(icon, type, id, ph, auto) {
+  return '<div class="authfield"><span class="af-ico">' + ic(icon) + '</span>' +
+    '<input type="' + type + '" id="' + id + '" placeholder="' + ph + '"' + (auto ? ' autocomplete="' + auto + '"' : '') + '></div>';
 }
-function backLink() { return '<p class="hint" style="margin-top:10px"><a class="link" onclick="cloudGoto(\'main\')">← 처음으로</a></p>'; }
-/* 로그아웃 뷰(main·signup·newpw·emailReset)를 현재 authTarget에 렌더한다.
-   홈 로그인 카드(homeLoginBody)와 보관함 카드(cloudBody)에 같은 id 입력칸이 공존하면
+function authLogo() {
+  return '<div class="auth-logo"><svg class="moon" viewBox="0 0 48 48" aria-hidden="true"><use href="#moonlogo"/></svg>' +
+    '<div class="bname">엄만달</div></div>';
+}
+function authBack() {
+  return '<div class="auth-top"><button class="auth-back" onclick="cloudGoto(\'main\')" aria-label="뒤로">' + ic('back') + '</button></div>';
+}
+/* 카카오 로그인 = 준비 중(비즈앱 인증 후 개통 — 2026-07-25 초승달 결정: 비활성 버튼으로 표시) */
+function kakaoSoon() { toast('카카오 로그인은 준비 중이에요. 지금은 Google이나 이메일로 로그인해주세요'); }
+/* 로그인 전 화면(01 로그인 · 02 회원가입 · 03 비밀번호찾기)을 현재 authTarget에 렌더한다.
+   홈(homeLoginBody)과 보관함 카드(cloudBody)에 같은 id 입력칸이 공존하면
    getElementById가 엉키므로, 렌더 직전에 반대쪽 컨테이너를 반드시 비운다. */
 function renderAuth() {
   var other = authTarget === 'homeLoginBody' ? 'cloudBody' : 'homeLoginBody';
@@ -1357,67 +1763,63 @@ function renderAuth() {
   var body = document.getElementById(authTarget);
   if (!body) return;
   if (cloudView === 'signup') {
-    body.innerHTML =
-      '<h3 class="authtitle">이메일로 가입하기</h3>' +
-      '<p class="hint">가입하면 확인 메일이 가요. 메일함에서 링크를 한 번만 눌러주시면 가입이 끝나요.</p>' +
-      '<div class="staffrow" style="border-bottom:none">' +
-      '<input type="text" id="cloudEmail" placeholder="이메일" style="width:220px" autocomplete="email">' +
-      pwInput('authPw', '비밀번호 (6자 이상)') + pwInput('authPw2', '비밀번호 다시') +
-      '</div>' +
-      '<div class="toolbar" style="margin-top:6px">' +
-      '<button class="btn big" onclick="cloudSignup()">가입하기</button>' +
-      '<span class="hint" id="cloudMsg"></span></div>' + backLink();
+    body.innerHTML = '<div class="auth-wrap">' + authBack() + authLogo() +
+      '<p class="auth-title">엄만달 시작하기</p>' +
+      '<p class="auth-sub">계정을 만들면 근무표가 안전하게 저장되고<br>다른 기기와도 이어져요.</p>' +
+      authField('mail', 'text', 'cloudEmail', '이메일', 'email') +
+      authField('lock', 'password', 'authPw', '비밀번호 (6자 이상)', 'new-password') +
+      authField('lock', 'password', 'authPw2', '비밀번호 확인', 'new-password') +
+      '<button class="btn big xl" onclick="cloudSignup()">회원가입</button>' +
+      '<span class="authmsg" id="cloudMsg"></span>' +
+      '<div class="auth-links">이미 계정이 있나요? <a class="link" onclick="cloudGoto(\'main\')">로그인</a></div>' +
+      '<p class="auth-note">가입하면 확인 메일이 가요.<br>메일함에서 링크를 한 번만 눌러주시면 가입이 끝나요.</p>' +
+      '</div>';
   } else if (cloudView === 'newpw') {
-    body.innerHTML =
-      '<h3 class="authtitle">새 비밀번호 만들기</h3>' +
-      '<p>본인 확인이 끝났어요. 이제 쓸 <b>새 비밀번호</b>를 정해주세요.</p>' +
-      '<div class="staffrow" style="border-bottom:none">' +
-      pwInput('authPw', '새 비밀번호 (6자 이상)') + pwInput('authPw2', '한 번 더') +
-      '<button class="btn big" onclick="cloudSetNewPw()">바꾸기</button>' +
-      '</div><span class="hint" id="cloudMsg"></span>';
+    body.innerHTML = '<div class="auth-wrap" style="padding-top:4px">' +
+      '<p class="auth-title" style="font-size:22px">새 비밀번호 만들기</p>' +
+      '<p class="auth-sub">본인 확인이 끝났어요. 이제 쓸 <b>새 비밀번호</b>를 정해주세요.</p>' +
+      authField('lock', 'password', 'authPw', '새 비밀번호 (6자 이상)', 'new-password') +
+      authField('lock', 'password', 'authPw2', '한 번 더', 'new-password') +
+      '<button class="btn big xl" onclick="cloudSetNewPw()">바꾸기</button>' +
+      '<span class="authmsg" id="cloudMsg"></span></div>';
   } else if (cloudView === 'emailReset') {
-    body.innerHTML =
-      '<h3 class="authtitle">비밀번호 찾기 (이메일)</h3>' +
-      '<p>가입할 때 쓴 <b>이메일</b>을 넣으면 비밀번호를 새로 정할 수 있는 <b>메일</b>을 보내드려요.</p>' +
-      '<div class="staffrow" style="border-bottom:none">' +
-      '<input type="text" id="cloudEmail" placeholder="이메일" style="width:220px" autocomplete="email">' +
-      '<button class="btn big" onclick="cloudEmailReset()">📮 메일 보내기</button>' +
-      '</div><span class="hint" id="cloudMsg"></span>' + backLink();
+    body.innerHTML = '<div class="auth-wrap">' + authBack() + authLogo() +
+      '<p class="auth-title">비밀번호 찾기</p>' +
+      '<p class="auth-sub">가입한 이메일을 입력하면 비밀번호를<br>다시 설정할 수 있는 링크를 보내드려요.</p>' +
+      authField('mail', 'text', 'cloudEmail', '이메일', 'email') +
+      '<button class="btn big xl" onclick="cloudEmailReset()">재설정 링크 보내기</button>' +
+      '<span class="authmsg" id="cloudMsg"></span>' +
+      '<p class="auth-note"><b>메일이 오지 않나요?</b><br>스팸함을 확인하거나 잠시 후 다시 시도해 주세요.</p>' +
+      '<div class="auth-links"><a class="link" onclick="cloudGoto(\'main\')">로그인으로 돌아가기</a></div>' +
+      '</div>';
   } else {
-    /* main — 소셜 로그인(구글·카카오) + 이메일 로그인 */
+    /* main(01) — 소셜 로그인 + 이메일 로그인 */
     var provs = Cloud.oauthProviders();
     /* 인앱 브라우저에서는 구글 로그인이 차단되므로 기본 브라우저로 안내 */
     var inapp = inAppBrowser()
-      ? '<div style="background:#FFF6E5;border:1.5px solid #F0C36D;border-radius:12px;padding:12px 14px;margin-bottom:12px">' +
-        '⚠️ 카카오톡·네이버 앱 안에서는 <b>Google 로그인이 막혀 있어요</b>.<br>' +
-        '<button class="btn big" style="margin-top:8px" onclick="openInBrowser()">🌐 크롬(브라우저)으로 열기</button></div>'
+      ? '<div style="background:var(--warn-soft);border:1px solid #F0C36D;border-radius:14px;padding:12px 14px;margin-bottom:14px;font-size:15.5px">' +
+        '⚠️ 카카오톡·네이버 앱 안에서는 <b>Google 로그인이 막혀 있어요</b>.' +
+        '<button class="btn big" style="margin-top:10px;width:100%" onclick="openInBrowser()">크롬(브라우저)으로 열기</button></div>'
       : '';
     var socials = '';
     if (provs.indexOf('google') >= 0)
       socials += '<button class="btn-google" onclick="cloudOAuth(\'google\')">' + GOOGLE_SVG + 'Google로 계속하기</button>';
-    if (provs.indexOf('kakao') >= 0)
-      socials += '<button class="btn-kakao" onclick="cloudOAuth(\'kakao\')">' + KAKAO_SVG + '카카오로 계속하기</button>';
-    /* 소개 문단은 보관함 카드(cloudBody)일 때만 — 홈 로그인 카드는 카드 자체에 환영 문구가 있다 */
-    var intro = authTarget === 'cloudBody'
-      ? '<p>로그인하면 폰·컴퓨터 어디서든 <b>같은 근무표</b>를 볼 수 있어요.<br>' +
-        '<span class="hint">로그인하지 않아도 이 기기에서는 그대로 쓸 수 있습니다.</span></p>'
-      : '';
-    body.innerHTML =
-      intro + inapp +
-      (socials ? '<div class="socialbtns">' + socials + '</div><div class="authdivider">또는 이메일로</div>' : '') +
-      '<div class="staffrow" style="border-bottom:none">' +
-      '<input type="text" id="cloudEmail" placeholder="이메일" style="width:220px" autocomplete="email">' +
-      pwInput('cloudPw', '비밀번호') +
-      '</div>' +
-      '<div class="toolbar" style="margin-top:6px">' +
-      '<button class="btn big" onclick="cloudLogin()">로그인</button>' +
-      '<button class="btn gray" onclick="cloudGoto(\'signup\')">처음이면 이메일 가입</button>' +
-      '<span class="hint" id="cloudMsg"></span>' +
-      '</div>' +
-      '<p class="hint">비밀번호를 잊으셨나요? → <a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a></p>' +
-      /* 바로가기 안내는 머리글 버튼 한 곳으로 모았다(2026-07-20) — 로그인 화면을 한 화면에 담기 위해 */
-      '';
+    socials += '<button class="btn-kakao soon" onclick="kakaoSoon()">' + KAKAO_SVG + '카카오로 계속하기</button>';
+    body.innerHTML = '<div class="auth-wrap">' + authLogo() +
+      '<p class="auth-title">다시 만나서 반가워요</p>' +
+      '<p class="auth-sub">로그인하면 어느 기기에서든<br>같은 근무표를 이어서 쓸 수 있어요.</p>' +
+      inapp +
+      '<div class="socialbtns">' + socials + '</div>' +
+      '<div class="authdivider">또는</div>' +
+      authField('mail', 'text', 'cloudEmail', '이메일', 'email') +
+      authField('lock', 'password', 'cloudPw', '비밀번호', 'current-password') +
+      '<button class="btn big xl" onclick="cloudLogin()">로그인</button>' +
+      '<span class="authmsg" id="cloudMsg"></span>' +
+      '<div class="auth-links"><a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a><br>' +
+      '처음이신가요? <a class="link" onclick="cloudGoto(\'signup\')">회원가입</a></div>' +
+      '</div>';
   }
+  renderIcons(body);
 }
 /* 보관함의 클라우드 카드 — 2026-07-20 사용자 결정으로 「여러 기기에서 함께 쓰기」 안내는 없앴다.
    로그인 상태는 머리글 로그아웃 버튼으로 충분하다.
@@ -1552,14 +1954,71 @@ function cloudSyncOnLogin() {
 
 function renderArchive() {
   var el = document.getElementById('histList');
-  var months = Object.keys(db.months || {}).sort().reverse();
-  el.innerHTML = months.filter(function (ym) {
+  var months = Object.keys(db.months || {}).sort().reverse().filter(function (ym) {
     return staffList().some(function (p) { return ((db.months[ym].codes || {})[p.id] || []).some(function (c) { return c; }); });
-  }).map(function (ym) {
+  }).slice(0, 12);   // 너무 오래된 기록까지 위반 검사를 돌리지 않는다
+  el.innerHTML = months.map(function (ym) {
     var p = ymParts(ym);
-    return '<div class="staffrow"><span class="nm">' + p.y + '년 ' + p.m + '월</span>' +
-      '<button class="btn gray" onclick="goMonth(\'' + ym + '\')">보기</button></div>';
-  }).join('') || '<p class="hint">아직 기록이 없어요.</p>';
+    var st = archMonthStatus(ym);
+    var mini = archMiniHtml(ym);
+    var sub = st.people + '명 · ' + (st.viols
+      ? '<span class="red">확인할 곳 ' + st.viols + '곳</span>'
+      : (st.fairShort ? '공평성 확인 ' + st.fairShort + '명' : '공평성 양호'));
+    return '<button class="listrow archrow" onclick="goMonth(\'' + ym + '\')">' +
+      '<span class="ar-mini">' + mini + '</span>' +
+      '<span class="lr-tx ar-tx"><b>' + p.y + '년 ' + p.m + '월</b>' +
+      (st.viols ? '' : '<span><span class="ar-chip green">완료</span></span>') +
+      '<span class="lr-sub ar-sub">' + sub + '</span></span>' +
+      '<span class="lr-go">' + ic('chevR') + '</span></button>';
+  }).join('') || '<p class="hint" style="margin:4px 0 14px">아직 기록이 없어요. 근무표를 만들면 자동으로 이곳에 쌓여요.</p>';
+  /* 계정 및 동기화 행의 상태 문구 */
+  var sync = document.getElementById('syncSub');
+  if (sync) {
+    var u = window.Cloud && Cloud.enabled() && Cloud.getUser();
+    sync.innerHTML = u ? '서버에 안전하게 저장됨<span class="okdot"></span>' : '로그인하면 서버에 저장돼요';
+  }
+}
+/* 보관함 달 카드의 상태 — 그 달 기준 규칙으로 위반·형평성을 계산한다(읽기 전용) */
+function archMonthStatus(ym) {
+  var days = daysInYM(ym);
+  var viols = 0, people = 0, fairShort = 0;
+  groupsPresent().forEach(function (g) {
+    var gStaff = groupStaff(g).filter(function (p) {
+      return ((db.months[ym].codes || {})[p.id] || []).some(function (c) { return c; });
+    });
+    if (!gStaff.length) return;
+    people += gStaff.length;
+    var sched = {}, rests = [], maxRest = 0;
+    gStaff.forEach(function (p) {
+      var codes = ((db.months[ym].codes || {})[p.id] || []).slice(0, days);
+      for (var i = 0; i < days; i++) if (!codes[i]) codes[i] = 'O';
+      sched[p.id] = codes;
+      var rc = codes.filter(function (c) { return !E.fam(c); }).length;
+      rests.push(rc); if (rc > maxRest) maxRest = rc;
+    });
+    try { viols += E.validate(sched, gStaff, engineConfig(ym, g)).length; } catch (e) { }
+    if (gStaff.length >= 2) rests.forEach(function (rc) { if (maxRest - rc >= 2) fairShort++; });
+  });
+  return { viols: viols, people: people, fairShort: fairShort };
+}
+/* 달 카드 미니 미리보기 — 앞사람 5명 × 1~7일 */
+function archMiniHtml(ym) {
+  var mrec = db.months[ym] || {};
+  var rows = staffList().filter(function (p) { return ((mrec.codes || {})[p.id] || []).some(function (c) { return c; }); }).slice(0, 5);
+  if (!rows.length) return '';
+  var html = '<table>';
+  rows.forEach(function (p) {
+    html += '<tr>';
+    for (var d = 1; d <= 7; d++) {
+      var c = (mrec.codes[p.id] || [])[d - 1] || '';
+      var f = E.fam(c);
+      var cls = f ? 'a' + f : (c && c !== 'O' ? 'aV' : 'aO');
+      var tx = f ? f : (c && c !== 'O' ? '휴' : '－');
+      html += '<td class="' + cls + '">' + tx + '</td>';
+    }
+    html += '</tr>';
+  });
+  return html + '</table>';
 }
 function goMonth(ym) { curYM = ym; save(); renderMonthLabel(); showTab('home'); }
 function exportData() {
@@ -2230,9 +2689,9 @@ function toast(msg) {
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 /* ---- 시작 ---- */
+renderIcons();
+document.getElementById('kebabBtn').innerHTML = ic('kebab');
 renderMonthLabel();
-renderRules();
-bindRules();
 showTab('home');
 checkAlreadyInstalled();   // 이미 홈 화면에 있으면 버튼·안내를 그에 맞게 바꾼다
 /* 소셜 로그인 실패로 돌아온 경우 — URL의 error_description을 사람 말로 알려주고 주소를 정리한다 */
