@@ -14,8 +14,9 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<!-- 달 로고(브랜드 표식) — 여러 곳에서 use로 재사용 -->
-<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+<!-- 달 로고(브랜드 표식) — 여러 곳에서 use로 재사용.
+     display:none이면 안의 mask가 무시돼 보름달이 된다(실기기 확인) — 크기 0으로 숨긴다 -->
+<svg style="position:absolute;width:0;height:0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <g id="moonlogo">
       <mask id="mcut"><rect width="48" height="48" fill="#fff"/><circle cx="34" cy="15" r="15" fill="#000"/></mask>
@@ -127,7 +128,7 @@
           <span class="lg-e">E 이브닝</span><span class="lg-e2">E2 이브닝2</span>
           <span class="lg-n">N 나이트</span><span class="lg-o">－ 오프</span>
           <span class="lg-v">휴·대·교 휴가</span><span class="lg-w">★ 희망</span>
-          <span class="lg-pin">📌 고정한 칸</span>
+          <span class="lg-pin">고정한 칸</span>
         </div>
       </div>
       <div class="card"><div class="stat" id="statArea"></div></div>
@@ -155,7 +156,7 @@
       <span class="lr-go" data-ic="chevR"></span>
     </button>
     <div class="card" id="patternCard" style="display:none">
-      <h2>💡 우리 병동 습관 메모</h2>
+      <h2>우리 병동 습관 메모</h2>
       <div id="patternArea"></div>
     </div>
   </div>
@@ -165,7 +166,7 @@
     <p class="pagetitle">보관함</p>
     <p class="pagesub">완성한 근무표와 지난 기록을 한곳에서 확인하세요.</p>
     <div class="card" id="installCard" style="display:none">
-      <h2>🔗 홈 화면에 바로가기 만들기</h2>
+      <h2>홈 화면에 바로가기 만들기</h2>
       <div id="installBody"></div>
     </div>
     <!-- 비밀번호 재설정(메일 링크 복귀) 전용 자리 -->

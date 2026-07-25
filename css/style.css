@@ -18,8 +18,13 @@
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink);
        font-family: system-ui, "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
-       font-size: 17px; line-height: 1.5; }
+       font-size: 17px; line-height: 1.5; word-break: keep-all; }
 .svgi { width: 1em; height: 1em; flex: none; vertical-align: -0.12em; }
+/* 기본 입력 위젯(베이스 레이어) — 컴포넌트별 입력 규칙이 이보다 아래에 와서 이긴다 */
+select, input[type=number], input[type=text] { font-size: 17px; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 12px; background: #fff; color: var(--ink); font-family: inherit; }
+select:focus, input:focus { outline: 2px solid var(--brand); border-color: transparent; }
+input[type=number] { width: 80px; }
 
 /* ===== 머리글 — 로고 + ⋮ 메뉴만 (달력 이동은 근무표 화면 안으로) ===== */
 header { background: var(--bg); padding: 12px 20px 6px; display: flex; align-items: center; gap: 10px; }
@@ -218,9 +223,9 @@ body.loginview main { padding-top: 0; }
 .sh-x .svgi { width: 22px; height: 22px; }
 .sh-sub { text-align: center; color: var(--sub); font-size: 15.5px; margin: -10px 0 14px; }
 .sh-label { font-size: 15px; font-weight: 700; color: var(--ink); margin: 14px 0 7px; }
-.sh-input { width: 100%; font-size: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 14px;
+input.sh-input, .sh-input { width: 100%; font-size: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 14px;
   background: var(--card); color: var(--ink); font-family: inherit; }
-.sh-input:focus { outline: 2px solid var(--brand); border-color: transparent; }
+input.sh-input:focus, .sh-input:focus { outline: 2px solid var(--brand); border-color: transparent; }
 /* 분할 선택(직군·성향) */
 .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .seg button { flex: 1; font-size: 16.5px; font-weight: 700; padding: 13px 6px; border: none; background: var(--card);
@@ -233,9 +238,10 @@ body.loginview main { padding-top: 0; }
   font-family: inherit; font-size: 17px; font-weight: 600; color: var(--ink); cursor: pointer; margin-bottom: 8px; }
 .radiocard .rc-dot { margin-left: auto; width: 24px; height: 24px; border-radius: 999px;
   border: 1.5px solid var(--line); flex: none; display: flex; align-items: center; justify-content: center; }
+.radiocard .rc-dot .svgi { display: none; }   /* 미선택은 빈 원 */
 .radiocard.on { border: 1.5px solid var(--brand); background: #FBFAFE; }
 .radiocard.on .rc-dot { background: var(--brand); border-color: var(--brand); color: #fff; }
-.radiocard.on .rc-dot .svgi { width: 14px; height: 14px; }
+.radiocard.on .rc-dot .svgi { display: block; width: 14px; height: 14px; }
 .sh-danger { display: block; width: 100%; text-align: center; border: none; background: none; color: var(--danger);
   font-family: inherit; font-size: 16.5px; font-weight: 700; padding: 14px 0 2px; cursor: pointer; }
 
@@ -282,16 +288,16 @@ body.loginview main { padding-top: 0; }
 /* ===== 근무 규칙(08) — 스테퍼 ===== */
 .rulesec { font-size: 16px; font-weight: 800; color: var(--sub); margin: 20px 0 8px; }
 .rulecard { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 2px 16px; }
-.rrow { display: flex; align-items: center; gap: 8px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.rrow { display: flex; align-items: center; gap: 6px; padding: 13px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .rrow:last-child { border-bottom: none; }
-.rrow .rr-lbl { flex: 1; font-size: 17px; font-weight: 600; min-width: 0; }
+.rrow .rr-lbl { flex: 1; font-size: 16.5px; font-weight: 600; min-width: 52px; }
 .rrow .rr-lbl .hint { display: block; font-size: 13px; }
-.stepper { display: inline-flex; align-items: center; gap: 2px; }
-.stepper button { width: 38px; height: 38px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
-  font-size: 20px; font-weight: 700; color: var(--ink); cursor: pointer; font-family: inherit; line-height: 1;
+.stepper { display: inline-flex; align-items: center; gap: 1px; }
+.stepper button { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+  font-size: 18px; font-weight: 700; color: var(--ink); cursor: pointer; font-family: inherit; line-height: 1;
   display: flex; align-items: center; justify-content: center; }
 .stepper button:active { background: var(--card2); }
-.stepper .st-val { min-width: 46px; text-align: center; font-size: 17px; font-weight: 700; }
+.stepper .st-val { min-width: 40px; text-align: center; font-size: 16.5px; font-weight: 700; }
 .rr-tilde { color: var(--faint); font-weight: 700; padding: 0 1px; }
 .rulereset { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
   border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--sub);
@@ -505,10 +511,6 @@ button.datarow { cursor: pointer; }
 /* ===== 인원·입력 공통(마법사 등 레거시) ===== */
 .staffrow { display: flex; gap: 10px; align-items: center; padding: 13px 4px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .staffrow .nm { font-size: 19px; min-width: 110px; }
-select, input[type=number], input[type=text] { font-size: 17px; padding: 10px 12px; border: 1px solid var(--line);
-  border-radius: 12px; background: #fff; color: var(--ink); font-family: inherit; }
-select:focus, input:focus { outline: 2px solid var(--brand); border-color: transparent; }
-input[type=number] { width: 80px; }
 details > summary { cursor: pointer; list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before { content: '▸ '; color: var(--brand); }

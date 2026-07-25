@@ -1320,7 +1320,7 @@ function renderWishScreen() {
   var isLast = wsIdx >= staff.length - 1;
   document.getElementById('wishScreenBody').innerHTML =
     ssTop('희망 휴무·고정 근무', '완료', 'closeWishScreen()') +
-    '<div class="wz-month" style="margin:0">📅 ' + pt.y + '년 ' + pt.m + '월</div>' +
+    '<div class="wz-month" style="margin:0">' + pt.y + '년 ' + pt.m + '월</div>' +
     '<button class="wp-person" onclick="openWishPersonSheet()">' +
     '<span class="wpp-av">' + esc(p.name.charAt(0)) + '</span>' +
     '<span class="wpp-tx"><b>' + esc(p.name) + '</b><span class="wpp-sub">희망 휴무 ' + wishes.length + '건 · 고정 근무 ' + Object.keys(pins).length + '건</span></span>' +
@@ -1592,7 +1592,7 @@ function installStepsHtml() {
   return box('크롬', [
     '오른쪽 위 <b>메뉴(⋮)</b>를 누르세요.',
     '<b>「홈 화면에 추가」</b>를 누르세요.'
-  ], '<p class="hint" style="margin-top:6px">이미 만들어져 있으면 이 항목이 안 보일 수 있어요. 그때는 홈 화면의 🌙 아이콘으로 열어주세요.</p>');
+  ], '<p class="hint" style="margin-top:6px">이미 만들어져 있으면 이 항목이 안 보일 수 있어요. 그때는 홈 화면의 달 모양 아이콘으로 열어주세요.</p>');
 }
 /* ---- 비지원 브라우저 안내막 ----
    2026-07-20 사용자 결정: 크롬 외 브라우저에서 로그인·기능을 쓰면 정체 모를 오류가 난다
@@ -1686,12 +1686,12 @@ function openInstallModal() {
   var m = document.getElementById('installModal');
   var inner = alreadyInstalled
     ? '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>'
-    : '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 근무표는 「크게 보기」로 가로로 크게 볼 수 있어요.</p>' +
+    : '<p>홈 화면에 달 모양 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
       installStepsHtml();
   /* 왜 원터치가 안 되는지 알려주는 작은 진단 표시 — 문제 보고용 */
   var diag = '<p class="insdiag">진단: 원터치신호 ' + (deferredInstall ? '있음' : '없음') +
     ' · 이미있음 ' + (navigator.getInstalledRelatedApps ? (alreadyInstalled ? '예' : '아니오') : '모름') + '</p>';
-  m.innerHTML = '<div class="ins-card"><h2>🔗 홈 화면에 바로가기 만들기</h2>' + inner + diag +
+  m.innerHTML = '<div class="ins-card"><h2>홈 화면에 바로가기 만들기</h2>' + inner + diag +
     '<div class="imp-actions"><button class="btn gray" onclick="closeInstallModal()">닫기</button></div></div>';
   m.className = 'on';
   m.onclick = function (ev) { if (ev.target === m) closeInstallModal(); };
@@ -1712,9 +1712,9 @@ function renderInstallCard() {
     return;
   }
   body.innerHTML =
-    '<p>홈 화면에 🌙 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요. 근무표는 「크게 보기」로 가로로 크게 볼 수 있어요.</p>' +
+    '<p>홈 화면에 달 모양 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
     (deferredInstall
-      ? '<button class="btn big xl" onclick="installApp()">🔗 지금 만들기</button>'
+      ? '<button class="btn big xl" onclick="installApp()">지금 만들기</button>'
       : installStepsHtml());
 }
 /* 아이폰 등에서 주소만 복사 — 다른 브라우저로 옮겨가야 할 때 */
