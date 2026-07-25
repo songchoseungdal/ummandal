@@ -1132,7 +1132,7 @@ function openStaffSheet(i) {
     '<div class="sh-label">근무 형태</div>' + typeCards +
     '<div class="sh-label">근무 성향</div>' +
     '<div class="seg">' + segBtn('pref', '', '자동') + segBtn('pref', 'D', '데이 위주') + segBtn('pref', 'E', '이브닝 위주') + '</div>' +
-    '<button class="btn big xl" style="margin-top:18px" onclick="staffSheetSave()">저장</button>' +
+    '<div class="btnrow" style="margin-top:14px"><button class="btn big xl" onclick="staffSheetSave()">저장</button></div>' +
     (isNew ? '' : '<button class="sh-danger" onclick="staffSheetDelete()">구성원 삭제</button>')
   );
   if (isNew) setTimeout(function () { var e = document.getElementById('sfName'); if (e) e.focus(); }, 50);
