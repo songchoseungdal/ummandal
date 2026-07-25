@@ -419,8 +419,8 @@ function flashCellEl(el, cls, ms) {
   activeFlash = { el: el, t: t };
 }
 function jumpTo(pid, day) {
-  /* 위반 칸으로 데려간다. 세로에선 먼저 가로 뷰어를 열고(레이아웃 잡힌 뒤 재호출), 표는 전체가 보이므로
-     스크롤 없이 그 칸을 애플식 포커스 링으로 잔잔히 띄운다. */
+  /* 위반 칸으로 데려간다. 세로에선 먼저 가로 뷰어를 열고(레이아웃 잡힌 뒤 재호출),
+     그 칸 주변으로 알맞게 줌인한 뒤 애플식 포커스 링으로 잔잔히 띄운다. */
   if (!document.body.classList.contains('grid-open')) {
     openGridFull();
     setTimeout(function () { jumpTo(pid, day); }, 320);
@@ -428,6 +428,8 @@ function jumpTo(pid, day) {
   }
   var el = document.getElementById('c_' + pid + '_' + day);
   if (!el) return;
+  vzFocus = { id: 'c_' + pid + '_' + day, t: Date.now() };   // 회전·재렌더 직후 재중앙용
+  vzFocusCell(el);
   flashCellEl(el, 'viol-flash', 2400);
 }
 function buildSchedule(gStaff) {
@@ -634,6 +636,7 @@ function renderStats() {
 /* ---- 선택판 ---- */
 var pickerTarget = null;
 function tapCell(ev, pid, d) {
+  vzFocus = null;                      // 편집을 시작하면 '보기' 자동 줌의 재중앙은 해제
   var pk = document.getElementById('picker');
   pickerTarget = { pid: pid, d: d };
   var p = staffList().filter(function (x) { return x.id === pid; })[0];
@@ -2248,6 +2251,11 @@ function fitGridFull() {
   vzFit = s;
   vzClamp(area, table);                          // 회전·재렌더 후에도 확대 상태를 한계 안에서 유지
   applyViewerTransform(table);
+  /* 방금 '보기'로 데려간 칸이 있으면(회전·재렌더로 배율이 바뀐 직후) 새 배율 기준으로 다시 중앙에 */
+  if (vzFocus && Date.now() - vzFocus.t < 1500) {
+    var fe = document.getElementById(vzFocus.id);
+    if (fe) vzFocusCell(fe, true);
+  }
 }
 
 /* ---- 뷰어 핀치 확대 (v6.3.0) ----
@@ -2257,11 +2265,47 @@ function fitGridFull() {
    transform 하나로 적용한다. 편집은 그대로 — 배율 1에선 개입하지 않고, 확대 중에도
    8px 미만 움직임은 탭으로 취급되어 선택판이 열린다. */
 var vzScale = 1, vzX = 0, vzY = 0, vzFit = 1;
+var vzFocus = null, vzAnimT = null;              // '보기'로 데려간 칸(재적합 시 재중앙용) · 전환 타이머
 function applyViewerTransform(table) {
   table.style.transformOrigin = 'center center';
   table.style.transform = 'translate(' + vzX + 'px,' + vzY + 'px) scale(' + (vzFit * vzScale) + ')';
 }
-function vzReset() { vzScale = 1; vzX = 0; vzY = 0; }
+function vzReset() { vzScale = 1; vzX = 0; vzY = 0; vzFocus = null; }
+/* fly-in(0.45s) 도중 손가락이 잡으면: 렌더 중인 보간값을 변수로 역산해 그 자리에 동결(순간이동 방지) */
+function vzGrab(table) {
+  vzFocus = null;
+  if (!table.style.transition) return;
+  var m = getComputedStyle(table).transform.match(/matrix\(([^)]+)\)/);
+  if (m) { var a = m[1].split(',').map(Number); vzScale = a[0] / vzFit; vzX = a[4]; vzY = a[5]; }
+  table.style.transition = '';
+  applyViewerTransform(table);
+}
+/* '확인할 곳 → 보기'의 자동 줌 — 그 칸이 화면 가운데 오도록 알맞게 확대한다.
+   목표 배율은 셀이 원래 크기의 약 0.8배로 보이는 정도(1.5~3배 — 과한 확대는 피함).
+   사용자가 이미 더 크게 확대해 뒀으면 배율은 존중하고 위치만 옮긴다.
+   instant = 재적합(회전·재렌더) 직후의 재중앙 — 전환 애니메이션 없이 바로. */
+function vzFocusCell(el, instant) {
+  var area = document.getElementById('gridArea');
+  var table = area && area.querySelector('table.duty');
+  if (!table || !el || !document.body.classList.contains('grid-open')) return;
+  /* u = 이 칸의 표 위 위치(표 중심 기준, 원배율 좌표) — 핀치 코드와 같은 규약.
+     rect가 아니라 레이아웃 오프셋으로 구한다: transform과 무관해서 전환 애니메이션
+     도중(이전 '보기'의 이동 중)에 또 눌러도 정확하다. */
+  var u = { x: el.offsetLeft + el.offsetWidth / 2 - table.scrollWidth / 2,
+            y: el.offsetTop + el.offsetHeight / 2 - table.offsetHeight / 2 };
+  vzScale = Math.max(vzScale, Math.min(3, Math.max(1.5, 0.8 / vzFit)));
+  var S = vzFit * vzScale;
+  vzX = -S * u.x; vzY = -S * u.y;
+  vzClamp(area, table);
+  clearTimeout(vzAnimT);
+  var noMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (instant || noMotion) table.style.transition = '';
+  else {
+    table.style.transition = 'transform .45s cubic-bezier(.2,.8,.2,1)';
+    vzAnimT = setTimeout(function () { table.style.transition = ''; }, 500);
+  }
+  applyViewerTransform(table);
+}
 function vzClamp(area, table) {
   vzScale = Math.min(4, Math.max(1, vzScale));
   if (vzScale === 1) { vzX = 0; vzY = 0; return; }
@@ -2286,12 +2330,14 @@ function vzClamp(area, table) {
     if (!e || !e.area.contains(ev.target)) return;
     var ts = ev.touches;
     if (ts.length === 2) {
+      vzGrab(e.table);                 // 손가락이 잡으면 자동 줌은 손 뗀다(현 위치 동결)
       var r = e.area.getBoundingClientRect();
       var c = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
       var m = mid(ts), S = vzFit * vzScale;
       /* u = 손가락 중점 아래의 표 위 지점(표 중심 기준) — 확대해도 이 지점이 손끝에 붙어 있도록 */
       tp = { kind: 'pinch', d0: dist(ts), s0: vzScale, c: c, u: { x: (m.x - c.x - vzX) / S, y: (m.y - c.y - vzY) / S } };
     } else if (ts.length === 1 && vzScale > 1) {
+      vzGrab(e.table);
       tp = { kind: 'pan', x0: ts[0].clientX, y0: ts[0].clientY, px: vzX, py: vzY, moved: false };
     }
   }, { passive: true });
@@ -2348,7 +2394,7 @@ function closeGridFull(ev) {
   document.body.classList.remove('grid-open');
   var area = document.getElementById('gridArea');
   if (area) { area.style.transform = ''; area.style.width = ''; area.style.height = '';
-    var _t = area.querySelector('table.duty'); if (_t) _t.style.transform = ''; }
+    var _t = area.querySelector('table.duty'); if (_t) { _t.style.transform = ''; _t.style.transition = ''; } }
   /* 뷰어의 가로 잠금을 풀어 기기의 시스템 방향 설정을 다시 따르게 한다(세로 강제 아님 — 자동회전 존중).
      이 기기는 lock/unlock이 전체화면에서만 되므로, 전체화면 상태에서 unlock한 뒤 나간다. */
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { }
