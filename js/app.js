@@ -303,7 +303,7 @@ function renderGrid() {
   for (var d = 1; d <= days; d++) {
     var wd = (fw + d - 1) % 7;
     var cls = isRestDayApp(d) ? ' class="wkend"' : '';
-    html += '<th' + cls + '>' + d + '<br>' + (m.holidays.indexOf(d) >= 0 ? '휴' : wdNames[wd]) + '</th>';
+    html += '<th id="dh_' + d + '"' + cls + '>' + d + '<br>' + (m.holidays.indexOf(d) >= 0 ? '휴' : wdNames[wd]) + '</th>';
   }
   html += '</tr>';
   var violMap = currentViolMap();
@@ -593,7 +593,9 @@ function renderViewerPanel() {
     var num = '<span class="vp-num">' + (i + 1) + '</span><span class="vp-msg">' + esc(x.msg) + '</span>';
     var head = x.pid
       ? '<button class="vp-item' + (sug ? ' has-fix' : '') + '" onclick="jumpTo(\'' + x.pid + '\',' + x.day + ')">' + num + '<span class="vp-go">보기›</span></button>'
-      : '<div class="vp-item vp-general' + (sug ? ' has-fix' : '') + '">' + num + '</div>';
+      : x.day
+        ? '<button class="vp-item vp-general' + (sug ? ' has-fix' : '') + '" onclick="jumpToDay(' + x.day + ')">' + num + '<span class="vp-go">보기›</span></button>'
+        : '<div class="vp-item vp-general' + (sug ? ' has-fix' : '') + '">' + num + '</div>';
     var fix = '';
     if (sug) {
       var si = viewerSuggestions.push(sug) - 1;
@@ -617,10 +619,12 @@ function showAllViols() {
     clearTimeout(activeFlash.t); activeFlash = null;
   }
   clearTimeout(violsAllT);
-  var els = [];
-  Object.keys(currentViolMap()).forEach(function (k) {
-    var el = document.getElementById('c_' + k);
-    if (el) els.push(el);
+  var els = [], seen = {};
+  currentViols().forEach(function (v) {
+    /* 사람 칸 위반은 그 칸을, 날짜 단위(인원) 위반은 그 날짜 머리칸을 켠다 */
+    var el = v.pid ? document.getElementById('c_' + v.pid + '_' + v.day)
+      : (v.day ? document.getElementById('dh_' + v.day) : null);
+    if (el && !seen[el.id]) { seen[el.id] = 1; els.push(el); }
   });
   if (!els.length) return;
   els.forEach(function (el) { el.classList.remove('viol-flash'); });
@@ -629,6 +633,19 @@ function showAllViols() {
   violsAllT = setTimeout(function () {
     els.forEach(function (el) { el.classList.remove('viol-flash'); });
   }, 4000);
+}
+/* 날짜 단위(인원) 위반의 '보기' — 특정 칸이 없으므로 그 날짜 머리칸으로 줌인해 띄운다 */
+function jumpToDay(day) {
+  if (!document.body.classList.contains('grid-open')) {
+    openGridFull();
+    setTimeout(function () { jumpToDay(day); }, 320);
+    return;
+  }
+  var el = document.getElementById('dh_' + day);
+  if (!el) return;
+  vzFocus = { id: 'dh_' + day, t: Date.now() };
+  vzFocusCell(el);
+  flashCellEl(el, 'viol-flash', 2400);
 }
 /* 제안 문구 탭 = 미리보기 — 적용하지 않고, 바뀔 칸("이 칸")으로 줌인해 초록 링으로 보여준다.
    제안 대상은 위반 칸과 다른 사람 칸일 수도 있어(인원 초과를 남의 칸으로 푸는 경우) 더 필요하다. */

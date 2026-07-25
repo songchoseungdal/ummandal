@@ -503,7 +503,9 @@ body.grid-open #toast { z-index: 1010; }
   background: var(--danger-soft); border: 1.5px solid #f6cfcf; border-radius: 12px; padding: 10px 11px;
   margin-bottom: 9px; font-family: inherit; font-size: 14px; color: #b02525; cursor: pointer; line-height: 1.4; }
 .vp-item:active { transform: scale(.98); }
-.vp-item.vp-general { background: #f4f1fb; border-color: #e0d8f5; color: var(--brand-dk); cursor: default; }
+.vp-item.vp-general { background: #f4f1fb; border-color: #e0d8f5; color: var(--brand-dk); }
+.vp-item.vp-general .vp-go { color: var(--brand-dk); }
+div.vp-item.vp-general { cursor: default; }   /* 날짜도 없는 일반 항목만 클릭 불가 */
 .vp-num { flex: 0 0 auto; width: 19px; height: 19px; border-radius: 50%; background: var(--danger); color: #fff;
   font-size: 11.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
 .vp-item.vp-general .vp-num { background: var(--brand); }
@@ -535,18 +537,21 @@ body.grid-open #toast { z-index: 1010; }
 /* 오류 위치 강조 — 애플식 절제: 단색(빨강) 포커스 링이 스프링으로 부드럽게 떠올라 잔잔히 머물다
    빠지는 class가 사라지면 아래 td.cell의 transition으로 스르륵 사라진다(요란한 광채·노랑 깜빡임 제거).
    fix-flash는 같은 결의 초록 — 제안을 적용해 '고쳐진' 칸을 한눈에 확인시킨다. */
-td.cell { transition: box-shadow .3s ease, transform .3s cubic-bezier(.22, 1, .36, 1); }
+td.cell, table.duty th { transition: box-shadow .3s ease, transform .3s cubic-bezier(.22, 1, .36, 1); }
 @keyframes violFocus {
   from { box-shadow: 0 0 0 2px rgba(224, 49, 49, 0); transform: scale(1); }
   60%  { transform: scale(1.18); }
   to   { box-shadow: 0 0 0 3px rgba(224, 49, 49, .92), 0 6px 16px rgba(224, 49, 49, .24); transform: scale(1.1); }
 }
-td.cell.viol-flash {
+td.cell.viol-flash,
+table.duty th.viol-flash {
   position: relative; z-index: 8; border-radius: 6px;
   box-shadow: 0 0 0 3px rgba(224, 49, 49, .92), 0 6px 16px rgba(224, 49, 49, .24);
   transform: scale(1.1);
   animation: violFocus .5s cubic-bezier(.34, 1.36, .5, 1) 1;
 }
+/* 날짜 단위(인원) 위반은 그 날짜 머리칸에 — 칩처럼 보이게 배경을 채워 링이 또렷하게 */
+table.duty th.viol-flash { background: var(--card); color: var(--danger); }
 @keyframes fixFocus {
   from { box-shadow: 0 0 0 2px rgba(43, 138, 62, 0); transform: scale(1); }
   60%  { transform: scale(1.18); }
@@ -560,6 +565,6 @@ td.cell.fix-flash {
 }
 /* 동작 줄이기: 확대/축소 모션까지 끄고, 강조는 색 링(box-shadow)만으로 유지 */
 @media (prefers-reduced-motion: reduce) {
-  td.cell { transition: box-shadow .2s ease; }
-  td.cell.viol-flash, td.cell.fix-flash { animation: none; transform: none; }
+  td.cell, table.duty th { transition: box-shadow .2s ease; }
+  td.cell.viol-flash, td.cell.fix-flash, table.duty th.viol-flash { animation: none; transform: none; }
 }
