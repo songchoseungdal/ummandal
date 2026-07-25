@@ -507,15 +507,24 @@ body.grid-open #toast { z-index: 1010; }
 .vp-block { margin-bottom: 9px; }
 .vp-block .vp-item { margin-bottom: 0; }
 .vp-item.has-fix { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.vp-fix { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; cursor: pointer;
+/* 제안 행: 문구(미리보기 버튼)와 '고치기'(적용 버튼)를 분리 — 문구를 눌러도 적용되지 않는다 */
+.vp-fix { display: flex; align-items: center; gap: 8px;
   background: var(--ok-soft); border: 1.5px solid #c4e7d0; border-top: none;
-  border-radius: 0 0 12px 12px; padding: 8px 11px; font-family: inherit; font-size: 13px;
+  border-radius: 0 0 12px 12px; padding: 0 8px 0 0; font-size: 13px;
   color: #1f7a34; line-height: 1.4; }
-.vp-fix:active { transform: scale(.985); }
-.vp-fixtag { flex: 0 0 auto; background: var(--ok); color: #fff; font-size: 10.5px; font-weight: 800;
-  padding: 2px 8px; border-radius: 999px; letter-spacing: .3px; }
+/* 문구 버튼이 행 높이를 꽉 채워(stretch) 초록 배너 어디를 눌러도 미리보기가 뜬다(무해한 동작이라 넓게) */
+.vp-fixsee { flex: 1; align-self: stretch; display: flex; align-items: center; gap: 7px; min-width: 0;
+  text-align: left; background: none; border: none; padding: 7px 0 7px 11px; font-family: inherit;
+  font-size: inherit; color: inherit; line-height: inherit; cursor: pointer; }
+.vp-fixsee:active { transform: scale(.985); }
+/* '제안' 태그는 외곽선형 — 채움 초록 알약은 실행 버튼(고치기) 하나만 갖는다 */
+.vp-fixtag { flex: 0 0 auto; background: none; border: 1.5px solid var(--ok); color: #1f7a34;
+  font-size: 10.5px; font-weight: 800; padding: 1px 7px; border-radius: 999px; letter-spacing: .3px; }
 .vp-fixmsg { flex: 1; }
-.vp-fixgo { flex: 0 0 auto; color: var(--ok); font-weight: 800; font-size: 12px; white-space: nowrap; }
+.vp-fixgo { flex: 0 0 auto; align-self: center; background: var(--ok); color: #fff; border: none;
+  border-radius: 999px; padding: 11px 14px; font-family: inherit; font-weight: 800; font-size: 13px;
+  white-space: nowrap; cursor: pointer; }
+.vp-fixgo:active { transform: scale(.95); }
 
 /* 오류 위치 강조 — 애플식 절제: 단색(빨강) 포커스 링이 스프링으로 부드럽게 떠올라 잔잔히 머물다
    빠지는 class가 사라지면 아래 td.cell의 transition으로 스르륵 사라진다(요란한 광채·노랑 깜빡임 제거).

@@ -568,8 +568,9 @@ function suggestForViol(v) {
 }
 
 /* 크게보기 뷰어 우측 라이브 패널 — 현재 규칙 위반을 실시간으로 보여주고(항목을 누르면 그 칸으로 데려가
-   포커스 링으로 띄운다), 안전한 수정이 있으면 아래에 초록 '제안'을 달아 원탭으로 고친다.
-   편집할 때마다(renderGrid) 자동 갱신된다. */
+   포커스 링으로 띄운다), 안전한 수정이 있으면 아래에 초록 '제안'을 단다.
+   제안 문구를 누르면 바뀔 칸을 미리 보여주기만 하고(줌인+초록 링, 적용 없음 — 사용자 의도와
+   다를 수 있으므로), '고치기' 버튼을 눌러야 실제로 적용한다. 편집할 때마다(renderGrid) 자동 갱신된다. */
 var viewerSuggestions = [];
 function renderViewerPanel() {
   var panel = document.getElementById('viewerPanel');
@@ -595,20 +596,41 @@ function renderViewerPanel() {
     var fix = '';
     if (sug) {
       var si = viewerSuggestions.push(sug) - 1;
-      fix = '<button class="vp-fix" onclick="applySuggest(' + si + ')"><span class="vp-fixtag">제안</span>' +
-        '<span class="vp-fixmsg">' + sug.label + '</span><span class="vp-fixgo">고치기›</span></button>';
+      fix = '<div class="vp-fix"><button class="vp-fixsee" onclick="jumpToSuggest(' + si + ')"><span class="vp-fixtag">제안</span>' +
+        '<span class="vp-fixmsg">' + sug.label + '</span></button>' +
+        '<button class="vp-fixgo" onclick="applySuggest(' + si + ')">고치기›</button></div>';
     }
     return '<div class="vp-block">' + head + fix + '</div>';
   }).join('');
   panel.innerHTML = html;
 }
-/* 제안 적용 — 손으로 그 칸을 고른 것과 동일(고정됨). 고친 칸을 초록으로 잠깐 띄워 확인시킨다. */
+/* 제안 문구 탭 = 미리보기 — 적용하지 않고, 바뀔 칸("이 칸")으로 줌인해 초록 링으로 보여준다.
+   제안 대상은 위반 칸과 다른 사람 칸일 수도 있어(인원 초과를 남의 칸으로 푸는 경우) 더 필요하다. */
+function jumpToSuggest(i) {
+  var s = viewerSuggestions[i];
+  if (!s) return;
+  var el = document.getElementById('c_' + s.pid + '_' + s.day);
+  if (!el) return;
+  vzFocus = { id: 'c_' + s.pid + '_' + s.day, t: Date.now() };
+  vzFocusCell(el);
+  flashCellEl(el, 'fix-flash', 2400);
+}
+/* 제안 적용('고치기') — 손으로 그 칸을 고른 것과 동일(고정됨). 고친 칸으로 줌인해 초록으로 확인시킨다. */
 function applySuggest(i) {
+  /* 더블탭 가드: 적용 직후 패널이 재렌더되며 '다음' 제안의 고치기가 같은 자리에 올라오므로,
+     빠른 두 번째 탭이 보지도 않은 제안을 적용해버리는 것을 막는다(적대 검토 확정). */
+  var now = Date.now();
+  if (now - (applySuggest._t || 0) < 450) return;
+  applySuggest._t = now;
   var s = viewerSuggestions[i];
   if (!s) return;
   setCell(s.pid, s.day, s.code);       // save + renderHome(→renderGrid→renderViewerPanel 자동 갱신)
   var el = document.getElementById('c_' + s.pid + '_' + s.day);
-  if (el) flashCellEl(el, 'fix-flash', 1500);
+  if (el) {
+    vzFocus = { id: 'c_' + s.pid + '_' + s.day, t: Date.now() };
+    vzFocusCell(el);
+    flashCellEl(el, 'fix-flash', 1500);
+  }
   toast(currentViols().length ? '고쳤어요 — 남은 곳을 확인해 주세요' : '규칙 위반이 모두 없어졌어요 🌙');
 }
 function renderStats() {
