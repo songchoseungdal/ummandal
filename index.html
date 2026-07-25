@@ -14,198 +14,194 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- 달 로고(브랜드 표식) — 여러 곳에서 use로 재사용 -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <g id="moonlogo">
+      <mask id="mcut"><rect width="48" height="48" fill="#fff"/><circle cx="34" cy="15" r="15" fill="#000"/></mask>
+      <circle cx="23" cy="25" r="19" fill="#4B32A8" mask="url(#mcut)"/>
+      <circle cx="38" cy="9" r="2.6" fill="#f2b705"/>
+    </g>
+  </defs>
+</svg>
+
 <header>
   <div class="brand">
-    <svg class="moon" viewBox="0 0 48 48" aria-hidden="true">
-      <defs>
-        <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#ffd43b"/><stop offset="1" stop-color="#f2b705"/>
-        </linearGradient>
-        <mask id="mcut"><rect width="48" height="48" fill="#fff"/><circle cx="33" cy="16" r="16" fill="#000"/></mask>
-      </defs>
-      <circle cx="23" cy="25" r="19" fill="url(#mg)" mask="url(#mcut)"/>
-      <circle cx="38" cy="9" r="2.2" fill="#f2b705"/>
-    </svg>
-    <div class="brandtx">
-      <h1>엄만달</h1>
-      <span class="slogan">엄마의 한 달을 1분 만에</span>
-    </div>
+    <svg class="moon" viewBox="0 0 48 48" aria-hidden="true"><use href="#moonlogo"/></svg>
+    <h1>엄만달</h1>
   </div>
-  <div class="monthnav" id="monthNav">
-    <button onclick="moveMonth(-1)" title="지난달">◀</button>
-    <span class="cur" id="curMonth"></span>
-    <button onclick="moveMonth(1)" title="다음달">▶</button>
-  </div>
-  <button class="installbtn" id="installBtn" style="display:none" onclick="installEntry()">🔗 바로가기 만들기</button>
-  <button class="acctbtn aibtn" id="aiBtn" style="display:none" onclick="aiImportStart()" title="사진·PDF로 근무표 읽기">📷 AI 분석</button>
-  <button class="acctbtn" id="acctBtn" style="display:none" onclick="cloudLogout()" title="로그아웃">🚪 로그아웃</button>
+  <button class="kebab" id="kebabBtn" onclick="toggleKebab(event)" aria-label="메뉴" title="메뉴"></button>
 </header>
+<div id="kebabMenu"></div>
 
 <nav>
-  <button id="tabBtn-home" class="on" onclick="showTab('home')"><span class="ico">📅</span><span class="tlbl">근무표</span></button>
-  <button id="tabBtn-ward" onclick="showTab('ward')"><span class="ico">👥</span><span class="tlbl">우리 병동</span></button>
-  <button id="tabBtn-archive" onclick="showTab('archive')"><span class="ico">📦</span><span class="tlbl">보관함</span></button>
+  <button id="tabBtn-home" class="on" onclick="showTab('home')"><span class="ico" data-ic="calendar"></span><span class="tlbl">근무표</span></button>
+  <button id="tabBtn-ward" onclick="showTab('ward')"><span class="ico" data-ic="people"></span><span class="tlbl">우리 병동</span></button>
+  <button id="tabBtn-archive" onclick="showTab('archive')"><span class="ico" data-ic="archive"></span><span class="tlbl">보관함</span></button>
 </nav>
 
 <main>
   <!-- ===== 근무표(홈) ===== -->
   <div id="tab-home">
+    <!-- 상태 0: 로그인 전 — 로그인/가입/비밀번호찾기 (01·02·03) -->
+    <div id="homeLoginCard" style="display:none"><div id="homeLoginBody"></div></div>
 
-    <!-- 상태 0: 처음 열었고 아직 로그인/건너뛰기 안 함 → 로그인 우선 -->
-    <div class="card empty-card" id="homeLoginCard" style="display:none">
-      <div class="bigmoon">🌙</div>
-      <h2>엄만달에 오신 것을 환영해요</h2>
-      <p class="empty-msg">로그인하면 폰·컴퓨터 어디서든<br><b>같은 근무표</b>를 쓸 수 있어요.</p>
-      <div id="homeLoginBody"></div>
-      <p class="hint" style="margin-top:10px"><span class="appver"></span> · <a class="link" onclick="forceUpdate()">최신으로 새로고침</a></p>
-      <!-- "로그인 없이 시작하기"는 숨김(2026-07-19 사용자 결정: 로그인 기본 구조). 복원 시 skipLogin() 링크를 되살릴 것 -->
-    </div>
-
-    <!-- 상태 1: 인원 없음 → 온보딩 선택 (쓰던 근무표 가져오기 우선) -->
-    <div class="card empty-card" id="homeEmpty" style="display:none">
-      <div class="bigmoon">🌙</div>
-      <h2>엄만달에 오신 것을 환영해요</h2>
-      <p class="empty-msg">쓰시던 근무표를 주시면<br><b>사람·규칙까지 자동으로</b> 읽어서 준비해 드려요.</p>
+    <!-- 상태 1: 인원 없음 — 첫 시작(04) -->
+    <div id="homeEmpty" class="empty-card" style="display:none">
+      <p class="pagetitle" style="text-align:center">근무표를 어떻게<br>시작할까요?</p>
+      <p class="pagesub" style="text-align:center">기존 근무표를 가져오면 사람과 규칙까지<br>자동으로 정리해 드려요.</p>
       <div class="onboard-opts">
+        <button class="onboard-card primary" onclick="aiImportStart()">
+          <span class="ob-ico" data-ic="camera"></span>
+          <span class="ob-txt"><b>사진·PDF로 불러오기</b>
+          <span class="ob-sub">찍어둔 근무표를 자동으로 읽어요 (최대 3장)</span></span>
+          <span class="ob-go" data-ic="chevR"></span>
+        </button>
         <button class="onboard-card" onclick="document.getElementById('importFileXlsx').click()">
-          <span class="ob-ico">📄</span>
+          <span class="ob-ico" data-ic="sheet"></span>
           <span class="ob-txt"><b>엑셀 근무표 불러오기</b>
-          <span class="ob-sub">엑셀 파일을 고르면 인원과 규칙을 자동으로 읽어요</span></span>
+          <span class="ob-sub">사용하던 파일을 그대로 가져와요</span></span>
+          <span class="ob-go" data-ic="chevR"></span>
         </button>
-        <button class="onboard-card" onclick="aiImportStart()">
-          <span class="ob-ico">📷</span>
-          <span class="ob-txt"><b>사진으로 불러오기</b>
-          <span class="ob-sub">근무표를 찍거나 앨범에서 고르면 자동으로 읽어드려요 (최대 3장)</span></span>
+        <button class="onboard-card" onclick="showTab('ward')">
+          <span class="ob-ico" data-ic="edit"></span>
+          <span class="ob-txt"><b>직접 입력하기</b>
+          <span class="ob-sub">우리 병동 사람부터 하나씩 등록해요</span></span>
+          <span class="ob-go" data-ic="chevR"></span>
         </button>
-        <!-- 사진 전용 — accept를 image/*로 두어야 안드로이드에서 카메라·앨범 선택창이 뜬다.
-             PDF까지 섞으면 파일 탐색기가 떠서 어르신이 헤맨다(2026-07-20 제보) -->
         <input type="file" id="aiImportFile" accept="image/*" multiple style="display:none" onchange="aiImport(event)">
         <input type="file" id="aiImportPdf" accept="application/pdf" multiple style="display:none" onchange="aiImport(event)">
       </div>
       <p class="hint">PDF 파일이라면 → <a class="link" onclick="aiImportPdfStart()">PDF로 불러오기</a></p>
-      <p class="hint">가져올 파일이 없다면 → <a class="link" onclick="showTab('ward')">직접 사람 넣기</a></p>
-      <p class="hint">먼저 구경해보고 싶으면 → <a class="link" onclick="trySample()">예시 인원 12명으로 연습하기</a></p>
+      <p class="hint">먼저 구경해보고 싶으면 → <a class="link" onclick="trySample()">예시 병동으로 둘러보기</a></p>
     </div>
 
-    <!-- 상태 2: 인원 있음 + 이번 달 근무표 없음 -->
-    <div class="card" id="homePrep" style="display:none">
-      <p class="prep-title">준비가 끝났어요</p>
-      <div class="prep-status" id="prepStatus"></div>
-      <div class="wish-hint">★ 쉬고 싶은 날은 칸을 눌러 <b>★</b>로, 연차·대휴·교육이나 미리 정해진 근무는 칸을 눌러 <b>직접 골라</b> 두세요(📌 고정). 아래 ※ 칸의 공휴일은 자동으로 채워지고, 그날은 주말 인원으로 계산해요. 준비가 끝나면 만들기!</div>
-      <button class="btn big xl" onclick="generate()">🪄 자동으로 만들기</button>
-      <p class="prep-caption">1분 안에 초안이 나와요 · 나중에 얼마든지 고칠 수 있어요</p>
+    <!-- 상태 2: 준비(09) — 만들기 전 -->
+    <div id="homePrep" style="display:none">
+      <div class="monthnav">
+        <button onclick="moveMonth(-1)" title="지난달" data-ic="chevL"></button>
+        <span class="cur mn-cur"></span>
+        <button onclick="moveMonth(1)" title="다음달" data-ic="chevR"></button>
+      </div>
+      <p class="pagetitle" style="text-align:center" id="prepTitle"></p>
+      <p class="pagesub" style="text-align:center">병동 정보와 희망 근무를 확인하면<br>자동으로 초안을 만들어 드려요.</p>
+      <div class="prepcard" id="prepStatus"></div>
+      <div class="fairnote"><span class="fn-ico" data-ic="scale"></span><span id="fairnoteTx">지난 2개월 기록을 반영해<br>나이트와 휴일 근무를 고르게 배정해요.</span></div>
+      <button class="btn big xl" onclick="generate()">자동으로 근무표 만들기</button>
+      <p class="prep-caption">약 1분이면 고치기 좋은 초안이 완성돼요.</p>
     </div>
 
-    <!-- 그리드 카드 (상태 2·3 공통) -->
-    <div class="card" id="gridCard" style="display:none">
-      <div class="toolbar" id="homeTools" style="display:none">
-        <button class="btn big" onclick="generate()">🔄 다시 만들기</button>
-        <button class="btn gray" onclick="undo()">↩ 되돌리기</button>
-        <button class="btn share" onclick="exportImage()">📤 이미지로 저장</button>
-        <button class="btn gray" onclick="resetMonth()">🧹 초기화</button>
-        <span class="hint" id="genInfo"></span>
+    <!-- 상태 3: 완성(11) — 검토·편집 -->
+    <div id="homeDone" style="display:none">
+      <div class="monthnav">
+        <button onclick="moveMonth(-1)" title="지난달" data-ic="chevL"></button>
+        <span class="cur mn-cur"></span>
+        <button onclick="moveMonth(1)" title="다음달" data-ic="chevR"></button>
       </div>
-      <div id="genProgress"><div class="lbl"><span id="genProgLbl"></span><span>화면은 멈추지 않아요</span></div><div class="track"><div class="bar" id="genProgBar"></div></div></div>
-      <div id="banner"></div>
-      <div class="holirow">※ 이번 달 공휴일:
-        <input type="text" id="holidayInput" placeholder="예: 3, 6" onchange="saveHolidays()">
-        <span class="hint">법정공휴일(대체휴일 포함)은 자동으로 채워져요 — 병원 사정에 맞게 고치셔도 됩니다</span>
-      </div>
-      <div class="legend">
-        <span class="lg-d">D 데이</span>
-        <span class="lg-md">MD 미들</span>
-        <span class="lg-e">E 이브닝</span>
-        <span class="lg-e2">E2 이브닝2</span>
-        <span class="lg-n">N 나이트</span>
-        <span class="lg-o">－ 오프</span>
-        <span class="lg-v">휴·대·교 휴가</span>
-        <span class="lg-w">★ 희망</span>
-        <span class="lg-pin">📌 직접 고정한 칸</span>
-      </div>
-      <p class="hint" id="gridHint"></p>
+      <p class="pagetitle" style="text-align:center" id="doneTitle"></p>
+      <div class="chiprow" id="doneChips"></div>
       <div class="gridthumb" id="gridThumb" onclick="openGridFull()" role="button" tabindex="0"
-           title="탭하면 가로로 크게 볼 수 있어요"
+           title="탭하면 가로로 크게 검토할 수 있어요"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGridFull();}">
         <button class="gridfull-close" onclick="closeGridFull(event)" aria-label="닫기">✕ 닫기</button>
         <div class="gridwrap" id="gridArea"></div>
         <div id="viewerPanel"></div>
-        <div class="gridthumb-cta"><span>🔍 크게 보기</span></div>
+        <div class="gridthumb-cta"><span>근무표 검토하기</span></div>
       </div>
-      <div class="stat" id="statArea"></div>
+      <button class="btn big xl" style="margin-top:12px" onclick="openGridFull()">근무표 검토하기</button>
+      <div class="btnrow">
+        <button class="btn gray" onclick="generate()">다시 만들기</button>
+        <button class="btn gray" onclick="exportImage()">이미지로 저장</button>
+      </div>
+      <p class="hint" style="text-align:center;margin-top:12px">
+        <a class="link" onclick="undo()">되돌리기</a> &nbsp;·&nbsp; <a class="link" onclick="resetMonth()">이 달 초기화</a>
+      </p>
+      <span class="hint" id="genInfo" style="margin-top:10px"></span>
+      <div class="card" style="margin-top:14px">
+        <div class="holirow">※ 이번 달 공휴일:
+          <input type="text" id="holidayInput" placeholder="예: 3, 6" onchange="saveHolidays()">
+          <span class="hint">자동으로 채워져요 — 병원 사정에 맞게 고치셔도 됩니다</span>
+        </div>
+        <div class="legend">
+          <span class="lg-d">D 데이</span><span class="lg-md">MD 미들</span>
+          <span class="lg-e">E 이브닝</span><span class="lg-e2">E2 이브닝2</span>
+          <span class="lg-n">N 나이트</span><span class="lg-o">－ 오프</span>
+          <span class="lg-v">휴·대·교 휴가</span><span class="lg-w">★ 희망</span>
+          <span class="lg-pin">📌 고정한 칸</span>
+        </div>
+      </div>
+      <div class="card"><div class="stat" id="statArea"></div></div>
     </div>
   </div>
 
-  <!-- ===== 우리 병동 ===== -->
+  <!-- ===== 우리 병동(06) ===== -->
   <div id="tab-ward" style="display:none">
-    <div class="card">
-      <h2>우리 병동 사람들</h2>
-      <div class="toolbar" style="margin-bottom:12px">
-        <button class="btn gray" onclick="document.getElementById('importFileXlsx').click()">📄 기존 근무표(엑셀) 불러오기</button>
-        <input type="file" id="importFileXlsx" accept=".xlsx,.xls,.csv" style="display:none" onchange="importXlsx(event)">
-      </div>
-      <div class="staffrow addrow">
-        <input type="text" id="newName" placeholder="이름" style="width:150px" onkeydown="if(event.key==='Enter')addStaff()">
-        <select id="newGroup" title="직군">
-          <option value="RN">간호사</option>
-          <option value="NA">조무사</option>
-        </select>
-        <select id="newType">
-          <option value="three">3교대 (D/E/N)</option>
-          <option value="two">2교대 (D/E)</option>
-          <option value="night">나이트 전담</option>
-          <option value="day">평일 상근 (D만)</option>
-        </select>
-        <button class="btn big" onclick="addStaff()">+ 추가</button>
-      </div>
-      <div id="staffList"></div>
-      <p class="hint" id="sampleHint" style="margin-top:12px">처음이라면 <a class="link" onclick="trySample()">예시 인원 12명 넣기</a>로 연습해보세요.</p>
+    <div class="ward-head">
+      <p class="pagetitle">우리 병동</p>
+      <span class="cntbadge" id="wardCount"></span>
+      <button class="addbtn" onclick="openStaffSheet(-1)"><span data-ic="plus"></span>사람 추가</button>
     </div>
-    <div class="card">
-      <details id="rulesBox">
-        <summary><h2 style="display:inline">근무 규칙</h2> <span class="hint">— 그대로 두셔도 됩니다 (바꾸면 바로 저장돼요)</span></summary>
-        <div id="rulesArea"></div>
-      </details>
-    </div>
+    <button class="listrow" onclick="openImportSheet()">
+      <span class="lr-ico" data-ic="import"></span>
+      <span class="lr-tx"><b>기존 근무표 불러오기</b><span class="lr-sub">사진·PDF·엑셀에서 자동으로 읽어요</span></span>
+      <span class="lr-go" data-ic="chevR"></span>
+    </button>
+    <input type="file" id="importFileXlsx" accept=".xlsx,.xls,.csv" style="display:none" onchange="importXlsx(event)">
+    <div id="staffList"></div>
+    <p class="hint" id="sampleHint" style="margin:4px 0 14px">처음이라면 <a class="link" onclick="trySample()">예시 인원 12명 넣기</a>로 연습해보세요.</p>
+    <button class="listrow" onclick="openRulesScreen()">
+      <span class="lr-ico" data-ic="doc"></span>
+      <span class="lr-tx"><b>근무 규칙</b><span class="lr-sub">평일·휴일 필요 인원과 연속 근무 제한</span></span>
+      <span class="lr-go" data-ic="chevR"></span>
+    </button>
     <div class="card" id="patternCard" style="display:none">
       <h2>💡 우리 병동 습관 메모</h2>
       <div id="patternArea"></div>
     </div>
   </div>
 
-  <!-- ===== 보관함 ===== -->
+  <!-- ===== 보관함(13) ===== -->
   <div id="tab-archive" style="display:none">
+    <p class="pagetitle">보관함</p>
+    <p class="pagesub">완성한 근무표와 지난 기록을 한곳에서 확인하세요.</p>
     <div class="card" id="installCard" style="display:none">
       <h2>🔗 홈 화면에 바로가기 만들기</h2>
       <div id="installBody"></div>
     </div>
-    <!-- 평소엔 숨김. 비밀번호 재설정(메일 링크로 돌아온 경우)에만 이 자리에서 진행한다.
-         「여러 기기에서 함께 쓰기」 안내는 2026-07-20 사용자 결정으로 삭제. -->
-    <div class="card" id="cloudCard" style="display:none">
-      <div id="cloudBody"></div>
-    </div>
-    <div class="card">
-      <h2>지난 달 기록</h2>
-      <p class="hint">근무표를 만들면 자동으로 기록됩니다. 지난달·지지난달 기록이 있으면 나이트·주말 횟수를 이어받아 공평하게 만들어 드려요.</p>
-      <div id="histList"></div>
-    </div>
-    <div class="card">
-      <h2>백업</h2>
-      <p>모든 내용은 이 기기에 자동으로 저장됩니다. 파일로도 보관해두면 더 안전해요.</p>
-      <div class="toolbar">
-        <button class="btn big" onclick="exportData()">💾 파일로 백업하기</button>
-        <button class="btn gray" onclick="document.getElementById('importFile').click()">📂 백업 불러오기</button>
-        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
-      </div>
-    </div>
+    <!-- 비밀번호 재설정(메일 링크 복귀) 전용 자리 -->
+    <div class="card" id="cloudCard" style="display:none"><div id="cloudBody"></div></div>
+    <h2 style="margin-top:4px">최근 근무표</h2>
+    <div id="histList"></div>
+    <button class="listrow" onclick="openDataScreen()">
+      <span class="lr-ico" data-ic="doc"></span>
+      <span class="lr-tx"><b>데이터 및 백업</b><span class="lr-sub">파일로 저장하거나 이전 백업 불러오기</span></span>
+      <span class="lr-go" data-ic="chevR"></span>
+    </button>
+    <button class="listrow" onclick="openDataScreen()">
+      <span class="lr-ico" data-ic="cloud"></span>
+      <span class="lr-tx"><b>계정 및 동기화</b><span class="lr-sub" id="syncSub">서버 저장 상태를 확인해요</span></span>
+      <span class="lr-go" data-ic="chevR"></span>
+    </button>
   </div>
 </main>
 
 <footer><span class="appver"></span></footer>
+
+<!-- 부속 화면: 근무 규칙(08) · 희망 휴무·고정 근무(15) · 데이터 및 계정(14) -->
+<div class="subscreen" id="screen-rules"><div class="ss-in" id="rulesScreenBody"></div></div>
+<div class="subscreen" id="screen-wish"><div class="ss-in" id="wishScreenBody"></div></div>
+<div class="subscreen" id="screen-data"><div class="ss-in" id="dataScreenBody"></div></div>
+
+<!-- 자동 생성 진행(10) -->
+<div id="genScreen"></div>
+
+<!-- 바텀시트 (구성원 편집·근무 선택·가져오기 선택) -->
+<div id="sheetWrap"><div id="sheet"></div></div>
+
 <div id="aiLoading"></div>
 <div id="browserGate"></div>
 <div id="installModal"></div>
 <div id="importReview"></div>
-<div id="picker"></div>
 <div id="toast"></div>
 
 <script src="js/vendor/xlsx.full.min.js"></script>
