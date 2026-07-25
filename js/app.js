@@ -2242,9 +2242,87 @@ function fitGridFull() {
   var availW = area.clientWidth - 12, availH = area.clientHeight - 12;   // 좌측 표 영역
   if (!tW || !tH || availW <= 0 || availH <= 0) return;
   var s = Math.min(availW / tW, availH / tH);    // 가로·세로 둘 다 들어오는 배율 = 전체가 보임
-  table.style.transformOrigin = 'center center';
-  table.style.transform = 'scale(' + s + ')';
+  vzFit = s;
+  vzClamp(area, table);                          // 회전·재렌더 후에도 확대 상태를 한계 안에서 유지
+  applyViewerTransform(table);
 }
+
+/* ---- 뷰어 핀치 확대 (v6.3.0) ----
+   전체화면(가로잠금의 필수 전제) 중에는 Android Chrome이 브라우저 핀치줌을 차단하는 것을
+   실기기로 확인(2026-07-25) — 그래서 뷰어 안에서 두 손가락 확대·이동을 직접 구현한다.
+   fitGridFull의 전체맞춤 배율(vzFit)에 사용자 배율(vzScale 1~4)·이동(vzX,vzY)을 얹어
+   transform 하나로 적용한다. 편집은 그대로 — 배율 1에선 개입하지 않고, 확대 중에도
+   8px 미만 움직임은 탭으로 취급되어 선택판이 열린다. */
+var vzScale = 1, vzX = 0, vzY = 0, vzFit = 1;
+function applyViewerTransform(table) {
+  table.style.transformOrigin = 'center center';
+  table.style.transform = 'translate(' + vzX + 'px,' + vzY + 'px) scale(' + (vzFit * vzScale) + ')';
+}
+function vzReset() { vzScale = 1; vzX = 0; vzY = 0; }
+function vzClamp(area, table) {
+  vzScale = Math.min(4, Math.max(1, vzScale));
+  if (vzScale === 1) { vzX = 0; vzY = 0; return; }
+  var S = vzFit * vzScale;
+  var maxX = Math.max(0, (table.scrollWidth * S - area.clientWidth) / 2 + 24);
+  var maxY = Math.max(0, (table.offsetHeight * S - area.clientHeight) / 2 + 24);
+  vzX = Math.min(maxX, Math.max(-maxX, vzX));
+  vzY = Math.min(maxY, Math.max(-maxY, vzY));
+}
+(function () {
+  var tp = null;                                 // 진행 중인 제스처(pinch/pan)
+  function els() {
+    var area = document.getElementById('gridArea');
+    var table = area && area.querySelector('table.duty');
+    return table ? { area: area, table: table } : null;
+  }
+  function mid(ts) { return { x: (ts[0].clientX + ts[1].clientX) / 2, y: (ts[0].clientY + ts[1].clientY) / 2 }; }
+  function dist(ts) { return Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY) || 1; }
+  document.addEventListener('touchstart', function (ev) {
+    if (!document.body.classList.contains('grid-open')) return;
+    var e = els();
+    if (!e || !e.area.contains(ev.target)) return;
+    var ts = ev.touches;
+    if (ts.length === 2) {
+      var r = e.area.getBoundingClientRect();
+      var c = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      var m = mid(ts), S = vzFit * vzScale;
+      /* u = 손가락 중점 아래의 표 위 지점(표 중심 기준) — 확대해도 이 지점이 손끝에 붙어 있도록 */
+      tp = { kind: 'pinch', d0: dist(ts), s0: vzScale, c: c, u: { x: (m.x - c.x - vzX) / S, y: (m.y - c.y - vzY) / S } };
+    } else if (ts.length === 1 && vzScale > 1) {
+      tp = { kind: 'pan', x0: ts[0].clientX, y0: ts[0].clientY, px: vzX, py: vzY, moved: false };
+    }
+  }, { passive: true });
+  document.addEventListener('touchmove', function (ev) {
+    if (!tp) return;
+    var e = document.body.classList.contains('grid-open') && els();
+    if (!e) { tp = null; return; }
+    var ts = ev.touches;
+    if (tp.kind === 'pinch' && ts.length >= 2) {
+      vzScale = tp.s0 * (dist(ts) / tp.d0);
+      var S = vzFit * Math.min(4, Math.max(1, vzScale));
+      var m = mid(ts);
+      vzX = m.x - tp.c.x - S * tp.u.x;
+      vzY = m.y - tp.c.y - S * tp.u.y;
+      vzClamp(e.area, e.table);
+      applyViewerTransform(e.table);
+      ev.preventDefault();
+    } else if (tp.kind === 'pan' && ts.length === 1) {
+      var dx = ts[0].clientX - tp.x0, dy = ts[0].clientY - tp.y0;
+      if (!tp.moved && Math.abs(dx) + Math.abs(dy) < 8) return;   // 탭 판정 보호
+      tp.moved = true;
+      vzX = tp.px + dx; vzY = tp.py + dy;
+      vzClamp(e.area, e.table);
+      applyViewerTransform(e.table);
+      ev.preventDefault();
+    }
+  }, { passive: false });
+  document.addEventListener('touchend', function (ev) {
+    if (!tp) return;
+    if (!ev.touches.length) { tp = null; return; }
+    if (tp.kind === 'pinch' && ev.touches.length === 1)   // 손가락 하나 남으면 이동 모드로 이어감
+      tp = { kind: 'pan', x0: ev.touches[0].clientX, y0: ev.touches[0].clientY, px: vzX, py: vzY, moved: true };
+  }, { passive: true });
+})();
 
 /* 표를 가로 전체화면으로 크게 — #gridThumb를 화면 가득 채우고(클래스 토글) 가로로 잠근다. */
 function openGridFull() {
@@ -2255,12 +2333,15 @@ function openGridFull() {
   if (thumb) { thumb.style.height = ''; thumb.scrollTop = 0; }
   var oarea = document.getElementById('gridArea');
   if (oarea) oarea.style.transform = '';         // 미니맵에서 쓴 값 정리
+  vzReset();                                     // 지난번 확대 상태는 이어받지 않는다
   lockLandscape();
   fitGridFull();                                 // 회전 전 우선 적합, 회전 완료되면 재적합
   renderViewerPanel();                           // 우측 라이브 오류 패널
+  if (!openGridFull._hint) { openGridFull._hint = 1; toast('두 손가락으로 벌리면 크게 볼 수 있어요'); }
 }
 function closeGridFull(ev) {
   if (ev) ev.stopPropagation();
+  vzReset();
   document.body.classList.remove('grid-open');
   var area = document.getElementById('gridArea');
   if (area) { area.style.transform = ''; area.style.width = ''; area.style.height = '';

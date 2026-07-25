@@ -86,5 +86,29 @@ ok(an.global.maxN >= 1 && an.global.maxN <= 4, 'maxN 1~4 (실제 ' + an.global.m
 ok(an.global.offAfterN >= 1, 'offAfterN>=1 (실제 ' + an.global.offAfterN + ')');
 ok(an.global.maxWork >= 3 && an.global.maxWork <= 7, 'maxWork 3~7 (실제 ' + an.global.maxWork + ')');
 
+/* ⑧ 빈 날(전원 미기재)이 있어도 인원 하한이 0으로 무너지지 않는다 (2026-07-25)
+   실병동 재현: 사진에 안 채워진 날이 하루라도 있으면 관찰 최솟값이 0이 되어
+   모든 하한이 [0,x]로 굳고, "아무도 근무 안 해도 규칙 통과"가 됐다. */
+section('⑧ 빈 날 제외');
+const rowsBlank = res.rows.map(r => ({ name: r.name, group: r.group, codes: r.codes.slice() }));
+rowsBlank.forEach(r => { r.codes[28] = ''; r.codes[29] = ''; });   // 6/29(월)·6/30(화)을 통째로 비운다
+const anBlank = Importer.analyze(rowsBlank, res.days, YM);
+const RNb = anBlank.rulesByGroup.RN;
+ok(RNb.wd.D[0] > 0, '빈 날 있어도 RN 평일 D 하한>0 (실제 ' + RNb.wd.D[0] + ')');
+ok(RNb.wd.N[0] === RN.wd.N[0] && RNb.wd.N[1] === RN.wd.N[1],
+  '빈 날 있어도 RN 평일 N 범위 유지 (실제 [' + RNb.wd.N + '] vs [' + RN.wd.N + '])');
+ok(RNb.hd.D[0] === RN.hd.D[0] && RNb.hd.D[1] === RN.hd.D[1],
+  '주말 D 범위 무영향 (실제 [' + RNb.hd.D + '])');
+/* 대조군: 특정 직군만 그 날 전원 쉬는 것은 정당한 관찰(하한 0 유지) — 빈 날 판정은 전체 합계 기준 */
+const rowsNAoff = res.rows.map(r => ({ name: r.name, group: r.group, codes: r.codes.slice() }));
+rowsNAoff.forEach(r => { if (r.group === 'NA') { r.codes[28] = 'O'; r.codes[29] = 'O'; } });
+const anNAoff = Importer.analyze(rowsNAoff, res.days, YM);
+ok(anNAoff.rulesByGroup.NA.wd.D[0] === 0, 'NA만 쉰 날은 정당한 0 관찰 (실제 ' + anNAoff.rulesByGroup.NA.wd.D[0] + ')');
+/* 전부 빈 표는 [0,0]으로 조용히 수렴(크래시 없음) */
+const rowsAll = res.rows.map(r => ({ name: r.name, group: r.group, codes: r.codes.map(() => '') }));
+const anAll = Importer.analyze(rowsAll, res.days, YM);
+ok(anAll.rulesByGroup.RN.wd.D[0] === 0 && anAll.rulesByGroup.RN.wd.D[1] === 0,
+  '전부 빈 표 → [0,0] (실제 [' + anAll.rulesByGroup.RN.wd.D + '])');
+
 console.log('\n결과: ' + pass + ' 통과 / ' + fail + ' 실패');
 process.exit(fail ? 1 : 0);

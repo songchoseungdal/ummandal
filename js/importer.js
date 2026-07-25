@@ -187,6 +187,16 @@
       row.codes.forEach(function (c, i) { var f = famOf(c); if (f) byDay[g][i][f]++; });
     });
 
+    /* 빈 날 = 전 직군 통틀어 근무 기록이 하나도 없는 날(사진·표에 안 채워진 날).
+       하루만 비어 있어도 모든 계열 하한이 0으로 굳어 "아무도 근무 안 해도 규칙 통과"가
+       되므로(2026-07-25 실병동 재현) 인원 범위 관찰에서 뺀다. 직군별 0은 정당할 수
+       있어(소인원 직군의 휴식일) 전체 합계가 0인 날만 제외한다. */
+    var dayFilled = [];
+    for (var fd = 0; fd < days; fd++) dayFilled.push(false);
+    rows.forEach(function (row) {
+      row.codes.forEach(function (c, i) { if (famOf(c)) dayFilled[i] = true; });
+    });
+
     var rulesByGroup = {};
     Object.keys(byDay).forEach(function (g) {
       var arr = byDay[g];
@@ -194,6 +204,7 @@
         var mn = Infinity, mx = -Infinity, any = false;
         for (var d = 0; d < days; d++) {
           if (isWeekendDay(d + 1) !== weekendWanted) continue;
+          if (!dayFilled[d]) continue;
           any = true;
           var v = arr[d][fam];
           if (v < mn) mn = v; if (v > mx) mx = v;

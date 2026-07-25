@@ -469,7 +469,8 @@ body.grid-open .gridthumb-cta { display: none; }
 /* #gridArea = 좌측 표 영역(우측 패널 뺀 나머지). 표(table)를 fitGridFull이 중심 기준 scale로 '전체가
    들어오게' 축소하고, 이 영역이 flex center라 가운데 정렬. 꽉 채우진 않음(사람 많으면 그만큼 작아짐). */
 body.grid-open .gridthumb .gridwrap { flex: 1; min-width: 0; overflow: hidden; pointer-events: auto;
-  display: flex; align-items: center; justify-content: center; padding: 8px; }
+  display: flex; align-items: center; justify-content: center; padding: 8px;
+  touch-action: none; }   /* 핀치·팬을 앱이 직접 처리(v6.3.0) — 브라우저 제스처 개입 차단 */
 /* 우측 라이브 패널 */
 body.grid-open #viewerPanel { display: block; flex: 0 0 clamp(190px, 30%, 300px); overflow-y: auto;
   -webkit-overflow-scrolling: touch; background: var(--card); border-left: 1.5px solid var(--line);
