@@ -99,16 +99,33 @@ ok(RNb.wd.N[0] === RN.wd.N[0] && RNb.wd.N[1] === RN.wd.N[1],
   '빈 날 있어도 RN 평일 N 범위 유지 (실제 [' + RNb.wd.N + '] vs [' + RN.wd.N + '])');
 ok(RNb.hd.D[0] === RN.hd.D[0] && RNb.hd.D[1] === RN.hd.D[1],
   '주말 D 범위 무영향 (실제 [' + RNb.hd.D + '])');
-/* 대조군: 특정 직군만 그 날 전원 쉬는 것은 정당한 관찰(하한 0 유지) — 빈 날 판정은 전체 합계 기준 */
+/* 대조군: 특정 직군이 이틀 이상 전원 쉬면 정당한 관찰(하한 0 유지) — 빈 날 판정은 전체 합계 기준,
+   반복 관찰된 0은 2번째 최솟값 방식(⑨)에서도 살아남는다 */
 const rowsNAoff = res.rows.map(r => ({ name: r.name, group: r.group, codes: r.codes.slice() }));
 rowsNAoff.forEach(r => { if (r.group === 'NA') { r.codes[28] = 'O'; r.codes[29] = 'O'; } });
 const anNAoff = Importer.analyze(rowsNAoff, res.days, YM);
-ok(anNAoff.rulesByGroup.NA.wd.D[0] === 0, 'NA만 쉰 날은 정당한 0 관찰 (실제 ' + anNAoff.rulesByGroup.NA.wd.D[0] + ')');
+ok(anNAoff.rulesByGroup.NA.wd.D[0] === 0, 'NA가 이틀 쉬면 정당한 0 관찰 (실제 ' + anNAoff.rulesByGroup.NA.wd.D[0] + ')');
 /* 전부 빈 표는 [0,0]으로 조용히 수렴(크래시 없음) */
 const rowsAll = res.rows.map(r => ({ name: r.name, group: r.group, codes: r.codes.map(() => '') }));
 const anAll = Importer.analyze(rowsAll, res.days, YM);
 ok(anAll.rulesByGroup.RN.wd.D[0] === 0 && anAll.rulesByGroup.RN.wd.D[1] === 0,
   '전부 빈 표 → [0,0] (실제 [' + anAll.rulesByGroup.RN.wd.D + '])');
+
+/* ⑨ 하루짜리 특이일은 하한에서 무시 — 하한 = 관찰 2번째 최솟값 (2026-07-26)
+   실사례(jyj6986 7월): 기준 달에 그 계열 0명인 날이 하루 있으면 하한이 0으로 저장돼
+   "아무도 없어도 통과" + 사용자가 이유를 알 수 없었다. 하루뿐인 최솟값(오독·행사)은 버리고,
+   이틀 이상 반복된 값만 진짜 최소로 존중한다. */
+section('⑨ 특이일 무시(2번째 최솟값)');
+const rowsOne = res.rows.map(r => ({ name: r.name, group: r.group, codes: r.codes.slice() }));
+rowsOne.forEach(r => { if (r.group === 'NA') { r.codes[1] = 'O'; } });   // 6/2(화) 하루만 NA 전원 오프
+const anOne = Importer.analyze(rowsOne, res.days, YM);
+ok(anOne.rulesByGroup.NA.wd.D[0] > 0,
+  '하루뿐인 NA 0명은 하한에 반영 안 됨 (실제 ' + anOne.rulesByGroup.NA.wd.D[0] + ')');
+ok(anOne.rulesByGroup.RN.wd.D[0] === RN.wd.D[0] && anOne.rulesByGroup.RN.wd.D[1] === RN.wd.D[1],
+  '다른 직군 범위는 무영향 (실제 [' + anOne.rulesByGroup.RN.wd.D + '])');
+/* 상한은 그대로 관찰 최댓값(하한만 보수화) */
+ok(anOne.rulesByGroup.NA.wd.D[1] === NA.wd.D[1],
+  '상한은 관찰 최댓값 유지 (실제 ' + anOne.rulesByGroup.NA.wd.D[1] + ')');
 
 console.log('\n결과: ' + pass + ' 통과 / ' + fail + ' 실패');
 process.exit(fail ? 1 : 0);

@@ -2174,13 +2174,12 @@ function aiFileToB64(file) {
    진행 중임을 계속 보여주고, 그동안 뒤로가기·새로고침·다른 조작으로 취소되지 않게 막는다.
    (중간에 끊기면 서버 횟수만 소모되고 결과는 못 받는다) */
 var aiBusy = false, aiTick = null, aiT0 = 0;
+/* 문구가 자꾸 바뀌면 기다리는 사람이 되레 불안하다(초승달 2026-07-26) — 2분 약속 하나로 고정하고,
+   약속을 넘겼을 때만 딱 한 번 "늦어지고 있어요"로 바꾼다. 5분 넘으면 cloud.js가 자동 중단. */
 var AI_STEPS = [
-  [0, '사진을 준비하는 중…'],
-  [4, '근무표를 서버로 보내는 중…'],
-  [10, 'AI가 표를 한 칸씩 읽는 중…'],
-  [45, '사람 이름과 근무를 맞춰보는 중…'],
-  [90, '거의 다 됐어요. 조금만 더…'],
-  [130, '표가 크면 3분쯤 걸리기도 해요. 그대로 기다려주세요…']
+  [0, '사진을 서버로 보내는 중…'],
+  [8, 'AI가 근무표를 읽고 있어요. 보통 2분쯤 걸려요'],
+  [125, '생각보다 늦어지고 있네요. 조금만 더 기다려주세요']
 ];
 function aiStepText(sec) {
   var t = AI_STEPS[0][1];
@@ -2207,14 +2206,14 @@ function aiLoadingShow() {
     '<div class="ai-card"><div class="ai-spin"></div>' +
     '<h2>근무표를 읽는 중이에요</h2>' +
     '<p class="ai-step" id="aiStep">' + aiStepText(0) + '</p>' +
-    '<p class="ai-sec" id="aiSec">0초 지났어요 · 보통 2분쯤 걸려요</p>' +
+    '<p class="ai-sec" id="aiSec">0초 지났어요</p>' +
     '<p class="ai-warn">⚠️ 다 될 때까지 <b>앱을 닫거나 뒤로 가지 마세요</b>.<br>중간에 멈추면 처음부터 다시 해야 해요.</p></div>';
   el.className = 'on';
   aiTick = setInterval(function () {
     var sec = Math.floor((Date.now() - aiT0) / 1000);
     var s = document.getElementById('aiStep'), c = document.getElementById('aiSec');
     if (s) s.textContent = aiStepText(sec);
-    if (c) c.textContent = sec + '초 지났어요 · 보통 2분쯤 걸려요';
+    if (c) c.textContent = sec + '초 지났어요';
   }, 1000);
   /* 뒤로가기 차단 — 한 칸 쌓아두고, 뒤로 누르면 도로 채워 넣는다 */
   history.pushState({ ai: 1 }, '', location.href);
@@ -2242,7 +2241,7 @@ function aiImport(ev) {
     return Cloud.aiAnalyze(files);
   }).then(function (res) {
     aiLoadingHide();
-    if (!res || !res.status) { alert('분석 요청에 실패했어요. 인터넷 연결을 확인해주세요.'); return; }
+    if (!res || !res.status) { alert((res && res.data && res.data.error) || '분석 요청에 실패했어요. 인터넷 연결을 확인해주세요.'); return; }
     if (res.status !== 200) { alert((res.data && res.data.error) || '분석에 실패했어요. 다시 시도해주세요.'); return; }
     applyAiResult(res.data);
   }).catch(function () {
@@ -2462,10 +2461,22 @@ function wizRulesHTML() {
     return '<div class="wz-sumline"><b>' + lb + '평일</b><br>데이(D) ' + rng(r.wd.D) + ' · 이브닝(E) ' + rng(r.wd.E) + ' · 나이트(N) ' + rng(r.wd.N) + '</div>' +
       '<div class="wz-sumline"><b>' + lb + '주말·공휴일</b><br>데이(D) ' + rng(r.hd.D) + ' · 이브닝(E) ' + rng(r.hd.E) + ' · 나이트(N) ' + rng(r.hd.N) + '</div>';
   }
+  /* 하한 0 안내(2026-07-26) — 근무가 있긴 한데(최대>0) 하한이 0이면 "아무도 없어도 통과"라는 뜻.
+     표에 0명인 날이 이틀 이상 관찰됐을 때만 나오는 값이므로, 사람이 맞는지 확인하게 짚어준다. */
+  var zeroLo = groups.some(function (gk) {
+    return ['wd', 'hd'].some(function (kd) {
+      return ['D', 'E', 'N'].some(function (f) {
+        var v = _wiz.rules[gk][kd][f]; return v[0] === 0 && v[1] > 0;
+      });
+    });
+  });
+  var zeroNote = zeroLo
+    ? '<p class="hint wz-note">⚠️ <b>0명으로 시작하는 항목</b>은 그 날 아무도 없어도 된다는 뜻이에요. 꼭 필요한 최소 인원이 있으면 「아니요, 고칠게요」에서 올려주세요.</p>'
+    : '';
   if (!_wiz.rulesOpen) {
     return '<div class="wz-ask"><p class="wz-q">하루에 이만큼 근무하나요?</p>' +
       '<div class="wz-summary">' + groups.map(sumFor).join('') + '</div>' +
-      '<p class="hint">데이=D, 이브닝=E, 나이트=N (MD·E2도 각 계열에 포함돼요)</p></div>' +
+      '<p class="hint">데이=D, 이브닝=E, 나이트=N (MD·E2도 각 계열에 포함돼요)</p>' + zeroNote + '</div>' +
       '<div class="imp-actions wz-nav">' +
       '<button class="btn gray" onclick="wizBack()">← 이전</button>' +
       '<button class="btn gray" onclick="wizOpenRules()">아니요, 고칠게요</button>' +
@@ -2481,7 +2492,7 @@ function wizRulesHTML() {
       rows += '<tr><td class="rgname">' + (groups.length > 1 ? groupNames[gk] + '<br>' : '') + '<span class="hint">' + kd[1] + '</span></td>' + box('D') + box('E') + box('N') + '</tr>';
     });
   });
-  return '<p class="hint" style="margin:2px 0 8px">하루에 몇 명이 서는지 최소~최대로 고쳐주세요.</p>' +
+  return '<p class="hint" style="margin:2px 0 8px">하루에 몇 명이 서는지 최소~최대로 고쳐주세요.</p>' + zeroNote +
     '<div class="imp-scroll2"><table class="rgtable"><tr><th>&nbsp;</th><th>데이(D)</th><th>이브닝(E)</th><th>나이트(N)</th></tr>' + rows + '</table></div>' +
     '<div class="imp-actions wz-nav"><button class="btn gray" onclick="wizBack()">← 이전</button>' +
     '<button class="btn big" onclick="wizNext()">다음 →</button></div>';

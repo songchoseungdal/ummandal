@@ -201,15 +201,19 @@
     Object.keys(byDay).forEach(function (g) {
       var arr = byDay[g];
       function range(weekendWanted, fam) {
-        var mn = Infinity, mx = -Infinity, any = false;
+        var vals = [];
         for (var d = 0; d < days; d++) {
           if (isWeekendDay(d + 1) !== weekendWanted) continue;
           if (!dayFilled[d]) continue;
-          any = true;
-          var v = arr[d][fam];
-          if (v < mn) mn = v; if (v > mx) mx = v;
+          vals.push(arr[d][fam]);
         }
-        return any ? [mn, mx] : [0, 0];
+        if (!vals.length) return [0, 0];
+        vals.sort(function (a, b) { return a - b; });
+        /* 하한 = 관찰 2번째 최솟값(2026-07-26): 하루짜리 특이일(오독·행사 등)이 하한을
+           끌어내려 "0명이어도 통과"가 되는 것을 막는다(7월 실데이터에서 재현·초승달 승인).
+           같은 최솟값이 이틀 이상 관찰되면 정렬 2번째도 같은 값이라 진짜 최소로 존중된다. */
+        var lo = vals.length > 1 ? vals[1] : vals[0];
+        return [lo, vals[vals.length - 1]];
       }
       /* 상한이 하한+4 초과면 눌러 담기(이상치 완충). N은 관찰값 그대로 */
       function soft(rg) { if (rg[1] > rg[0] + 4) rg[1] = rg[0] + 4; return rg; }

@@ -78,6 +78,11 @@ var Cloud = (function () {
     return sb.auth.getSession().then(function (s) {
       var t = s && s.data && s.data.session && s.data.session.access_token;
       if (!t) return { status: 401, data: { error: '로그인한 뒤에 쓸 수 있어요.' } };
+      /* 5분 안전 타임아웃(2026-07-26) — 네트워크가 멈춰 응답이 영영 안 오면 시간만 도는 것을 막는다.
+         정상 소요는 2분 안팎(실측 126초), 서버 자체 한계보다 넉넉하게 잡아 멀쩡한 분석은 안 끊는다. */
+      var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = ac ? setTimeout(function () { ac.abort(); }, 5 * 60 * 1000) : null;
+      function done() { if (timer) clearTimeout(timer); }
       return fetch(CLOUD_CONFIG.url + '/functions/v1/analyze-roster', {
         method: 'POST',
         headers: {
@@ -85,10 +90,17 @@ var Cloud = (function () {
           'Authorization': 'Bearer ' + t,
           'apikey': CLOUD_CONFIG.key
         },
-        body: JSON.stringify({ files: files })
+        body: JSON.stringify({ files: files }),
+        signal: ac ? ac.signal : undefined
       }).then(function (r) {
+        done();
         return r.json().catch(function () { return {}; })
           .then(function (j) { return { status: r.status, data: j }; });
+      }, function () {
+        done();
+        return { status: 0, data: { error: (ac && ac.signal.aborted)
+          ? '분석이 5분을 넘겨서 멈췄어요. 잠시 후 다시 시도해주세요.'
+          : '인터넷 연결이 불안정해요. 연결을 확인하고 다시 시도해주세요.' } };
       });
     });
   }
