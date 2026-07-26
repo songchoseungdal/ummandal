@@ -2522,20 +2522,23 @@ function applyImport() {
   var ym = _wiz.ym;
 
   /* 이름이 같은 기존 인원은 id를 재사용한다(2026-07-26 승인) — 재가져오기 때 과거 달 기록이
-     고아가 되지 않고 이력(형평성 승계)이 그대로 이어진다. 같은 이름이 여럿이면 1:1로만 소진.
+     고아가 되지 않고 이력(형평성 승계)이 그대로 이어진다. 같은 이름이 여럿이면 같은 직군을
+     먼저 1:1로 소진(시트 행 순서가 달라져도 두 사람의 이력이 서로 엇갈리지 않게).
      한계: 동명이인 신규 입사자는 옛 사람 기록을 이어받는다(이전 달 이름 매칭과 같은 방식). */
-  var oldIdsByName = {};
-  staffList().forEach(function (p) { (oldIdsByName[p.name] = oldIdsByName[p.name] || []).push(p.id); });
+  var oldByName = {};
+  staffList().forEach(function (p) { (oldByName[p.name] = oldByName[p.name] || []).push(p); });
   var staff = [], codesById = {};
   _wiz.staff.forEach(function (s, i) {
     if (s.exc) return;
-    var reuse = oldIdsByName[s.name] && oldIdsByName[s.name].shift();
-    var id = reuse || ('imp' + Date.now() + '_' + i);
+    var pool = oldByName[s.name] || [], k = -1;
+    for (var j = 0; j < pool.length; j++) if (pool[j].group === s.group) { k = j; break; }
+    if (k < 0 && pool.length) k = 0;
+    var id = k >= 0 ? pool.splice(k, 1)[0].id : ('imp' + Date.now() + '_' + i);
     staff.push({ id: id, name: s.name, group: s.group, type: s.type, pref: s.pref });
     codesById[id] = s.codes.slice();
   });
   if (!staff.length) { alert('등록할 사람이 없어요. 「빼기」를 하나 이상 풀어주세요.'); return; }
-  if (staffList().length && !confirm('인원을 이 근무표 기준으로 다시 등록합니다.\n이름이 같은 사람은 기존 기록이 그대로 이어져요. 계속할까요?')) return;
+  if (staffList().length && !confirm('인원을 이 근무표 기준으로 다시 등록합니다.\n이름이 같은 사람은 지난 달 근무 기록이 이어지고,\n이 근무표에 없는 사람은 목록에서 빠져요. 계속할까요?')) return;
 
   /* 규칙: 마법사에서 확정한 값(_wiz.rules)을 그대로 쓴다. 직군 편집은 wizDeriveRules로 이미 반영됨. */
   var r = rules2();
@@ -2566,7 +2569,14 @@ function applyImport() {
       var arr = []; for (var d = 0; d < hdim; d++) arr.push(row.codes[d] || '');
       hcodes[id] = arr; matched++;
     });
-    if (matched) { db.months[hym] = { codes: hcodes, wish: {}, pins: {}, holidays: [] }; histSaved++; }
+    /* 기존 기록이 있는 달은 통째 교체하지 않는다 — 시트에서 읽힌 사람 행만 덧씌우고,
+       시트에 안 읽힌 사람의 기록과 희망·고정·잠금·공휴일은 보존(비파괴). */
+    if (matched) {
+      var ex = db.months[hym];
+      if (ex) { ex.codes = ex.codes || {}; Object.keys(hcodes).forEach(function (pid) { ex.codes[pid] = hcodes[pid]; }); }
+      else db.months[hym] = { codes: hcodes, wish: {}, pins: {}, holidays: [] };
+      histSaved++;
+    }
   });
 
   /* AI 습관 메모 — 「맞아요」한 것만 이 계정에 저장(dedup·자동 강제 X, 참고 표시용) */
@@ -2585,6 +2595,7 @@ function applyImport() {
     });
   }
   save();
+  undoStack = [];   // 이전 편집 스냅샷이 「되돌리기」로 방금 불러온 달을 덮어쓰지 않게
   closeImportReview();
   renderRules();
   showTab('home');
