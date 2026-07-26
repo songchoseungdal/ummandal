@@ -2170,7 +2170,7 @@ function aiFileToB64(file) {
   });
 }
 /* ---- 분석 중 화면 ----
-   30초쯤 걸리는데 토스트가 사라지면 되는지 안 되는지 알 수 없다는 제보(2026-07-20).
+   실측 2분 안팎 걸린다(2026-07-26 로그: 126초 성공 — 예전 "30초" 안내는 실제와 어긋났다).
    진행 중임을 계속 보여주고, 그동안 뒤로가기·새로고침·다른 조작으로 취소되지 않게 막는다.
    (중간에 끊기면 서버 횟수만 소모되고 결과는 못 받는다) */
 var aiBusy = false, aiTick = null, aiT0 = 0;
@@ -2178,8 +2178,9 @@ var AI_STEPS = [
   [0, '사진을 준비하는 중…'],
   [4, '근무표를 서버로 보내는 중…'],
   [10, 'AI가 표를 한 칸씩 읽는 중…'],
-  [26, '거의 다 됐어요. 조금만 더…'],
-  [50, '표가 크면 1분 넘게 걸리기도 해요. 그대로 기다려주세요…']
+  [45, '사람 이름과 근무를 맞춰보는 중…'],
+  [90, '거의 다 됐어요. 조금만 더…'],
+  [130, '표가 크면 3분쯤 걸리기도 해요. 그대로 기다려주세요…']
 ];
 function aiStepText(sec) {
   var t = AI_STEPS[0][1];
@@ -2206,14 +2207,14 @@ function aiLoadingShow() {
     '<div class="ai-card"><div class="ai-spin"></div>' +
     '<h2>근무표를 읽는 중이에요</h2>' +
     '<p class="ai-step" id="aiStep">' + aiStepText(0) + '</p>' +
-    '<p class="ai-sec" id="aiSec">0초 지났어요</p>' +
+    '<p class="ai-sec" id="aiSec">0초 지났어요 · 보통 2분쯤 걸려요</p>' +
     '<p class="ai-warn">⚠️ 다 될 때까지 <b>앱을 닫거나 뒤로 가지 마세요</b>.<br>중간에 멈추면 처음부터 다시 해야 해요.</p></div>';
   el.className = 'on';
   aiTick = setInterval(function () {
     var sec = Math.floor((Date.now() - aiT0) / 1000);
     var s = document.getElementById('aiStep'), c = document.getElementById('aiSec');
     if (s) s.textContent = aiStepText(sec);
-    if (c) c.textContent = sec + '초 지났어요';
+    if (c) c.textContent = sec + '초 지났어요 · 보통 2분쯤 걸려요';
   }, 1000);
   /* 뒤로가기 차단 — 한 칸 쌓아두고, 뒤로 누르면 도로 채워 넣는다 */
   history.pushState({ ai: 1 }, '', location.href);
@@ -2227,8 +2228,8 @@ function aiLoadingHide() {
   window.removeEventListener('beforeunload', aiBlockUnload);
   var el = document.getElementById('aiLoading');
   if (el) { el.className = ''; el.innerHTML = ''; }
-  /* 막으려고 쌓아둔 기록 한 칸을 조용히 정리 */
-  if (history.state && history.state.ai) history.back();
+  /* 막으려고 쌓아둔 기록 한 칸을 조용히 정리 — 전역 뒤로가기 핸들러가 사용자 입력으로 오인하지 않게 */
+  if (history.state && history.state.ai) { backSilent++; history.back(); }
 }
 function aiImport(ev) {
   var fl = Array.prototype.slice.call(ev.target.files || []);
@@ -3002,3 +3003,52 @@ document.addEventListener('keydown', function (e) {
 document.addEventListener('fullscreenchange', function () {
   if (!document.fullscreenElement && document.body.classList.contains('grid-open')) closeGridFull();
 });
+
+/* ===== 시스템 뒤로가기(안드로이드) — v7.2.0 =====
+   예전엔 뒤로가기를 누르면 앱이 바로 꺼졌다(히스토리가 1칸뿐이라). 완충용 기록 1칸을 깔아두고,
+   뒤로 누르면 열려 있는 것(메뉴→시트→안내창→가져오기 확인→생성 중→뷰어→부속화면→다른 탭→로그인 하위화면)을
+   위에서부터 한 겹만 닫는다. 홈 바닥에서는 "한 번 더 누르면 종료"(2초) 후에야 실제로 나간다.
+   ※ AI 분석 중 차단(aiBlockBack)은 별도 유지 — 여기서는 aiBusy면 손대지 않는다.
+   ※ 뷰어 전체화면 중의 뒤로가기는 안드로이드가 전체화면 해제로 소비(위 fullscreenchange가 닫음)
+      — 히스토리가 안 빠지므로 이 핸들러와 겹치지 않는다. */
+var backExitAt = 0;    // 마지막 '한 번 더 누르면 종료' 안내 시각
+var backSilent = 0;    // 프로그램이 부른 history.back()을 사용자 입력과 구분하는 카운터
+function backStep() {
+  var el = document.getElementById('kebabMenu');
+  if (el && el.classList.contains('on')) { hideKebab(); return true; }
+  el = document.getElementById('sheetWrap');
+  if (el && el.classList.contains('on')) { closeSheet(); return true; }
+  el = document.getElementById('installModal');
+  if (el && el.classList.contains('on')) { closeInstallModal(); return true; }
+  el = document.getElementById('importReview');
+  if (el && el.classList.contains('on')) {
+    /* AI 결과는 평생 3회 — 실수 뒤로가기로 날리지 않게 단계만 되돌리고 화면은 지킨다 */
+    if (_wiz && _wiz.step > 0) wizBack();
+    else toast('가져온 내용을 확인 중이에요 — 화면의 버튼으로 진행해주세요');
+    return true;
+  }
+  el = document.getElementById('genScreen');
+  if (el && el.classList.contains('on')) { genCancel(); return true; }
+  if (document.body.classList.contains('grid-open')) { closeGridFull(); return true; }
+  if (openScreenId) {
+    if (openScreenId === 'screen-wish') closeWishScreen(); else closeScreen();
+    return true;
+  }
+  if (document.getElementById('tab-home').style.display === 'none') { showTab('home'); return true; }
+  /* 홈 로그인 화면의 하위(가입·비번찾기)면 첫 로그인 화면으로 */
+  var lc = document.getElementById('homeLoginCard');
+  if (lc && lc.style.display !== 'none' && cloudView !== 'main') { cloudGoto('main'); return true; }
+  return false;
+}
+window.addEventListener('popstate', function () {
+  if (backSilent > 0) { backSilent--; return; }
+  if (aiBusy) return;                                   // 분석 중 — aiBlockBack이 도로 채운다
+  if (backStep()) { history.pushState({ um: 1 }, '', location.href); return; }
+  if (Date.now() - backExitAt < 2000) { history.back(); return; }   // 2초 안 두 번 = 진짜 종료
+  backExitAt = Date.now();
+  toast('한 번 더 누르면 앱이 종료돼요');
+  history.pushState({ um: 1 }, '', location.href);
+});
+/* 완충 1칸 — 새로고침 시(state가 남아 있음) 중복으로 쌓지 않는다 */
+if (!(history.state && (history.state.um || history.state.ai)))
+  history.pushState({ um: 1 }, '', location.href);
