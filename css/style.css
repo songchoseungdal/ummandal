@@ -731,6 +731,13 @@ td.cell.fix-flash {
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 body.nonav #toast, body.loginview #toast { bottom: 40px; }
 
+/* ===== 생성 불가 안내 시트 — 문제 목록 + 고칠 곳 바로가기 ===== */
+.fixcard { background: var(--card); border: 1.5px solid var(--line); border-radius: 16px;
+  padding: 2px 16px 0; margin-bottom: 12px; }
+.fixcard .fix-list { margin: 12px 0 4px; padding-left: 20px; }
+.fixcard .fix-list li { font-size: 15.5px; color: var(--sub); margin: 4px 0; line-height: 1.45; }
+.fixcard .preprow { padding: 12px 0 14px; border-bottom: none; }
+
 /* ===== PC(넓은 화면) 보정 ===== */
 @media (min-width: 769px) {
   main { max-width: 860px; }

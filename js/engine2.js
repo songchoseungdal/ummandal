@@ -170,6 +170,8 @@
   /* ---------- 사전 검사 (불능 입력 조기 검출) ----------
    * 선입력·희망오프·이력은 시도 간 불변이라, 여기 걸리는 모순은 재시도로 절대 해소되지 않는다.
    * 따라서 검출 즉시 사유를 반환해 maxAttempts 낭비와 "원인 없는 실패"를 막는다. */
+  /* 하드 이슈의 fix 필드 = 고칠 화면 힌트('rules' 규칙 | 'staff' 병동 구성 | 'pre' 희망·고정).
+     UI(생성 불가 안내 시트)가 문구 파싱 없이 바로가기를 만들 수 있게 하는 구조화 통로. */
   function preflight(staff, config) {
     var cfg = normalizeConfig(staff, config);
     var issues = [];
@@ -180,7 +182,7 @@
       ['D', 'E', 'N'].forEach(function (f) {
         var r = cfg.required[kind][f];
         if (r[0] > r[1])
-          issues.push({ day: null, pid: null, rule: '사전검사', msg: (kind === 'weekday' ? '평일' : '휴일') + ' ' + FAM_DISP[f] + ' — 최소 ' + r[0] + '명이 최대 ' + r[1] + '명보다 큽니다' });
+          issues.push({ day: null, pid: null, rule: '사전검사', fix: 'rules', msg: (kind === 'weekday' ? '평일' : '휴일') + ' ' + FAM_DISP[f] + ' — 최소 ' + r[0] + '명이 최대 ' + r[1] + '명보다 큽니다' });
       });
     });
 
@@ -200,7 +202,7 @@
       var anyN = staff.some(function (p) { return typeAllows(p.type, 'N'); });
       if (!anyN) {
         issues.push({
-          day: null, pid: null, rule: '사전검사',
+          day: null, pid: null, rule: '사전검사', fix: 'staff',
           msg: '나이트를 설 수 있는 사람이 없어요 — 등록된 인원이 모두 2교대·평일 상근이에요. ' +
                '「우리 병동 > 근무 규칙」에서 나이트 인원을 0명으로 바꾸거나, 3교대·나이트 전담 인원을 넣어주세요.'
         });
@@ -226,14 +228,14 @@
       var minSum = need.D[0] + need.E[0] + need.N[0];
       var preSum = famPre.D + famPre.E + famPre.N;
       if (preSum + availAll < minSum)
-        issues.push({ day: d, pid: null, rule: '사전검사', msg: d + '일 — 휴무(선입력·희망오프) 제외 가용 ' + (preSum + availAll) + '명 < 최소 필요 ' + minSum + '명' });
+        issues.push({ day: d, pid: null, rule: '사전검사', fix: 'rules', msg: d + '일 — 휴무(선입력·희망오프) 제외 가용 ' + (preSum + availAll) + '명 < 최소 필요 ' + minSum + '명' });
       if (famPre.N + availN < need.N[0])
-        issues.push({ day: d, pid: null, rule: '사전검사', msg: d + '일 — 나이트 가능 인원 ' + (famPre.N + availN) + '명 < 최소 ' + need.N[0] + '명' });
+        issues.push({ day: d, pid: null, rule: '사전검사', fix: 'staff', msg: d + '일 — 나이트 가능 인원 ' + (famPre.N + availN) + '명 < 최소 ' + need.N[0] + '명' });
       if (famPre.D + famPre.E + availDE < need.D[0] + need.E[0])
-        issues.push({ day: d, pid: null, rule: '사전검사', msg: d + '일 — 주간(D·E) 가능 인원 ' + (famPre.D + famPre.E + availDE) + '명 < 최소 ' + (need.D[0] + need.E[0]) + '명' });
+        issues.push({ day: d, pid: null, rule: '사전검사', fix: 'rules', msg: d + '일 — 주간(D·E) 가능 인원 ' + (famPre.D + famPre.E + availDE) + '명 < 최소 ' + (need.D[0] + need.E[0]) + '명' });
       ['D', 'E', 'N'].forEach(function (f) {
         if (famPre[f] > need[f][1])
-          issues.push({ day: d, pid: null, rule: '사전검사', msg: d + '일 — ' + FAM_DISP[f] + ' 선입력 ' + famPre[f] + '명 > 최대 ' + need[f][1] + '명' });
+          issues.push({ day: d, pid: null, rule: '사전검사', fix: 'pre', msg: d + '일 — ' + FAM_DISP[f] + ' 선입력 ' + famPre[f] + '명 > 최대 ' + need[f][1] + '명' });
       });
     }
 
@@ -260,28 +262,28 @@
         var c = row[d];
         if (c === undefined) { prev = undefined; runPre = 0; nrunPre = 0; continue; }
         if (ALL_CODES.indexOf(c) < 0) {
-          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 알 수 없는 코드 ' + c });
+          issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 알 수 없는 코드 ' + c });
           prev = c; continue;
         }
         if (!typeAllows(p.type, c))
-          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 이 사람 유형은 ' + codeDisp(c) + ' 선입력 불가' });
+          issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 이 사람 유형은 ' + codeDisp(c) + ' 선입력 불가' });
         if (p.type === 'day' && isWork(c) && cfg.isRestDay(d))
-          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 상근은 휴일 근무 선입력 불가' });
+          issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 상근은 휴일 근무 선입력 불가' });
         if (cfg.restrictNToNight && fam(c) === 'N' && !cfg.nightStaffIds[p.id])
-          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 나이트는 전담 인원만 설 수 있어요 (선입력 충돌)' });
+          issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 나이트는 전담 인원만 설 수 있어요 (선입력 충돌)' });
         if (wish[d] && !WISH_OK[c])
-          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 희망 오프일과 ' + codeDisp(c) + ' 선입력 충돌' });
+          issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 희망 오프일과 ' + codeDisp(c) + ' 선입력 충돌' });
         if (d <= spill && isWork(c))
-          issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 지난달 말 나이트 후 휴식 기간에 근무 선입력' });
-        if (isWork(c)) { runPre++; if (runPre > cfg.maxConsecWork) issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 선입력·이력만으로 연속 근무 ' + runPre + '일 초과' }); }
+          issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 지난달 말 나이트 후 휴식 기간에 근무 선입력' });
+        if (isWork(c)) { runPre++; if (runPre > cfg.maxConsecWork) issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 선입력·이력만으로 연속 근무 ' + runPre + '일 초과' }); }
         else runPre = 0;
-        if (fam(c) === 'N') { nrunPre++; if (nrunPre > cfg.maxConsecN) issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 선입력·이력만으로 나이트 ' + nrunPre + '개 연속 초과' }); }
+        if (fam(c) === 'N') { nrunPre++; if (nrunPre > cfg.maxConsecN) issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 선입력·이력만으로 나이트 ' + nrunPre + '개 연속 초과' }); }
         else nrunPre = 0;
         if (prev !== undefined) {
           if (fam(prev) === 'N' && isWork(c) && fam(c) !== 'N')
-            issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 나이트 다음날 ' + codeDisp(c) + ' 선입력 불가' });
+            issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 나이트 다음날 ' + codeDisp(c) + ' 선입력 불가' });
           if (cfg.forbidBackward && fam(prev) === 'E' && fam(c) === 'D')
-            issues.push({ day: d, pid: p.id, rule: '사전검사', msg: p.name + ' ' + d + '일 — 이브닝 다음날 데이 선입력 불가' });
+            issues.push({ day: d, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + d + '일 — 이브닝 다음날 데이 선입력 불가' });
         }
         // 나이트 휴식창: 블록 종료가 선입력으로 확정된 경우(다음 셀이 비N으로 지정),
         // 이후 k일 창 안의 모든 근무 선입력(재진입 N 포함)은 모순.
@@ -292,7 +294,7 @@
             for (var j = 1; j <= k && d + j <= cfg.days; j++) {
               var w2 = row[d + j];
               if (w2 !== undefined && isWork(w2)) {
-                issues.push({ day: d + j, pid: p.id, rule: '사전검사', msg: p.name + ' ' + (d + j) + '일 — 나이트 후 휴식 기간에 근무 선입력' });
+                issues.push({ day: d + j, pid: p.id, rule: '사전검사', fix: 'pre', msg: p.name + ' ' + (d + j) + '일 — 나이트 후 휴식 기간에 근무 선입력' });
                 break;
               }
             }

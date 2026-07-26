@@ -930,6 +930,61 @@ function undo() {
 }
 
 /* ---- 자동 생성 (직군별 순차 배치) ---- */
+/* ---- 생성 불가 안내 시트 — 무엇이 문제인지 + 어디서 고치는지 + 바로가기 (2026-07-26) ----
+   preflight 하드 이슈의 fix 필드('rules'|'staff'|'pre')로 목적지를 묶는다(문구 파싱 없음).
+   사람별 충돌은 그 사람의 희망·고정 화면으로 직행한다. */
+var _genFixTarget = null;   // 「희망·고정에서 고치기」가 열 사람·모드 {pid, mode}
+var GEN_FIX_DEST = {
+  rules: ['근무 규칙에서 고치기', '하루 최소 인원·근무 제한을 조정해요'],
+  staff: ['병동 구성에서 고치기', '사람 유형(3교대·나이트 전담)을 확인해요'],
+  pre: ['희망 휴무·고정 근무에서 고치기', '겹친 날짜를 지우거나 옮겨요']
+};
+function genFixGo(dest) {
+  if (dest === 'rules') { openRulesScreen(); return; }
+  if (dest === 'staff' || !staffList().length) { showTab('ward'); return; }
+  var i = 0, mode = 'pin';
+  if (_genFixTarget) {
+    staffList().some(function (p, ix) { if (p.id === _genFixTarget.pid) { i = ix; return true; } return false; });
+    mode = _genFixTarget.mode;
+  }
+  wsIdx = i; wsMode = mode;
+  renderWishScreen();
+  openScreen('screen-wish');
+}
+function genFixRow(dest) {
+  var t = GEN_FIX_DEST[dest];
+  return '<button class="preprow" onclick="genFixGo(\'' + dest + '\')">' +
+    '<span class="pr-ico warn">' + ic('bang') + '</span>' +
+    '<span class="pr-tx"><b>' + t[0] + '</b><span class="pr-sub">' + t[1] + '</span></span>' +
+    '<span class="pr-go">이동' + ic('chevR') + '</span></button>';
+}
+function showGenIssuesSheet(hardIssues) {
+  var groups = { rules: [], staff: [], pre: [] };
+  hardIssues.forEach(function (v) { (groups[v.fix] || groups.rules).push(v); });
+  /* 사람이 특정된 첫 충돌로 바로가기 대상 지정 — 희망 오프 충돌이면 희망 탭, 아니면 고정 탭 */
+  var pre1 = groups.pre.filter(function (v) { return v.pid != null; })[0];
+  _genFixTarget = pre1 ? { pid: pre1.pid, mode: /희망 오프/.test(pre1.msg) ? 'wish' : 'pin' } : null;
+  var html = '<div class="sh-head"><h3>아직 만들 수 없어요</h3></div>' +
+    '<p class="hint" style="margin:0 0 12px">아래 문제를 고치면 만들 수 있어요. 버튼을 누르면 고치는 화면으로 바로 가요.</p>';
+  ['rules', 'staff', 'pre'].forEach(function (dest) {
+    var list = groups[dest];
+    if (!list.length) return;
+    html += '<div class="fixcard"><ul class="fix-list">' +
+      list.slice(0, 4).map(function (v) { return '<li>' + esc(v.msg) + '</li>'; }).join('') +
+      (list.length > 4 ? '<li>…외 ' + (list.length - 4) + '건</li>' : '') +
+      '</ul>' + genFixRow(dest) + '</div>';
+  });
+  openSheet(html);
+}
+function showGenExhaustSheet(msg, softMsgs) {
+  _genFixTarget = null;
+  openSheet('<div class="sh-head"><h3>근무표를 만들지 못했어요</h3></div>' +
+    '<p class="hint" style="margin:0 0 12px">' + esc(msg) +
+    (softMsgs && softMsgs.length ? '<br>⚠️ ' + softMsgs.map(esc).join('<br>⚠️ ') : '') + '</p>' +
+    '<div class="fixcard"><ul class="fix-list"><li>하루 최소 인원을 줄이면 조합이 쉬워져요</li></ul>' + genFixRow('rules') + '</div>' +
+    '<div class="fixcard"><ul class="fix-list"><li>같은 날짜에 몰린 희망 휴무·고정 근무를 나눠보세요</li></ul>' + genFixRow('pre') + '</div>');
+}
+
 function generate() {
   hidePicker();
   var staff = staffList();
@@ -947,9 +1002,7 @@ function generate() {
   });
   var hardIssues = preIssues.filter(function (v) { return !v.soft; });
   if (hardIssues.length) {
-    alert('만들기 전에 먼저 고쳐야 할 것이 있어요:\n\n' +
-      hardIssues.slice(0, 6).map(function (v) { return '· ' + v.msg; }).join('\n') +
-      (hardIssues.length > 6 ? '\n…외 ' + (hardIssues.length - 6) + '건' : ''));
+    showGenIssuesSheet(hardIssues);
     return;
   }
   /* 소프트 경고(월 여력 부족) — 생성을 막지 않고 참고로만 안내.
@@ -973,7 +1026,7 @@ function generate() {
   function failAll(msg) {
     genHide();
     undoStack.pop();
-    alert((softMsgs.length ? softMsgs.join('\n') + '\n\n' : '') + msg);
+    showGenExhaustSheet(msg, softMsgs);
   }
   function finishAll() {
     genHide();
@@ -1018,8 +1071,7 @@ function generate() {
       if (!results[job.g]) {
         if (best) { results[job.g] = best.r; }
         else {
-          failAll('이 조건으로는 ' + groupNames[job.g] + ' 근무표를 만들 수 없었어요.\n' +
-            '규칙의 최소 인원을 줄이거나, 같은 날짜에 몰린 희망 오프·선입력을 나눠보세요.');
+          failAll('이 조건으로는 ' + groupNames[job.g] + ' 근무표를 만들 수 없었어요.');
           return;
         }
       }
