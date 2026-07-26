@@ -2521,15 +2521,21 @@ function applyImport() {
   wizReadStep();                 // 지금 단계(습관) 선택을 마지막으로 반영
   var ym = _wiz.ym;
 
+  /* 이름이 같은 기존 인원은 id를 재사용한다(2026-07-26 승인) — 재가져오기 때 과거 달 기록이
+     고아가 되지 않고 이력(형평성 승계)이 그대로 이어진다. 같은 이름이 여럿이면 1:1로만 소진.
+     한계: 동명이인 신규 입사자는 옛 사람 기록을 이어받는다(이전 달 이름 매칭과 같은 방식). */
+  var oldIdsByName = {};
+  staffList().forEach(function (p) { (oldIdsByName[p.name] = oldIdsByName[p.name] || []).push(p.id); });
   var staff = [], codesById = {};
   _wiz.staff.forEach(function (s, i) {
     if (s.exc) return;
-    var id = 'imp' + Date.now() + '_' + i;
+    var reuse = oldIdsByName[s.name] && oldIdsByName[s.name].shift();
+    var id = reuse || ('imp' + Date.now() + '_' + i);
     staff.push({ id: id, name: s.name, group: s.group, type: s.type, pref: s.pref });
     codesById[id] = s.codes.slice();
   });
   if (!staff.length) { alert('등록할 사람이 없어요. 「빼기」를 하나 이상 풀어주세요.'); return; }
-  if (staffList().length && !confirm('기존 인원 ' + staffList().length + '명을 지우고 새로 등록합니다. 계속할까요?')) return;
+  if (staffList().length && !confirm('인원을 이 근무표 기준으로 다시 등록합니다.\n이름이 같은 사람은 기존 기록이 그대로 이어져요. 계속할까요?')) return;
 
   /* 규칙: 마법사에서 확정한 값(_wiz.rules)을 그대로 쓴다. 직군 편집은 wizDeriveRules로 이미 반영됨. */
   var r = rules2();
