@@ -143,6 +143,15 @@
       <span class="cntbadge" id="wardCount"></span>
       <button class="addbtn" onclick="openStaffSheet(-1)"><span data-ic="plus"></span>사람 추가</button>
     </div>
+    <button class="listrow" onclick="openRulesScreen()">
+      <span class="lr-ico" data-ic="doc"></span>
+      <span class="lr-tx"><b>근무 규칙</b><span class="lr-sub">평일·휴일 필요 인원과 연속 근무 제한</span></span>
+      <span class="lr-go" data-ic="chevR"></span>
+    </button>
+    <div class="card" id="patternCard" style="display:none">
+      <h2>AI가 발견한 근무 습관</h2>
+      <div id="patternArea"></div>
+    </div>
     <button class="listrow" onclick="openImportSheet()">
       <span class="lr-ico" data-ic="import"></span>
       <span class="lr-tx"><b>기존 근무표 불러오기</b><span class="lr-sub">사진·PDF·엑셀에서 자동으로 읽어요</span></span>
@@ -151,15 +160,6 @@
     <input type="file" id="importFileXlsx" accept=".xlsx,.xls,.csv" style="display:none" onchange="importXlsx(event)">
     <div id="staffList"></div>
     <p class="hint" id="sampleHint" style="margin:4px 0 14px">처음이라면 <a class="link" onclick="trySample()">예시 인원 12명 넣기</a>로 연습해보세요.</p>
-    <button class="listrow" onclick="openRulesScreen()">
-      <span class="lr-ico" data-ic="doc"></span>
-      <span class="lr-tx"><b>근무 규칙</b><span class="lr-sub">평일·휴일 필요 인원과 연속 근무 제한</span></span>
-      <span class="lr-go" data-ic="chevR"></span>
-    </button>
-    <div class="card" id="patternCard" style="display:none">
-      <h2>우리 병동 습관 메모</h2>
-      <div id="patternArea"></div>
-    </div>
   </div>
 
   <!-- ===== 보관함(13) ===== -->
