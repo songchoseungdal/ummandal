@@ -46,7 +46,8 @@ var ICONS = {
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.6-5.9M20 3v4h-4"/>',
   link: '<path d="M9.5 14.5l5-5M8 11l-2.3 2.3a3.5 3.5 0 0 0 5 5L13 16M11 8l2.3-2.3a3.5 3.5 0 0 1 5 5L16 13"/>',
-  kebab: '<path d="M12 5.5h.01M12 12h.01M12 18.5h.01"/>'
+  kebab: '<path d="M12 5.5h.01M12 12h.01M12 18.5h.01"/>',
+  photo: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.8" cy="9.8" r="1.7"/><path d="M4 17.5l4.8-4.8 3.7 3.7 2.7-2.7 4.8 4.8"/>'
 };
 function ic(name, extra) {
   return '<svg class="svgi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
@@ -2134,10 +2135,23 @@ function aiImportReady() {
   if (aiBusy) return false;
   return true;
 }
-/* 사진 — 카메라·앨범 선택창 */
+/* 사진 — 찍기/앨범 선택 시트. 기종·브라우저마다 시스템 사진 선택창이 달라
+   (카메라가 없는 선택창, 폴더 탭이 없는 선택창 등) 카메라 직행 경로를 앱이 직접 제공한다. */
 function aiImportStart() {
   if (!aiImportReady()) return;
-  document.getElementById('aiImportFile').click();
+  openSheet(
+    '<div class="sh-head"><h3>사진을 어떻게 올릴까요?</h3>' +
+    '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
+    '<div class="onboard-opts">' +
+    '<button class="onboard-card" onclick="closeSheet();document.getElementById(\'aiImportCam\').click()">' +
+    '<span class="ob-ico">' + ic('camera') + '</span>' +
+    '<span class="ob-txt"><b>지금 찍어서 올리기</b><span class="ob-sub">카메라가 바로 열려요 (한 장)</span></span></button>' +
+    '<button class="onboard-card" onclick="closeSheet();document.getElementById(\'aiImportFile\').click()">' +
+    '<span class="ob-ico">' + ic('photo') + '</span>' +
+    '<span class="ob-txt"><b>앨범에서 고르기</b><span class="ob-sub">찍어둔 사진에서 골라요 (최대 3장)</span></span></button>' +
+    '</div>' +
+    '<p class="hint">앨범 화면 위쪽에 ‘컬렉션’이나 ‘앨범’ 탭이 있으면 폴더별로 찾을 수 있어요</p>'
+  );
 }
 /* PDF — 파일 선택창 (드물게 쓰는 경로라 따로 둔다) */
 function aiImportPdfStart() {
