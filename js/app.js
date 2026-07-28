@@ -1494,10 +1494,9 @@ function renderWishScreen() {
     'value="' + (p.annual != null && p.annual !== '' ? p.annual : '') + '" onchange="wsAnnualChange()" aria-label="남은 연차">' +
     '<span class="wsa-unit">개</span></div>' +
     '<div class="wsdates">' + rows + '</div>' +
-    /* 초안이 있는 상태에서는 반영 시점이 갈린다 — 연차·반차(setCell)는 표에 즉시,
-       희망 휴무(wish)는 엔진이 다시 돌 때만. 이걸 안 알려주면 "넣었는데 안 바뀐다"고 헤맨다 */
+    /* 초안이 있으면 희망 휴무도 즉시 반영된다(wsAddDay) — 인원이 비는 건 검토 화면이 알려준다 */
     '<div class="wp-legend">' + (hasDraft()
-      ? '연차·반차는 근무표에 바로 반영돼요.<br>희망 휴무는 「다시 만들기」를 눌러야 반영돼요.'
+      ? '입력한 날은 근무표에 바로 반영돼요.<br>그날 인원이 모자라면 근무표 검토에서 알려줘요.'
       : '입력한 날은 자동 배정에서 쉬는 날로 우선 반영해요.<br>반차도 이번 버전에서는 하루 쉼으로 계산해요.') + '</div>' +
     '<p class="wp-count">' + (wsIdx + 1) + ' / ' + list.length + '명 · ' + groupNames[wsGroup] + '</p>' +
     nav;
@@ -1512,13 +1511,21 @@ function wsAnnualChange() {
   p.annual = readAnnualInput('wsAnnual');
   save();
 }
-/* 날짜 한 개를 그 줄에 넣기/빼기. 희망 휴무는 wish 배열, 나머지는 setCell(pins+codes) */
+/* 날짜 한 개를 그 줄에 넣기/빼기. 희망 휴무는 wish 배열, 나머지는 setCell(pins+codes)
+   초안이 있으면 희망 휴무도 그 칸을 바로 오프로 바꾼다(2026-07-29 초승달 지시 —
+   "다시 만들기를 눌러야 반영"은 헷갈린다. 인원이 비면 검토 화면이 알려주고 사람이 고친다).
+   고정 없이 코드만 바꾸므로 다시 만들기에서는 여전히 '희망'으로만 작용한다.
+   단, 손으로 📌 고정한 칸은 덮지 않는다. */
 function wsAddDay(pid, key, d) {
   if (key !== 'W') { setCell(pid, d, key); return; }
   var m = month(curYM);
   pushUndo();
   m.wish[pid] = m.wish[pid] || [];
   if (m.wish[pid].indexOf(d) < 0) m.wish[pid].push(d);
+  if (hasDraft() && !(m.pins[pid] || {})[d]) {
+    m.codes[pid] = m.codes[pid] || [];
+    m.codes[pid][d - 1] = 'O';
+  }
   save(); renderHome();
 }
 function wsRemoveDay(pid, key, d) {
@@ -1528,6 +1535,9 @@ function wsRemoveDay(pid, key, d) {
   var w = m.wish[pid] || [];
   var i = w.indexOf(d);
   if (i >= 0) w.splice(i, 1);
+  /* 즉시 반영으로 오프가 된 칸은 빈칸으로 되돌린다(연차 삭제와 같은 동작) */
+  if (hasDraft() && !(m.pins[pid] || {})[d] && (m.codes[pid] || [])[d - 1] === 'O')
+    m.codes[pid][d - 1] = '';
   save(); renderHome();
 }
 /* 숫자 칸 하나가 바뀌었을 때. 값이 다른 줄에 이미 있으면 그 줄에서 빼고 이리로 옮긴다.
