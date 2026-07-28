@@ -379,7 +379,7 @@ function renderPrep() {
   if (wishCount) wpTx.push('희망 휴무 ' + wishCount + '건');
   if (vCount) wpTx.push('연차 ' + vCount + '건');
   if (halfCount) wpTx.push('반차 ' + halfCount + '건');
-  if (pinCount) wpTx.push('고정 근무 ' + pinCount + '건');
+  if (pinCount) wpTx.push('고정한 칸 ' + pinCount + '개');   // 근무표에서 직접 눌러 고정한 근무
   var wpDone = wishCount + vCount + halfCount + pinCount > 0;
   function row(iconOk, title, sub, go, fn) {
     return '<button class="preprow" onclick="' + fn + '">' +
@@ -390,7 +390,7 @@ function renderPrep() {
   document.getElementById('prepStatus').innerHTML =
     row(true, '병동 구성', staff.length + '명 준비됨', '확인', "showTab('ward')") +
     row(true, '근무 규칙', grpTx + ' 설정됨', '확인', 'openRulesScreen()') +
-    row(wpDone, '희망 휴무·고정 근무', wpDone ? wpTx.join(' · ') + ' 입력됨' : '아직 입력한 날이 없어요', '입력', 'openWishScreen()');
+    row(wpDone, '희망 휴무', wpDone ? wpTx.join(' · ') + ' 입력됨' : '아직 입력한 날이 없어요', '입력', 'openWishScreen()');
   /* 형평성 안내 — 지난 기록이 있어야 이어받는다 */
   var hasHist = [1, 2].some(function (back) {
     var rec = (db.months || {})[prevYM(curYM, back)];
@@ -826,7 +826,7 @@ function hidePicker() { closeSheet(); }
 function tapCell(ev, pid, d) {
   vzFocus = null;                      // 편집을 시작하면 '보기' 자동 줌의 재중앙은 해제
   ev.stopPropagation();
-  openCodeSheet(pid, d, null);
+  openCodeSheet(pid, d);
 }
 var CODE_SHEET_ROWS = [
   ['D', 'E', 'N', 'O'],
@@ -837,26 +837,21 @@ var codeBig = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', 
   HA: '전반', HP: '후반', W: '★', X: '✕' };
 var codeSheetLbl = { D: '데이', MD: '미들', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육',
   HA: '반차(전반)', HP: '반차(후반)', W: '희망 휴무', X: '지움' };
-/* opts.pinOnly = 희망 화면의 「고정 근무」 입력 — 고정이 전제라 토글·희망을 숨긴다 */
-function openCodeSheet(pid, d, opts) {
-  opts = opts || {};
+function openCodeSheet(pid, d) {
   var p = staffList().filter(function (x) { return x.id === pid; })[0];
   var cur = cellCode(pid, d);
   var sel = cur || (isWish(pid, d) ? 'W' : '');
-  sheetCtx = { kind: 'code', pid: pid, d: d, sel: sel || null, pinOnly: !!opts.pinOnly, after: opts.after || null };
+  sheetCtx = { kind: 'code', pid: pid, d: d, sel: sel || null };
   var codes = [];
   CODE_SHEET_ROWS.forEach(function (r) {
-    r.forEach(function (c) {
-      if (opts.pinOnly && c === 'W') return;   // 고정 입력에선 ★(희망)은 달력에서 직접 찍는다
-      codes.push(c);
-    });
+    r.forEach(function (c) { codes.push(c); });
   });
   var grid = codes.map(function (c) {
     return '<button class="codebtn c' + c + (sheetCtx.sel === c ? ' on' : '') + '" id="cbtn_' + c + '" ' +
       'onclick="codeSheetPick(\'' + c + '\')"><span class="cb-big">' + codeBig[c] + '</span>' +
       '<span class="cb-lbl">' + codeSheetLbl[c] + '</span></button>';
   }).join('');
-  var pinRow = opts.pinOnly ? '' :
+  var pinRow =
     '<div class="pinrow"><span class="pin-tx"><b>이 근무를 고정하기</b>' +
     '<span class="pin-sub">다시 만들어도 이 칸은 바뀌지 않아요.</span></span>' +
     '<label class="tgl"><input type="checkbox" id="codePin" checked><span class="knob"></span></label></div>';
@@ -880,11 +875,10 @@ function codeSheetApply() {
   if (!sheetCtx || c == null) { closeSheet(); return; }
   var ctx = sheetCtx;
   var pinEl = document.getElementById('codePin');
-  var noPin = !ctx.pinOnly && pinEl && !pinEl.checked;
+  var noPin = pinEl && !pinEl.checked;
   closeSheet();
   if (c === 'X') setCell(ctx.pid, ctx.d, '');
   else setCell(ctx.pid, ctx.d, c, noPin);
-  if (ctx.after) ctx.after();
 }
 function setCell(pid, d, code, noPin) {
   var m = month(curYM);
@@ -945,12 +939,12 @@ function undo() {
 /* ---- 자동 생성 (직군별 순차 배치) ---- */
 /* ---- 생성 불가 안내 시트 — 무엇이 문제인지 + 어디서 고치는지 + 바로가기 (2026-07-26) ----
    preflight 하드 이슈의 fix 필드('rules'|'staff'|'pre')로 목적지를 묶는다(문구 파싱 없음).
-   사람별 충돌은 그 사람의 희망·고정 화면으로 직행한다. */
-var _genFixTarget = null;   // 「희망·고정에서 고치기」가 열 사람 {pid}
+   사람별 충돌은 그 사람의 희망 휴무 화면으로 직행한다. */
+var _genFixTarget = null;   // 「희망 휴무에서 고치기」가 열 사람 {pid}
 var GEN_FIX_DEST = {
   rules: ['근무 규칙에서 고치기', '하루 최소 인원·근무 제한을 조정해요'],
   staff: ['병동 구성에서 고치기', '사람 유형(3교대·나이트 전담)을 확인해요'],
-  pre: ['희망 휴무·고정 근무에서 고치기', '겹친 날짜를 지우거나 옮겨요']
+  pre: ['희망 휴무에서 고치기', '겹친 날짜를 지우거나 옮겨요']
 };
 function genFixGo(dest) {
   if (dest === 'rules') { openRulesScreen(); return; }
@@ -1001,7 +995,7 @@ function showGenExhaustSheet(msg, softMsgs) {
     '<p class="hint" style="margin:0 0 12px">' + esc(msg) +
     (softMsgs && softMsgs.length ? '<br>⚠️ ' + softMsgs.map(esc).join('<br>⚠️ ') : '') + '</p>' +
     '<div class="fixcard"><ul class="fix-list"><li>하루 최소 인원을 줄이면 조합이 쉬워져요</li></ul>' + genFixRow('rules') + '</div>' +
-    '<div class="fixcard"><ul class="fix-list"><li>같은 날짜에 몰린 희망 휴무·고정 근무를 나눠보세요</li></ul>' + genFixRow('pre') + '</div>');
+    '<div class="fixcard"><ul class="fix-list"><li>같은 날짜에 몰린 희망 휴무·연차를 나눠보세요</li></ul>' + genFixRow('pre') + '</div>');
 }
 
 function generate() {
@@ -1371,14 +1365,15 @@ function ruleBackward(on) {
   toast(on ? '이브닝 다음날 데이를 금지해요' : '이브닝 다음날 데이를 허용해요');
 }
 
-/* ---- 희망 휴무·고정 근무 화면(15) — 날짜를 숫자로 적어 넣는 방식 (2026-07-28 개편) ----
+/* ---- 희망 휴무 화면(15) — 날짜를 숫자로 적어 넣는 방식 (2026-07-28 개편) ----
    달력을 눌러 찍던 방식은 한 사람당 화면을 한참 훑어야 했다. 희망 휴무·연차·반차를
-   각각 한 줄의 숫자 칸으로 받고, 고정 근무만 따로 목록으로 관리한다.
+   각각 한 줄의 숫자 칸으로 받는다. 고정 근무 섹션은 2026-07-29 제거(초승달 지시) —
+   쓰임이 드문데 화면만 길어져 스크롤 부담. 근무 고정은 근무표 칸을 직접 눌러서 한다.
+   한 사람 입력이 스크롤 없이 한 화면에 들어오는 것이 목표.
    순회 단위는 「직군」 — 간호사 목록을 다 돌고 조무사로 넘어간다. */
 var wsIdx = 0;                                  // 현재 직군 목록 안에서의 위치
 var wsGroup = 'RN';                             // 보고 있는 직군
 var wsExtra = { W: 0, V: 0, HA: 0, HP: 0 };     // 줄별로 [+]로 추가한 빈 칸 수
-var wsFixOn = false;                            // 「고정 근무 추가」 인라인 입력 열림 여부
 /* 날짜 입력 4줄의 정의. key는 저장 코드('W'=희망 휴무는 wish 배열, 나머지는 pins 코드) */
 var WISH_ROWS = [
   { key: 'W', label: '희망 휴무', cls: 'wr-wish' },
@@ -1405,7 +1400,7 @@ function wsPerson() {
   if (wsIdx < 0) wsIdx = 0;
   return list[wsIdx];
 }
-function wsResetExtra() { wsExtra = { W: 0, V: 0, HA: 0, HP: 0 }; wsFixOn = false; }
+function wsResetExtra() { wsExtra = { W: 0, V: 0, HA: 0, HP: 0 }; }
 /* 한 줄에 들어갈 날짜들(오름차순). 희망 휴무는 wish 배열, 나머지는 pins에서 그 코드만 골라낸다 */
 function wsRowDays(pid, key) {
   var m = month(curYM);
@@ -1417,22 +1412,10 @@ function wsRowDays(pid, key) {
   }
   return out.sort(function (a, b) { return a - b; });
 }
-/* 고정 근무 = pins 중 연차·반차가 아닌 것(= 실제 근무 코드) */
-function wsPinWork(pid) {
-  var pins = month(curYM).pins[pid] || {};
-  var out = [];
-  Object.keys(pins).forEach(function (ds) {
-    var c = pins[ds];
-    if (!c || c === 'V' || c === 'HA' || c === 'HP') return;
-    out.push({ d: +ds, code: c });
-  });
-  return out.sort(function (a, b) { return a.d - b.d; });
-}
 function wsSummary(pid) {
   return '희망 ' + wsRowDays(pid, 'W').length +
     ' · 연차 ' + wsRowDays(pid, 'V').length +
-    ' · 반차 ' + (wsRowDays(pid, 'HA').length + wsRowDays(pid, 'HP').length) +
-    ' · 고정 ' + wsPinWork(pid).length;
+    ' · 반차 ' + (wsRowDays(pid, 'HA').length + wsRowDays(pid, 'HP').length);
 }
 function openWishScreen() {
   if (!staffList().length) { showTab('ward'); return; }
@@ -1492,33 +1475,15 @@ function renderWishScreen() {
       '</span></div>';
   }).join('');
 
-  /* 고정 근무 — 연차·반차를 뺀 실제 근무만 */
-  var pinWork = wsPinWork(p.id);
-  var fix = '<div class="wsfix"><div class="wsfix-head">' + ic('pin') + ' 고정 근무</div>' +
-    (pinWork.length
-      ? pinWork.map(function (x) {
-          return '<div class="wsfix-row"><span class="wf-d">' + x.d + '일</span>' +
-            '<span class="wf-c">' + codeDisp[x.code] + '(' + (codeLabels[x.code] || x.code) + ')</span>' +
-            '<button class="wf-del" onclick="wsFixDel(' + x.d + ')" aria-label="' + x.d + '일 고정 근무 지우기">' + ic('close') + '</button></div>';
-        }).join('')
-      : '<p class="wsfix-empty">아직 고정한 근무가 없어요.</p>') +
-    (wsFixOn
-      ? '<div class="wsfix-new"><input class="wsd-in" type="number" inputmode="numeric" min="1" max="' + days + '" ' +
-        'id="wsFixDay" placeholder="날짜" aria-label="고정 근무 날짜">' +
-        '<button class="btn big wsfix-pick" onclick="wsFixPick()">근무 고르기</button>' +
-        '<button class="wsfix-cancel" onclick="wsFixOn=false;renderWishScreen()">취소</button></div>'
-      : '<button class="wsfix-add" onclick="wsFixOpen()">' + ic('plus') + ' 고정 근무 추가</button>') +
-    '</div>';
-
   var isFirst = wsIdx <= 0, isLast = wsIdx >= list.length - 1;
   var nav = '<div class="wsnav">' +
     (isFirst ? '' : '<button class="btn gray" onclick="wsGo(-1)">' + ic('chevL') + ' 이전 사람</button>') +
     '<button class="btn big" onclick="' + (isLast ? 'closeWishScreen()' : 'wsGo(1)') + '">' +
     (isLast ? '입력 끝내기' : '다음 사람 ' + ic('chevR')) + '</button></div>';
 
+  /* 월은 상단 제목에 합쳐 한 줄을 아낀다 — 한 사람 입력이 한 화면에 들어오는 게 목표 */
   document.getElementById('wishScreenBody').innerHTML =
-    ssTop('희망 휴무·고정 근무', '완료', 'closeWishScreen()') +
-    '<div class="wz-month" style="margin:0">' + pt.y + '년 ' + pt.m + '월</div>' +
+    ssTop(pt.m + '월 희망 휴무', '완료', 'closeWishScreen()') +
     tabs +
     '<button class="wp-person" onclick="openWishPersonSheet()">' +
     '<span class="wpp-av">' + esc(p.name.charAt(0)) + '</span>' +
@@ -1529,14 +1494,13 @@ function renderWishScreen() {
     'value="' + (p.annual != null && p.annual !== '' ? p.annual : '') + '" onchange="wsAnnualChange()" aria-label="남은 연차">' +
     '<span class="wsa-unit">개</span></div>' +
     '<div class="wsdates">' + rows + '</div>' +
-    fix +
-    /* 초안이 있는 상태에서는 반영 시점이 갈린다 — 연차·반차·고정(setCell)은 표에 즉시,
+    /* 초안이 있는 상태에서는 반영 시점이 갈린다 — 연차·반차(setCell)는 표에 즉시,
        희망 휴무(wish)는 엔진이 다시 돌 때만. 이걸 안 알려주면 "넣었는데 안 바뀐다"고 헤맨다 */
     '<div class="wp-legend">' + (hasDraft()
-      ? '연차·반차·고정 근무는 근무표에 바로 반영돼요.<br>희망 휴무는 「다시 만들기」를 눌러야 반영돼요.'
+      ? '연차·반차는 근무표에 바로 반영돼요.<br>희망 휴무는 「다시 만들기」를 눌러야 반영돼요.'
       : '입력한 날은 자동 배정에서 쉬는 날로 우선 반영해요.<br>반차도 이번 버전에서는 하루 쉼으로 계산해요.') + '</div>' +
-    nav +
-    '<p class="wp-count">' + (wsIdx + 1) + ' / ' + list.length + '명 · ' + groupNames[wsGroup] + '</p>';
+    '<p class="wp-count">' + (wsIdx + 1) + ' / ' + list.length + '명 · ' + groupNames[wsGroup] + '</p>' +
+    nav;
 }
 function wsAddSlot(key) {
   wsExtra[key] = (wsExtra[key] || 0) + 1;
@@ -1605,23 +1569,6 @@ function wsDayChange(key, idx, val) {
   if (old == null && wsExtra[key] > 0) wsExtra[key]--;   // [+]로 만든 빈 칸을 채웠다
   if (from) toast(d + '일을 ' + wsRowLabel(key) + '(으)로 바꿨어요');
   renderWishScreen();
-}
-function wsFixOpen() { wsFixOn = true; renderWishScreen(); }
-function wsFixDel(d) {
-  var p = wsPerson();
-  if (!p) return;
-  setCell(p.id, d, '');
-  renderWishScreen();
-}
-function wsFixPick() {
-  var p = wsPerson();
-  var el = document.getElementById('wsFixDay');
-  if (!p || !el) return;
-  var days = daysInYM(curYM);
-  var d = parseInt(String(el.value || '').trim(), 10);
-  if (isNaN(d) || d < 1 || d > days) { toast('1~' + days + '일 사이 숫자를 넣어주세요'); return; }
-  wsFixOn = false;
-  openCodeSheet(p.id, d, { pinOnly: true, after: renderWishScreen });
 }
 /* 사람 고르기 시트 — 이름 검색(부분일치·공백 무시) + 직군 묶음 */
 function openWishPersonSheet() {

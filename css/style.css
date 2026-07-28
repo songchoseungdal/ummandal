@@ -313,9 +313,9 @@ input.sh-input:focus, .sh-input:focus { outline: 2px solid var(--brand); border-
 
 /* ===== 희망 휴무·고정 근무(15) — 달력 ===== */
 .wp-person { display: flex; align-items: center; gap: 13px; width: 100%; background: var(--card);
-  border: 1px solid var(--line); border-radius: 16px; padding: 13px 16px; margin: 10px 0 4px;
+  border: 1px solid var(--line); border-radius: 16px; padding: 10px 16px; margin: 8px 0 0;
   font-family: inherit; cursor: pointer; text-align: left; }
-.wp-person .wpp-av { flex: none; width: 46px; height: 46px; border-radius: 999px; background: var(--brand-soft);
+.wp-person .wpp-av { flex: none; width: 42px; height: 42px; border-radius: 999px; background: var(--brand-soft);
   color: var(--brand); font-size: 19px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
 .wp-person .wpp-tx { flex: 1; min-width: 0; }
 .wp-person .wpp-tx b { font-size: 18px; display: block; }
@@ -343,64 +343,46 @@ input.sh-input:focus, .sh-input:focus { outline: 2px solid var(--brand); border-
 .modeseg button.on.mwish { border: 1.5px solid var(--warn); background: var(--warn-soft); color: #8a5d00; }
 .modeseg button.on.mpin { border: 1.5px solid var(--brand); background: var(--brand-soft); color: var(--brand); }
 .wp-legend { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-  padding: 11px 15px; font-size: 14px; color: var(--sub); line-height: 1.7; margin-bottom: 14px; }
+  padding: 9px 15px; font-size: 14px; color: var(--sub); line-height: 1.55; margin: 8px 0 0; }
 .wp-legend .lg { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; font-weight: 600; }
 .wp-legend .dotw { width: 16px; height: 16px; border-radius: 999px; background: #FCE8C6; display: inline-block; }
 .wp-legend .dotp { width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 2px var(--brand); display: inline-block; }
-.wp-count { text-align: center; color: var(--sub); font-size: 15px; margin-top: 10px; }
+.wp-count { text-align: center; color: var(--sub); font-size: 14.5px; margin: 6px 0 2px; }
 
-/* ===== 희망 휴무·고정 근무(15) — 숫자 입력 개편 (2026-07-28) =====
-   .wcal/.modeseg(위)는 달력 방식의 잔재로, 지금은 쓰지 않지만 되돌릴 여지를 남겨 보존한다. */
-.wstab { margin: 10px 0 2px; }
+/* ===== 희망 휴무(15) — 숫자 입력 개편 (2026-07-28) =====
+   .wcal/.modeseg(위)는 달력 방식의 잔재로, 지금은 쓰지 않지만 되돌릴 여지를 남겨 보존한다.
+   고정 근무 섹션(.wsfix*)은 2026-07-29 제거 — 한 사람 입력이 스크롤 없이 한 화면에
+   들어오는 것이 목표라, 아래 여백들도 그 기준으로 조인 값이다. */
+.wstab { margin: 6px 0 2px; }
 /* 남은 연차 */
 .wsannual { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line);
-  border-radius: 16px; padding: 12px 16px; margin: 10px 0; }
+  border-radius: 16px; padding: 9px 16px; margin: 8px 0; }
 .wsannual .wsa-lbl { font-size: 16.5px; font-weight: 700; flex: 1; min-width: 0; }
 .wsannual .wsa-unit { font-size: 15.5px; color: var(--sub); font-weight: 600; }
-input.wsa-in { width: 76px; height: 46px; text-align: center; font-size: 19px; font-weight: 700; padding: 6px 4px; }
+input.wsa-in { width: 76px; height: 44px; text-align: center; font-size: 19px; font-weight: 700; padding: 6px 4px; }
 /* 날짜 입력 4줄 */
-.wsdates { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 6px 14px 14px; }
-.wsrow { display: flex; align-items: flex-start; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.wsdates { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 3px 14px 10px; }
+.wsrow { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .wsrow:last-child { border-bottom: none; }
 /* 라벨 폭·칸 폭은 375px에서 「라벨 + 기본 3칸 + [+]」가 한 줄에 들어가도록 맞춰져 있다.
    (본문 307px − 라벨 86 − 간격 10 = 211 ≥ 48×3 + 6×3 + 42 = 204) */
 .wsrow .wsr-lbl { flex: none; width: 86px; font-size: 15px; font-weight: 700; color: var(--ink);
-  padding-top: 13px; word-break: keep-all; }
+  padding-top: 12px; word-break: keep-all; }
 .wsrow.wr-wish .wsr-lbl { color: #8a5d00; }
 .wsrow .wsr-ins { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-input.wsd-in { width: 48px; height: 46px; text-align: center; font-size: 19px; font-weight: 700;
+input.wsd-in { width: 48px; height: 44px; text-align: center; font-size: 19px; font-weight: 700;
   padding: 6px 2px; border-radius: 12px; -moz-appearance: textfield; }
 input.wsd-in::-webkit-outer-spin-button, input.wsd-in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .wsrow.wr-wish input.wsd-in { border-color: var(--moon); background: var(--moon-soft); color: #8a5d00; }
-.wsr-add { flex: none; width: 42px; height: 46px; border-radius: 12px; border: 1px dashed var(--line);
+.wsr-add { flex: none; width: 42px; height: 44px; border-radius: 12px; border: 1px dashed var(--line);
   background: var(--card); color: var(--brand); cursor: pointer; font-family: inherit;
   display: flex; align-items: center; justify-content: center; }
 .wsr-add .svgi { width: 22px; height: 22px; }
 .wsr-add:active { background: var(--card2); }
-/* 고정 근무 */
-.wsfix { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; margin: 12px 0; }
-.wsfix-head { font-size: 16px; font-weight: 800; color: var(--brand); display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
-.wsfix-head .svgi { width: 19px; height: 19px; }
-.wsfix-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
-.wsfix-row .wf-d { flex: none; font-size: 17px; font-weight: 800; min-width: 52px; }
-.wsfix-row .wf-c { flex: 1; min-width: 0; font-size: 16px; color: var(--sub); font-weight: 600; }
-.wf-del { flex: none; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line);
-  background: var(--card); color: var(--sub); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.wf-del .svgi { width: 18px; height: 18px; }
-.wf-del:active { background: var(--card2); }
-.wsfix-empty { color: var(--sub); font-size: 15px; margin: 4px 0 10px; }
-.wsfix-add { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%;
-  border: 1px dashed var(--line); border-radius: 14px; background: var(--card); color: var(--brand);
-  font-family: inherit; font-size: 16px; font-weight: 700; padding: 12px 0; margin-top: 8px; cursor: pointer; }
-.wsfix-add .svgi { width: 19px; height: 19px; }
-.wsfix-add:active { background: var(--card2); }
-.wsfix-new { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
-.wsfix-new .wsfix-pick { flex: 1; min-width: 130px; padding: 12px 10px; }
-.wsfix-cancel { border: none; background: none; color: var(--sub); font-family: inherit; font-size: 15.5px;
-  font-weight: 700; padding: 12px 8px; cursor: pointer; }
-/* 이전/다음 사람 */
-.wsnav { display: flex; gap: 10px; margin-top: 14px; }
-.wsnav .btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 16px 8px; font-size: 18px; }
+/* 이전/다음 사람 — 화면이 넘치는 작은 폰에서도 항상 보이게 바닥에 붙인다(시트 .btnrow와 같은 이유) */
+.wsnav { display: flex; gap: 10px; position: sticky; bottom: 0; z-index: 5; background: var(--bg);
+  margin-top: 4px; padding: 8px 0 10px; box-shadow: 0 -12px 14px -12px rgba(29, 27, 32, .25); }
+.wsnav .btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 15px 8px; font-size: 18px; }
 .wsnav .btn .svgi { width: 19px; height: 19px; }
 /* 좁은 화면(320px 등)에서는 라벨을 윗줄로 올려 칸이 한 줄에 다 보이게 한다 */
 @media (max-width: 359px) {
