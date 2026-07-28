@@ -1530,8 +1530,11 @@ function renderWishScreen() {
     '<span class="wsa-unit">개</span></div>' +
     '<div class="wsdates">' + rows + '</div>' +
     fix +
-    '<div class="wp-legend">입력한 날은 자동 배정에서 쉬는 날로 우선 반영해요.<br>' +
-    '반차도 이번 버전에서는 하루 쉼으로 계산해요.</div>' +
+    /* 초안이 있는 상태에서는 반영 시점이 갈린다 — 연차·반차·고정(setCell)은 표에 즉시,
+       희망 휴무(wish)는 엔진이 다시 돌 때만. 이걸 안 알려주면 "넣었는데 안 바뀐다"고 헤맨다 */
+    '<div class="wp-legend">' + (hasDraft()
+      ? '연차·반차·고정 근무는 근무표에 바로 반영돼요.<br>희망 휴무는 「다시 만들기」를 눌러야 반영돼요.'
+      : '입력한 날은 자동 배정에서 쉬는 날로 우선 반영해요.<br>반차도 이번 버전에서는 하루 쉼으로 계산해요.') + '</div>' +
     nav +
     '<p class="wp-count">' + (wsIdx + 1) + ' / ' + list.length + '명 · ' + groupNames[wsGroup] + '</p>';
 }
