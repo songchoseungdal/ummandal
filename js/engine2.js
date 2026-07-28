@@ -5,9 +5,11 @@
  * v1 대비 확장 (기초자료_2병동_2026-06.md 기반, 적대 검토 반영 2026-07-18):
  *  1. 인원 범위: required.{weekday,holiday}.{D,E,N} = [min,max] (min 하드, max까지 소프트 충원)
  *  2. 공휴일: config.holidays = [일자...] — 주말∪공휴일 = 휴일 취급(isRestDay)
- *  3. 코드 확장: 근무 D/MD/E/E2/N + 비근무 O/V(연차)/CO(대휴)/EDU(교육)
+ *  3. 코드 확장: 근무 D/MD/E/E2/N + 비근무 O/V(연차)/CO(대휴)/EDU(교육)/HA·HP(반차)
  *     - 패밀리 합산: MD→D계열, E2→E계열 (생성기 slotCnt·검증기 집계 공통 매핑)
- *     - REST={O,V,CO,EDU}: 연속근무 리셋·나이트 후 휴식 충족 (생성기 상태 갱신도 동일 기준)
+ *     - REST={O,V,CO,EDU,HA,HP}: 연속근무 리셋·나이트 후 휴식 충족 (생성기 상태 갱신도 동일 기준)
+ *       ※ 반차(HA 전반·HP 후반)는 이번 버전에서 하루 쉼으로 계산한다(부분 근무 미지원).
+ *         희망 오프 충족 코드(WISH_OK)에는 넣지 않는다 — 반차는 온전한 휴무가 아니다.
  *     - 자동 생성은 D/E/N/O만 산출. MD·E2는 선입력·손편집 전용
  *  4. 셀 단위 선입력 preAssigned[pid][day]=code — 불가침(증강 매칭 제외), 상태에는 반영,
  *     전방 검사 3종(N 휴식창·N 연속 / E→D 역행 / 연속 근무 한도)으로 선입력 인접 위반 사전 차단.
@@ -25,9 +27,9 @@
   'use strict';
 
   var FAM = { D: 'D', MD: 'D', E: 'E', E2: 'E', N: 'N' };      // 근무 코드 → 패밀리
-  var REST = { O: 1, V: 1, CO: 1, EDU: 1 };                     // 휴식 취급 코드
-  var WISH_OK = { O: 1, V: 1, CO: 1 };                          // 희망오프 충족 코드(EDU 제외)
-  var ALL_CODES = ['D', 'MD', 'E', 'E2', 'N', 'O', 'V', 'CO', 'EDU'];
+  var REST = { O: 1, V: 1, CO: 1, EDU: 1, HA: 1, HP: 1 };       // 휴식 취급 코드(반차 HA·HP 포함)
+  var WISH_OK = { O: 1, V: 1, CO: 1 };                          // 희망오프 충족 코드(EDU·반차 제외)
+  var ALL_CODES = ['D', 'MD', 'E', 'E2', 'N', 'O', 'V', 'CO', 'EDU', 'HA', 'HP'];
 
   function fam(c) { return FAM[c] || null; }
   function isRest(c) { return !!REST[c]; }
@@ -37,7 +39,8 @@
      D 계열엔 MD, E 계열엔 E2가 포함되지만 문구는 대표 이름으로 짧게 쓴다. */
   var FAM_DISP = { D: 'D(데이)', E: 'E(이브닝)', N: 'N(나이트)' };
   var CODE_DISP = { D: 'D(데이)', MD: 'MD(미들)', E: 'E(이브닝)', E2: 'E2(이브닝2)', N: 'N(나이트)',
-                    O: '－(오프)', V: '휴(연차)', CO: '대(대휴)', EDU: '교(교육)' };
+                    O: '－(오프)', V: '휴(연차)', CO: '대(대휴)', EDU: '교(교육)',
+                    HA: '전반(반차·전반)', HP: '후반(반차·후반)' };
   function codeDisp(c) { return CODE_DISP[c] || c; }
 
   function isWeekend(day, firstWeekday) {
@@ -80,7 +83,7 @@
     var restDays = 0;
     for (var d = 1; d <= cfg.days; d++) if (cfg.isRestDay(d)) restDays++;
     cfg.restDayCount = restDays;                                  // 주말∪공휴일 (합집합)
-    cfg.targetOff = config.targetOff != null ? config.targetOff : restDays; // O 전용 예산(V·CO·EDU 제외)
+    cfg.targetOff = config.targetOff != null ? config.targetOff : restDays; // O 전용 예산(V·CO·EDU·반차 제외)
 
     var req = config.required || {};
     var wd = req.weekday || {};
@@ -133,7 +136,7 @@
    * 두 소비처가 반드시 같은 수치를 쓰게 한다(드리프트 방지 — [[기능-preflight개선]] 리스크 #3).
    *  - monthMinDemand: 한 달 최소 근무 슬롯 합(N 계열 / D·E 계열 분리)
    *  - capOfPerson: 한 사람이 휴무 목표(targetOff)를 지키며 설 수 있는 최대 근무일.
-   *    선입력된 비-O 휴식(V·CO·EDU)은 그만큼 근무 여력이 줄므로 제외(O는 목표에 기여하므로 안 뺌).
+   *    선입력된 비-O 휴식(V·CO·EDU·반차 HA·HP)은 그만큼 근무 여력이 줄므로 제외(O는 목표에 기여하므로 안 뺌).
    *    ※ 한계(의도된 하한): 유형별 실근무 가능일(상근=평일만·2교대=N불가·잠금행)을 세밀히 빼지
    *      않아 Σ여력을 과대추정할 수 있다 → 소프트 경고는 "뜨면 확실, 안 떠도 안심 못 함"인
    *      하한 신호. 과대추정은 경고를 '덜' 띄우는 방향이라 false positive는 없다.
@@ -764,6 +767,7 @@
         id: p.id, name: p.name, type: p.type,
         D: famCnt.D, E: famCnt.E, N: famCnt.N, O: cnt.O,
         V: cnt.V, CO: cnt.CO, EDU: cnt.EDU,
+        HA: cnt.HA, HP: cnt.HP,
         MD: cnt.MD, E2: cnt.E2,
         weekend: restWork, totalN: famCnt.N + (hist.n || 0), totalWeekend: restWork + (hist.weekend || 0)
       };

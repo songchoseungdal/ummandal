@@ -313,6 +313,51 @@ section('T6 선입력 단위 (MD/E2 패밀리·N후V·인접차단·희망오프
   }
 }
 
+/* ========== T6h 반차(HA 전반·HP 후반) 선입력 — 미지코드 아님 + 휴식 취급 (2026-07-28) ========== */
+{
+  const staff = mkStaff(6, 0, 0);
+  const cfg = {
+    days: 14, firstWeekday: 1, holidays: [], ...BASE_RULES, maxAttempts: 400,
+    required: { weekday: { D: [2, 2], E: [1, 1], N: [0, 0] }, holiday: { D: [1, 1], E: [1, 1], N: [0, 0] } },
+    preAssigned: { t0: { 6: 'HA', 7: 'HP' } },
+  };
+  // a. preflight — 알 수 없는 코드로 걸리지 않는다
+  const pf = E2.preflight(staff, cfg);
+  ok(!pf.some(i => /알 수 없는 코드/.test(i.msg)), 'T6h 반차 선입력이 미지코드로 안 잡힘');
+  ok(!pf.some(i => !i.soft && i.pid === 't0'), 'T6h 반차 선입력에 하드 이슈 없음');
+  // b. 생성 — 위반 0이고 반차가 보존된다
+  const res = E2.generate(staff, cfg, 21);
+  ok(res && res.violations.length === 0, 'T6h 반차 선입력 위반 0');
+  ok(res && res.schedule.t0[5] === 'HA' && res.schedule.t0[6] === 'HP', 'T6h 반차 코드 보존');
+  // c. 휴식 취급 — 연속근무가 반차에서 끊긴다(1~5일 강제 근무 + 6일 HA → 7일 이후로 이어지지 않음)
+  ok(E2.isRest('HA') && E2.isRest('HP'), 'T6h isRest(HA/HP) = true');
+  {
+    // 5일 연속 근무 뒤 HA, 그다음 다시 근무 — 리셋이 안 되면 연속 6일로 위반
+    const sched = { t0: ['D', 'D', 'D', 'D', 'D', 'HA', 'D', 'O', 'O', 'O', 'O', 'O', 'O', 'O'] };
+    for (const p of staff.slice(1)) sched[p.id] = new Array(14).fill('D');
+    const one = [staff[0], ...staff.slice(1, 3)];
+    const vs = E2.validate(
+      { t0: sched.t0, t1: sched.t1, t2: sched.t2 }, one,
+      { ...cfg, preAssigned: {}, required: { weekday: { D: [0, 9], E: [0, 9], N: [0, 9] }, holiday: { D: [0, 9], E: [0, 9], N: [0, 9] } } }
+    );
+    ok(!vs.some(v => v.pid === 't0' && v.rule === '연속근무'), 'T6h 반차가 연속근무 카운트를 리셋');
+  }
+  // d. 리포트에 반차 개수가 잡힌다
+  {
+    const rep = E2.report({ t0: res.schedule.t0 }, [staff[0]], cfg);
+    ok(rep[0].HA === 1 && rep[0].HP === 1, `T6h 리포트 HA=${rep[0].HA}·HP=${rep[0].HP}`);
+  }
+  // e. 희망 오프는 반차로 충족되지 않는다(WISH_OK 제외 — 반차는 온전한 휴무가 아님)
+  {
+    const vs = E2.validate(
+      { t0: new Array(14).fill('O').map((c, i) => (i === 5 ? 'HA' : c)) }, [staff[0]],
+      { ...cfg, preAssigned: {}, wishOffs: { t0: [6] },
+        required: { weekday: { D: [0, 9], E: [0, 9], N: [0, 9] }, holiday: { D: [0, 9], E: [0, 9], N: [0, 9] } } }
+    );
+    ok(vs.some(v => v.rule === '희망오프' && v.day === 6), 'T6h 반차는 희망오프 충족 아님');
+  }
+}
+
 /* ========== T6+. 나이트 전담 해제 경로 ========== */
 section('T6+ allowGenericNight / 전담 부재');
 {

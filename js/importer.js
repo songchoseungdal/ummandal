@@ -33,7 +33,7 @@
     if (c === 'N') return 'N';
     return null;
   }
-  function isRestCode(c) { return c === 'O' || c === 'V' || c === 'CO' || c === 'EDU'; }
+  function isRestCode(c) { return c === 'O' || c === 'V' || c === 'CO' || c === 'EDU' || c === 'HA' || c === 'HP'; }
 
   /* 코드 정규화 — 대소문자 무시, 앞뒤 공백·★ 제거. 미인식은 unknown에 원문 수집 */
   function normCode(raw, unknown) {
@@ -46,6 +46,9 @@
     if (u === 'E') return 'E';
     if (u === 'E2') return 'E2';
     if (u === 'N') return 'N';
+    /* 반차 — 전반/후반. '전반차'가 '전반'보다 먼저 오도록 완전일치로만 비교한다 */
+    if (s === '전반차' || s === '오전반차' || s === '반차(전반)' || s === '전반' || u === 'HA') return 'HA';
+    if (s === '후반차' || s === '오후반차' || s === '반차(후반)' || s === '후반' || u === 'HP') return 'HP';
     if (u === 'OFF' || s === '오프' || u === 'O' || s === '－' || s === '-' || u === 'X') return 'O';
     if (s === '휴' || s === '연차' || u === 'V') return 'V';
     if (s === '대') return 'CO';

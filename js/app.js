@@ -10,9 +10,10 @@ var typeNames = { three: '3교대', two: '2교대(데이·이브닝)', night: '�
 var TYPE_ORDER = ['three', 'two', 'night', 'day'];
 var groupNames = { RN: '간호사', NA: '조무사' };
 var prefNames = { '': '자동', D: '데이 위주', E: '이브닝 위주' };
-/* 셀 표시: 근무 5종 + 휴무 4종 */
-var codeDisp = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', CO: '대', EDU: '교' };
-var codeLabels = { D: '데이', MD: '미들데이', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육' };
+/* 셀 표시: 근무 5종 + 휴무 6종(반차 HA 전반·HP 후반 포함 — 이번 버전은 하루 쉼으로 계산) */
+var codeDisp = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', CO: '대', EDU: '교', HA: '전반', HP: '후반' };
+var codeLabels = { D: '데이', MD: '미들데이', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육',
+  HA: '반차(전반)', HP: '반차(후반)' };
 function staffGroup(p) { return p.group === 'NA' ? 'NA' : 'RN'; }
 function groupsPresent() {
   var has = { RN: false, NA: false };
@@ -358,10 +359,17 @@ function skipLogin() { loginSkippedNow = true; renderHome(); }
 function renderPrep() {
   var staff = staffList();
   var m = month(curYM);
-  var wishCount = 0, pinCount = 0;
+  /* 희망 화면(15)의 4분류와 같은 기준으로 센다 — 연차·반차도 pins에 담기므로 코드별로 가른다 */
+  var wishCount = 0, vCount = 0, halfCount = 0, pinCount = 0;
   staff.forEach(function (p) {
     wishCount += (m.wish[p.id] || []).length;
-    pinCount += Object.keys(m.pins[p.id] || {}).length;
+    var pins = m.pins[p.id] || {};
+    Object.keys(pins).forEach(function (ds) {
+      var c = pins[ds];
+      if (c === 'V') vCount++;
+      else if (c === 'HA' || c === 'HP') halfCount++;
+      else if (c) pinCount++;
+    });
   });
   var p = ymParts(curYM);
   document.getElementById('prepTitle').textContent = p.m + '월 근무표 만들기';
@@ -369,8 +377,10 @@ function renderPrep() {
   var grpTx = gs.map(function (g) { return groupNames[g]; }).join('·');
   var wpTx = [];
   if (wishCount) wpTx.push('희망 휴무 ' + wishCount + '건');
+  if (vCount) wpTx.push('연차 ' + vCount + '건');
+  if (halfCount) wpTx.push('반차 ' + halfCount + '건');
   if (pinCount) wpTx.push('고정 근무 ' + pinCount + '건');
-  var wpDone = wishCount + pinCount > 0;
+  var wpDone = wishCount + vCount + halfCount + pinCount > 0;
   function row(iconOk, title, sub, go, fn) {
     return '<button class="preprow" onclick="' + fn + '">' +
       '<span class="pr-ico ' + (iconOk ? 'ok' : 'warn') + '">' + ic(iconOk ? 'check' : 'bang') + '</span>' +
@@ -793,7 +803,7 @@ function renderStats() {
   var el = document.getElementById('statArea');
   if (!hasAny()) { el.innerHTML = ''; return; }
   var html = '<h2>공평하게 나눠졌는지 확인 <span class="hint">— 구성원에게 그대로 보여주셔도 됩니다</span></h2>' +
-    '<table class="stats"><tr><th>이름</th><th>데이</th><th>이브닝</th><th>나이트</th><th>오프</th><th>휴가·교육</th><th>휴일 근무</th><th>나이트 (3개월 누적)</th></tr>';
+    '<table class="stats"><tr><th>이름</th><th>데이</th><th>이브닝</th><th>나이트</th><th>오프</th><th>휴가·반차·교육</th><th>휴일 근무</th><th>나이트 (3개월 누적)</th></tr>';
   groupsPresent().forEach(function (g) {
     var gStaff = groupStaff(g);
     var rep = E.report(buildSchedule(gStaff), gStaff, engineConfig(curYM, g));
@@ -803,7 +813,7 @@ function renderStats() {
         '<td><span class="pill pe">' + r.E + '</span></td>' +
         '<td><span class="pill pn">' + r.N + '</span></td>' +
         '<td><span class="pill po">' + r.O + '</span></td>' +
-        '<td>' + (r.V + r.CO + r.EDU) + '</td>' +
+        '<td>' + (r.V + r.CO + r.EDU + (r.HA || 0) + (r.HP || 0)) + '</td>' +
         '<td>' + r.weekend + '</td><td>' + r.totalN + '</td></tr>';
     });
   });
@@ -821,10 +831,12 @@ function tapCell(ev, pid, d) {
 var CODE_SHEET_ROWS = [
   ['D', 'E', 'N', 'O'],
   ['V', 'CO', 'EDU', 'W'],
-  ['MD', 'E2', 'X']
+  ['MD', 'E2', 'HA', 'HP', 'X']
 ];
-var codeBig = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', CO: '대', EDU: '교', W: '★', X: '✕' };
-var codeSheetLbl = { D: '데이', MD: '미들', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육', W: '희망 휴무', X: '지움' };
+var codeBig = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', CO: '대', EDU: '교',
+  HA: '전반', HP: '후반', W: '★', X: '✕' };
+var codeSheetLbl = { D: '데이', MD: '미들', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육',
+  HA: '반차(전반)', HP: '반차(후반)', W: '희망 휴무', X: '지움' };
 /* opts.pinOnly = 희망 화면의 「고정 근무」 입력 — 고정이 전제라 토글·희망을 숨긴다 */
 function openCodeSheet(pid, d, opts) {
   opts = opts || {};
@@ -934,7 +946,7 @@ function undo() {
 /* ---- 생성 불가 안내 시트 — 무엇이 문제인지 + 어디서 고치는지 + 바로가기 (2026-07-26) ----
    preflight 하드 이슈의 fix 필드('rules'|'staff'|'pre')로 목적지를 묶는다(문구 파싱 없음).
    사람별 충돌은 그 사람의 희망·고정 화면으로 직행한다. */
-var _genFixTarget = null;   // 「희망·고정에서 고치기」가 열 사람·모드 {pid, mode}
+var _genFixTarget = null;   // 「희망·고정에서 고치기」가 열 사람 {pid}
 var GEN_FIX_DEST = {
   rules: ['근무 규칙에서 고치기', '하루 최소 인원·근무 제한을 조정해요'],
   staff: ['병동 구성에서 고치기', '사람 유형(3교대·나이트 전담)을 확인해요'],
@@ -943,12 +955,18 @@ var GEN_FIX_DEST = {
 function genFixGo(dest) {
   if (dest === 'rules') { openRulesScreen(); return; }
   if (dest === 'staff' || !staffList().length) { showTab('ward'); return; }
-  var i = 0, mode = 'pin';
+  /* 문제가 있는 사람의 직군 목록으로 들어가 그 사람을 펼친다 */
+  var gs = groupsPresent();
+  wsGroup = gs[0] || 'RN';
+  wsIdx = 0;
   if (_genFixTarget) {
-    staffList().some(function (p, ix) { if (p.id === _genFixTarget.pid) { i = ix; return true; } return false; });
-    mode = _genFixTarget.mode;
+    var tp = staffList().filter(function (x) { return x.id === _genFixTarget.pid; })[0];
+    if (tp) {
+      wsGroup = staffGroup(tp);
+      groupStaff(wsGroup).some(function (x, ix) { if (x.id === tp.id) { wsIdx = ix; return true; } return false; });
+    }
   }
-  wsIdx = i; wsMode = mode;
+  wsResetExtra();
   renderWishScreen();
   openScreen('screen-wish');
 }
@@ -962,9 +980,9 @@ function genFixRow(dest) {
 function showGenIssuesSheet(hardIssues) {
   var groups = { rules: [], staff: [], pre: [] };
   hardIssues.forEach(function (v) { (groups[v.fix] || groups.rules).push(v); });
-  /* 사람이 특정된 첫 충돌로 바로가기 대상 지정 — 희망 오프 충돌이면 희망 탭, 아니면 고정 탭 */
+  /* 사람이 특정된 첫 충돌을 바로가기 대상으로 — 그 사람의 입력 화면이 한 장에 다 보인다 */
   var pre1 = groups.pre.filter(function (v) { return v.pid != null; })[0];
-  _genFixTarget = pre1 ? { pid: pre1.pid, mode: /희망 오프/.test(pre1.msg) ? 'wish' : 'pin' } : null;
+  _genFixTarget = pre1 ? { pid: pre1.pid } : null;
   var html = '<div class="sh-head"><h3>아직 만들 수 없어요</h3></div>' +
     '<p class="hint" style="margin:0 0 12px">아래 문제를 고치면 만들 수 있어요. 버튼을 누르면 고치는 화면으로 바로 가요.</p>';
   ['rules', 'staff', 'pre'].forEach(function (dest) {
@@ -1153,7 +1171,8 @@ function renderStaff() {
       html += '<button class="listrow personrow" onclick="openStaffSheet(' + i + ')">' +
         '<span class="lr-ico">' + ic('people') + '</span>' +
         '<span class="lr-tx"><b>' + esc(p.name) + '</b><span class="lr-sub">' +
-        typeNames[p.type] + ' · ' + (prefNames[p.pref || ''] || '자동') + '</span></span>' +
+        typeNames[p.type] + ' · ' + (prefNames[p.pref || ''] || '자동') +
+        (p.annual != null && p.annual !== '' ? ' · 연차 ' + p.annual + '개' : '') + '</span></span>' +
         '<span class="lr-go">' + ic('chevR') + '</span></button>';
     });
   });
@@ -1161,10 +1180,21 @@ function renderStaff() {
   document.getElementById('sampleHint').style.display = staff.length ? 'none' : '';
   renderPatternMemo();
 }
+/* 「남은 연차」 입력칸 읽기 — 빈 값 = 미설정(null), 그 외 0~99로 자른다.
+   구성원 편집 시트와 희망 화면이 같은 규칙을 쓰도록 한 곳에 둔다. */
+function readAnnualInput(id) {
+  var el = document.getElementById(id);
+  if (!el) return null;
+  var s = String(el.value == null ? '' : el.value).trim();
+  if (s === '') return null;
+  var n = parseInt(s, 10);
+  if (isNaN(n)) return null;
+  return Math.max(0, Math.min(99, n));
+}
 /* 구성원 편집 바텀시트(07). i = staff 인덱스, -1 = 새로 추가 */
 function openStaffSheet(i) {
   var isNew = i < 0;
-  var p = isNew ? { name: '', group: 'RN', type: 'three', pref: '' } : staffList()[i];
+  var p = isNew ? { name: '', group: 'RN', type: 'three', pref: '', annual: null } : staffList()[i];
   if (!p) return;
   sheetCtx = { kind: 'staff', i: i, group: staffGroup(p), type: p.type, pref: p.pref || '' };
   function segBtn(field, val, label) {
@@ -1185,6 +1215,9 @@ function openStaffSheet(i) {
     '<div class="sh-label">근무 형태</div>' + typeCards +
     '<div class="sh-label">근무 성향</div>' +
     '<div class="seg">' + segBtn('pref', '', '자동') + segBtn('pref', 'D', '데이 위주') + segBtn('pref', 'E', '이브닝 위주') + '</div>' +
+    '<div class="sh-label">남은 연차(개)</div>' +
+    '<input type="number" class="sh-input" id="sfAnnual" min="0" max="99" inputmode="numeric" ' +
+    'value="' + (p.annual != null && p.annual !== '' ? p.annual : '') + '" placeholder="비워두면 설정 안 함">' +
     '<div class="btnrow" style="margin-top:14px"><button class="btn big xl" onclick="staffSheetSave()">저장</button></div>' +
     (isNew ? '' : '<button class="sh-danger" onclick="staffSheetDelete()">구성원 삭제</button>')
   );
@@ -1210,13 +1243,15 @@ function staffSheetSave() {
   if (!sheetCtx || sheetCtx.kind !== 'staff') return;
   var name = (document.getElementById('sfName').value || '').trim();
   if (!name) { alert('이름을 입력해주세요.'); return; }
+  var ann = readAnnualInput('sfAnnual');
   if (sheetCtx.i < 0) {
     staffList().push({ id: 'p' + Date.now() + Math.floor(Math.random() * 1000), name: name,
-      group: sheetCtx.group, type: sheetCtx.type, pref: sheetCtx.pref });
+      group: sheetCtx.group, type: sheetCtx.type, pref: sheetCtx.pref, annual: ann });
     toast(name + ' 님을 추가했어요');
   } else {
     var p = staffList()[sheetCtx.i];
     p.name = name; p.group = sheetCtx.group; p.type = sheetCtx.type; p.pref = sheetCtx.pref;
+    p.annual = ann;
     toast('저장했어요 ✓');
   }
   closeSheet();
@@ -1336,92 +1371,293 @@ function ruleBackward(on) {
   toast(on ? '이브닝 다음날 데이를 금지해요' : '이브닝 다음날 데이를 허용해요');
 }
 
-/* ---- 희망 휴무·고정 근무 화면(15) — 사람별 달력 입력 ---- */
-var wsIdx = 0, wsMode = 'wish';   // wish | pin
+/* ---- 희망 휴무·고정 근무 화면(15) — 날짜를 숫자로 적어 넣는 방식 (2026-07-28 개편) ----
+   달력을 눌러 찍던 방식은 한 사람당 화면을 한참 훑어야 했다. 희망 휴무·연차·반차를
+   각각 한 줄의 숫자 칸으로 받고, 고정 근무만 따로 목록으로 관리한다.
+   순회 단위는 「직군」 — 간호사 목록을 다 돌고 조무사로 넘어간다. */
+var wsIdx = 0;                                  // 현재 직군 목록 안에서의 위치
+var wsGroup = 'RN';                             // 보고 있는 직군
+var wsExtra = { W: 0, V: 0, HA: 0, HP: 0 };     // 줄별로 [+]로 추가한 빈 칸 수
+var wsFixOn = false;                            // 「고정 근무 추가」 인라인 입력 열림 여부
+/* 날짜 입력 4줄의 정의. key는 저장 코드('W'=희망 휴무는 wish 배열, 나머지는 pins 코드) */
+var WISH_ROWS = [
+  { key: 'W', label: '희망 휴무', cls: 'wr-wish' },
+  { key: 'V', label: '연차', cls: 'wr-rest' },
+  { key: 'HA', label: '반차(전반)', cls: 'wr-rest' },
+  { key: 'HP', label: '반차(후반)', cls: 'wr-rest' }
+];
+function wsRowLabel(key) {
+  var lb = key;
+  WISH_ROWS.forEach(function (r) { if (r.key === key) lb = r.label; });
+  return lb;
+}
+/* 현재 직군의 사람 목록 — 직군이 사라졌으면(삭제 등) 남아 있는 첫 직군으로 되돌린다 */
+function wsList() {
+  var gs = groupsPresent();
+  if (!gs.length) return [];
+  if (gs.indexOf(wsGroup) < 0) { wsGroup = gs[0]; wsIdx = 0; }
+  return groupStaff(wsGroup);
+}
+function wsPerson() {
+  var list = wsList();
+  if (!list.length) return null;
+  if (wsIdx >= list.length) wsIdx = list.length - 1;
+  if (wsIdx < 0) wsIdx = 0;
+  return list[wsIdx];
+}
+function wsResetExtra() { wsExtra = { W: 0, V: 0, HA: 0, HP: 0 }; wsFixOn = false; }
+/* 한 줄에 들어갈 날짜들(오름차순). 희망 휴무는 wish 배열, 나머지는 pins에서 그 코드만 골라낸다 */
+function wsRowDays(pid, key) {
+  var m = month(curYM);
+  var out = [];
+  if (key === 'W') out = (m.wish[pid] || []).slice();
+  else {
+    var pins = m.pins[pid] || {};
+    Object.keys(pins).forEach(function (ds) { if (pins[ds] === key) out.push(+ds); });
+  }
+  return out.sort(function (a, b) { return a - b; });
+}
+/* 고정 근무 = pins 중 연차·반차가 아닌 것(= 실제 근무 코드) */
+function wsPinWork(pid) {
+  var pins = month(curYM).pins[pid] || {};
+  var out = [];
+  Object.keys(pins).forEach(function (ds) {
+    var c = pins[ds];
+    if (!c || c === 'V' || c === 'HA' || c === 'HP') return;
+    out.push({ d: +ds, code: c });
+  });
+  return out.sort(function (a, b) { return a.d - b.d; });
+}
+function wsSummary(pid) {
+  return '희망 ' + wsRowDays(pid, 'W').length +
+    ' · 연차 ' + wsRowDays(pid, 'V').length +
+    ' · 반차 ' + (wsRowDays(pid, 'HA').length + wsRowDays(pid, 'HP').length) +
+    ' · 고정 ' + wsPinWork(pid).length;
+}
 function openWishScreen() {
   if (!staffList().length) { showTab('ward'); return; }
-  wsIdx = 0; wsMode = 'wish';
+  var gs = groupsPresent();
+  wsGroup = gs[0] || 'RN';
+  wsIdx = 0;
+  wsResetExtra();
   renderWishScreen();
   openScreen('screen-wish');
 }
 function closeWishScreen() { closeScreen(); renderHome(); }
+function wsPickGroup(g) {
+  wsGroup = g; wsIdx = 0;
+  wsResetExtra();
+  renderWishScreen();
+}
+function wsGo(delta) {
+  wsIdx += delta;
+  wsResetExtra();
+  renderWishScreen();
+  var sc = document.getElementById('screen-wish');
+  if (sc) sc.scrollTop = 0;
+}
 function renderWishScreen() {
-  var staff = staffList();
-  if (!staff.length) { closeWishScreen(); return; }
-  if (wsIdx >= staff.length) wsIdx = staff.length - 1;
-  var p = staff[wsIdx];
-  var m = month(curYM);
+  if (!staffList().length) { closeWishScreen(); return; }
+  var p = wsPerson();
+  if (!p) { closeWishScreen(); return; }
+  var list = wsList();
   var pt = ymParts(curYM);
-  var wishes = m.wish[p.id] || [];
-  var pins = m.pins[p.id] || {};
-  var days = daysInYM(curYM), fw = firstWeekdayYM(curYM);
-  /* 달력 */
-  var cal = '<table><tr>' + ['일', '월', '화', '수', '목', '금', '토'].map(function (w, i) {
-    return '<th class="' + (i === 0 ? 'sun' : i === 6 ? 'sat' : '') + '">' + w + '</th>';
-  }).join('') + '</tr><tr>';
-  for (var b = 0; b < fw; b++) cal += '<td></td>';
-  for (var d = 1; d <= days; d++) {
-    var wd = (fw + d - 1) % 7;
-    if (d > 1 && wd === 0) cal += '</tr><tr>';
-    var cls = 'day' + (wd === 0 ? ' sun' : wd === 6 ? ' sat' : '') + (m.holidays.indexOf(d) >= 0 ? ' hol' : '');
-    var badge = '';
-    if (wishes.indexOf(d) >= 0) cls += ' wish';
-    if (pins[d]) { cls += ' pin'; badge = '<span class="pcode">' + codeDisp[pins[d]] + '</span>'; }
-    cal += '<td><button class="' + cls + '" onclick="wishTapDay(' + d + ')">' + d + badge + '</button></td>';
-  }
-  cal += '</tr></table>';
-  var isLast = wsIdx >= staff.length - 1;
+  var days = daysInYM(curYM);
+  var gs = groupsPresent();
+
+  /* 직군 필터 — 한 직군뿐이면 보여줄 이유가 없다 */
+  var tabs = gs.length > 1
+    ? '<div class="seg wstab">' + gs.map(function (g) {
+        return '<button class="' + (wsGroup === g ? 'on' : '') + '" onclick="wsPickGroup(\'' + g + '\')">' +
+          groupNames[g] + ' ' + groupStaff(g).length + '명</button>';
+      }).join('') + '</div>'
+    : '';
+
+  /* 날짜 입력 4줄 — 칸 수는 최소 3개, [+]로 늘린 만큼 더 */
+  var rows = WISH_ROWS.map(function (r) {
+    var ds = wsRowDays(p.id, r.key);
+    /* 기본 3칸 + [+]로 늘린 만큼. 늘린 칸을 채우면 wsDayChange가 하나씩 되돌려
+       칸이 무한정 늘어나지 않게 한다(날짜가 3개 미만이어도 [+]는 항상 한 칸 보태야 눌린 티가 난다). */
+    var n = Math.max(3, ds.length) + (wsExtra[r.key] || 0);
+    var cells = '';
+    for (var i = 0; i < n; i++) {
+      cells += '<input class="wsd-in" type="number" inputmode="numeric" min="1" max="' + days + '" ' +
+        'value="' + (ds[i] != null ? ds[i] : '') + '" aria-label="' + r.label + ' 날짜" ' +
+        'onchange="wsDayChange(\'' + r.key + '\',' + i + ',this.value)">';
+    }
+    return '<div class="wsrow ' + r.cls + '">' +
+      '<span class="wsr-lbl">' + r.label + '</span>' +
+      '<span class="wsr-ins">' + cells +
+      '<button class="wsr-add" onclick="wsAddSlot(\'' + r.key + '\')" aria-label="' + r.label + ' 칸 늘리기">' + ic('plus') + '</button>' +
+      '</span></div>';
+  }).join('');
+
+  /* 고정 근무 — 연차·반차를 뺀 실제 근무만 */
+  var pinWork = wsPinWork(p.id);
+  var fix = '<div class="wsfix"><div class="wsfix-head">' + ic('pin') + ' 고정 근무</div>' +
+    (pinWork.length
+      ? pinWork.map(function (x) {
+          return '<div class="wsfix-row"><span class="wf-d">' + x.d + '일</span>' +
+            '<span class="wf-c">' + codeDisp[x.code] + '(' + (codeLabels[x.code] || x.code) + ')</span>' +
+            '<button class="wf-del" onclick="wsFixDel(' + x.d + ')" aria-label="' + x.d + '일 고정 근무 지우기">' + ic('close') + '</button></div>';
+        }).join('')
+      : '<p class="wsfix-empty">아직 고정한 근무가 없어요.</p>') +
+    (wsFixOn
+      ? '<div class="wsfix-new"><input class="wsd-in" type="number" inputmode="numeric" min="1" max="' + days + '" ' +
+        'id="wsFixDay" placeholder="날짜" aria-label="고정 근무 날짜">' +
+        '<button class="btn big wsfix-pick" onclick="wsFixPick()">근무 고르기</button>' +
+        '<button class="wsfix-cancel" onclick="wsFixOn=false;renderWishScreen()">취소</button></div>'
+      : '<button class="wsfix-add" onclick="wsFixOpen()">' + ic('plus') + ' 고정 근무 추가</button>') +
+    '</div>';
+
+  var isFirst = wsIdx <= 0, isLast = wsIdx >= list.length - 1;
+  var nav = '<div class="wsnav">' +
+    (isFirst ? '' : '<button class="btn gray" onclick="wsGo(-1)">' + ic('chevL') + ' 이전 사람</button>') +
+    '<button class="btn big" onclick="' + (isLast ? 'closeWishScreen()' : 'wsGo(1)') + '">' +
+    (isLast ? '입력 끝내기' : '다음 사람 ' + ic('chevR')) + '</button></div>';
+
   document.getElementById('wishScreenBody').innerHTML =
     ssTop('희망 휴무·고정 근무', '완료', 'closeWishScreen()') +
     '<div class="wz-month" style="margin:0">' + pt.y + '년 ' + pt.m + '월</div>' +
+    tabs +
     '<button class="wp-person" onclick="openWishPersonSheet()">' +
     '<span class="wpp-av">' + esc(p.name.charAt(0)) + '</span>' +
-    '<span class="wpp-tx"><b>' + esc(p.name) + '</b><span class="wpp-sub">희망 휴무 ' + wishes.length + '건 · 고정 근무 ' + Object.keys(pins).length + '건</span></span>' +
+    '<span class="wpp-tx"><b>' + esc(p.name) + '</b><span class="wpp-sub">' + wsSummary(p.id) + '</span></span>' +
     '<span class="lr-go">' + ic('chevR') + '</span></button>' +
-    '<p class="wp-guide">날짜를 눌러 표시하세요</p>' +
-    '<div class="wcal">' + cal + '</div>' +
-    '<div class="modeseg">' +
-    '<button class="mwish' + (wsMode === 'wish' ? ' on' : '') + '" onclick="wsMode=\'wish\';renderWishScreen()">' + ic('calstar') + ' 희망 휴무</button>' +
-    '<button class="mpin' + (wsMode === 'pin' ? ' on' : '') + '" onclick="wsMode=\'pin\';renderWishScreen()">' + ic('pin') + ' 고정 근무</button>' +
-    '</div>' +
-    '<div class="wp-legend"><span class="lg"><span class="dotw"></span>희망 휴무</span>' +
-    '<span class="lg"><span class="dotp"></span>고정 근무</span><br>' +
-    '희망 휴무는 자동 배정에서 쉬는 날로 우선 반영해요.</div>' +
-    '<button class="btn big xl" onclick="' + (isLast ? 'closeWishScreen()' : 'wsIdx++;renderWishScreen()') + '">' +
-    (isLast ? '입력 끝내기' : '다음 사람') + '</button>' +
-    '<p class="wp-count">' + (wsIdx + 1) + ' / ' + staff.length + '명</p>';
+    '<div class="wsannual"><span class="wsa-lbl">남은 연차</span>' +
+    '<input class="wsa-in" type="number" inputmode="numeric" min="0" max="99" id="wsAnnual" ' +
+    'value="' + (p.annual != null && p.annual !== '' ? p.annual : '') + '" onchange="wsAnnualChange()" aria-label="남은 연차">' +
+    '<span class="wsa-unit">개</span></div>' +
+    '<div class="wsdates">' + rows + '</div>' +
+    fix +
+    '<div class="wp-legend">입력한 날은 자동 배정에서 쉬는 날로 우선 반영해요.<br>' +
+    '반차도 이번 버전에서는 하루 쉼으로 계산해요.</div>' +
+    nav +
+    '<p class="wp-count">' + (wsIdx + 1) + ' / ' + list.length + '명 · ' + groupNames[wsGroup] + '</p>';
 }
-function wishTapDay(d) {
-  var p = staffList()[wsIdx];
+function wsAddSlot(key) {
+  wsExtra[key] = (wsExtra[key] || 0) + 1;
+  renderWishScreen();
+}
+function wsAnnualChange() {
+  var p = wsPerson();
   if (!p) return;
-  if (wsMode === 'wish') {
-    setCell(p.id, d, 'W');
-    renderWishScreen();
-  } else {
-    var pins = month(curYM).pins[p.id] || {};
-    if (pins[d]) {   // 이미 고정된 날 다시 누르면 바로 해제(어르신 동선 단축)
-      setCell(p.id, d, '');
-      renderWishScreen();
-      return;
-    }
-    openCodeSheet(p.id, d, { pinOnly: true, after: renderWishScreen });
-  }
+  p.annual = readAnnualInput('wsAnnual');
+  save();
 }
-function openWishPersonSheet() {
-  var staff = staffList();
+/* 날짜 한 개를 그 줄에 넣기/빼기. 희망 휴무는 wish 배열, 나머지는 setCell(pins+codes) */
+function wsAddDay(pid, key, d) {
+  if (key !== 'W') { setCell(pid, d, key); return; }
   var m = month(curYM);
+  pushUndo();
+  m.wish[pid] = m.wish[pid] || [];
+  if (m.wish[pid].indexOf(d) < 0) m.wish[pid].push(d);
+  save(); renderHome();
+}
+function wsRemoveDay(pid, key, d) {
+  if (key !== 'W') { setCell(pid, d, ''); return; }
+  var m = month(curYM);
+  pushUndo();
+  var w = m.wish[pid] || [];
+  var i = w.indexOf(d);
+  if (i >= 0) w.splice(i, 1);
+  save(); renderHome();
+}
+/* 숫자 칸 하나가 바뀌었을 때. 값이 다른 줄에 이미 있으면 그 줄에서 빼고 이리로 옮긴다.
+   어떤 경우든 마지막에 다시 그려서 정렬·요약을 맞춘다(포커스는 잃어도 되는 흐름). */
+function wsDayChange(key, idx, val) {
+  var p = wsPerson();
+  if (!p) return;
+  var days = daysInYM(curYM);
+  var ds = wsRowDays(p.id, key);
+  var old = ds[idx] != null ? ds[idx] : null;
+  var s = String(val == null ? '' : val).trim();
+
+  if (s === '') {                                   // 비우면 그 날짜를 뺀다
+    if (old != null) wsRemoveDay(p.id, key, old);
+    renderWishScreen();
+    return;
+  }
+  var d = parseInt(s, 10);
+  if (isNaN(d) || d < 1 || d > days) {
+    toast('1~' + days + '일 사이 숫자를 넣어주세요');
+    renderWishScreen();
+    return;
+  }
+  if (d === old) { renderWishScreen(); return; }
+  if (ds.indexOf(d) >= 0) {                         // 같은 줄에 이미 있는 날짜
+    toast('이미 넣은 날짜예요');
+    renderWishScreen();
+    return;
+  }
+  var from = null;                                  // 다른 줄에 있으면 옮겨온다
+  for (var i = 0; i < WISH_ROWS.length; i++) {
+    var r = WISH_ROWS[i];
+    if (r.key === key) continue;
+    if (wsRowDays(p.id, r.key).indexOf(d) >= 0) { from = r; break; }
+  }
+  if (from) wsRemoveDay(p.id, from.key, d);
+  if (old != null) wsRemoveDay(p.id, key, old);
+  wsAddDay(p.id, key, d);
+  if (old == null && wsExtra[key] > 0) wsExtra[key]--;   // [+]로 만든 빈 칸을 채웠다
+  if (from) toast(d + '일을 ' + wsRowLabel(key) + '(으)로 바꿨어요');
+  renderWishScreen();
+}
+function wsFixOpen() { wsFixOn = true; renderWishScreen(); }
+function wsFixDel(d) {
+  var p = wsPerson();
+  if (!p) return;
+  setCell(p.id, d, '');
+  renderWishScreen();
+}
+function wsFixPick() {
+  var p = wsPerson();
+  var el = document.getElementById('wsFixDay');
+  if (!p || !el) return;
+  var days = daysInYM(curYM);
+  var d = parseInt(String(el.value || '').trim(), 10);
+  if (isNaN(d) || d < 1 || d > days) { toast('1~' + days + '일 사이 숫자를 넣어주세요'); return; }
+  wsFixOn = false;
+  openCodeSheet(p.id, d, { pinOnly: true, after: renderWishScreen });
+}
+/* 사람 고르기 시트 — 이름 검색(부분일치·공백 무시) + 직군 묶음 */
+function openWishPersonSheet() {
   openSheet(
     '<div class="sh-head"><h3>사람 고르기</h3>' +
     '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
-    staff.map(function (p, i) {
-      var w = (m.wish[p.id] || []).length, pn = Object.keys(m.pins[p.id] || {}).length;
-      return '<button class="listrow" onclick="wsIdx=' + i + ';closeSheet();renderWishScreen()">' +
-        '<span class="lr-ico" style="border-radius:999px">' + esc(p.name.charAt(0)) + '</span>' +
-        '<span class="lr-tx"><b>' + esc(p.name) + '</b><span class="lr-sub">희망 ' + w + '건 · 고정 ' + pn + '건</span></span>' +
-        (i === wsIdx ? '<span class="lr-val" style="color:var(--brand);font-weight:800">보는 중</span>' : '') +
-        '</button>';
-    }).join('')
+    '<input type="text" class="sh-input" id="wsPsQ" placeholder="이름 검색" oninput="wsPersonFilter(this.value)">' +
+    '<div id="wsPsList">' + wsPersonListHtml('') + '</div>'
   );
+}
+function wsPersonFilter(q) {
+  var el = document.getElementById('wsPsList');
+  if (el) el.innerHTML = wsPersonListHtml(q);
+}
+function wsPersonListHtml(q) {
+  var key = String(q == null ? '' : q).replace(/\s+/g, '');
+  var html = '';
+  groupsPresent().forEach(function (g) {
+    var all = groupStaff(g);
+    var list = key ? all.filter(function (p) { return p.name.replace(/\s+/g, '').indexOf(key) >= 0; }) : all;
+    if (!list.length) return;
+    html += '<div class="grouplabel">' + groupNames[g] + '<span>' + list.length + '명</span></div>';
+    list.forEach(function (p) {
+      var ix = all.indexOf(p);
+      var cur = (g === wsGroup && ix === wsIdx);
+      html += '<button class="listrow" onclick="wsPickPerson(\'' + g + '\',' + ix + ')">' +
+        '<span class="lr-ico" style="border-radius:999px">' + esc(p.name.charAt(0)) + '</span>' +
+        '<span class="lr-tx"><b>' + esc(p.name) + '</b><span class="lr-sub">' + wsSummary(p.id) + '</span></span>' +
+        (cur ? '<span class="lr-val" style="color:var(--brand);font-weight:800">보는 중</span>' : '') +
+        '</button>';
+    });
+  });
+  return html || '<p class="hint" style="margin:12px 0 4px">찾는 이름이 없어요.</p>';
+}
+function wsPickPerson(g, ix) {
+  wsGroup = g; wsIdx = ix;
+  wsResetExtra();
+  closeSheet();
+  renderWishScreen();
 }
 
 /* ---- 데이터 및 계정 화면(14) ---- */
@@ -2639,7 +2875,7 @@ function exportImage() {
   var gs = groupsPresent();
   var wdNames = ['일', '월', '화', '수', '목', '금', '토'];
   var codeColors = { D: '#2f9e44', MD: '#66a80f', E: '#e8590c', E2: '#f08c00', N: '#3b5bdb' };
-  var restDisp = { O: '－', V: '휴', CO: '대', EDU: '교' };
+  var restDisp = { O: '－', V: '휴', CO: '대', EDU: '교', HA: '전반', HP: '후반' };
   var FF = '"Malgun Gothic","Apple SD Gothic Neo",sans-serif';
   var S = 2;
   var left = 20, top = 76;
@@ -2660,7 +2896,7 @@ function exportImage() {
   ctx.fillText(pt.y + '년 ' + pt.m + '월 근무표', left, 30);
   ctx.fillStyle = '#948e9e';
   ctx.font = '600 13px ' + FF;
-  ctx.fillText('D 데이 · MD 미들 · E/E2 이브닝 · N 나이트 · － 오프 · 휴 연차 · 대 대휴 · 교 교육 · ★ 희망', left, 56);
+  ctx.fillText('D 데이 · MD 미들 · E/E2 이브닝 · N 나이트 · － 오프 · 휴 연차 · 대 대휴 · 교 교육 · 전반/후반 반차 · ★ 희망', left, 56);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#aaa4bb';
   ctx.font = '700 14px ' + FF;
@@ -2716,7 +2952,8 @@ function exportImage() {
       ctx.fill();
       ctx.fillStyle = tx;
       ctx.textAlign = 'center';
-      ctx.font = '800 15px ' + FF;
+      /* 반차(전반·후반)는 두 글자라 칸을 넘치므로 글씨만 줄인다 */
+      ctx.font = ((c === 'HA' || c === 'HP') ? '800 10px ' : '800 15px ') + FF;
       ctx.fillText(disp, x + cellW / 2, y + cellH / 2 + 1);
     }
     /* 개수 */
