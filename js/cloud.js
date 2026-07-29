@@ -105,6 +105,24 @@ var Cloud = (function () {
     });
   }
 
+  /* 회원탈퇴 — Edge Function이 본인 확인(JWT) 후 계정을 삭제한다.
+     서버의 user_data·app_events·user_backups는 FK CASCADE로 함께 지워진다(되돌릴 수 없음). */
+  function deleteAccount() {
+    if (!sb) return Promise.resolve({ error: { message: '로그인 준비 중이에요. 잠시 후 다시 시도해주세요.' } });
+    return sb.auth.getSession().then(function (s) {
+      var t = s && s.data && s.data.session && s.data.session.access_token;
+      if (!t) return { error: { message: '로그인한 뒤에 쓸 수 있어요.' } };
+      return fetch(CLOUD_CONFIG.url + '/functions/v1/delete-account', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + t, 'apikey': CLOUD_CONFIG.key }
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          return r.ok ? { error: null } : { error: { message: j.error || ('서버 오류(' + r.status + ')가 났어요. 잠시 후 다시 시도해주세요.') } };
+        });
+      }, function () { return { error: { message: '인터넷 연결을 확인하고 다시 시도해주세요.' } }; });
+    });
+  }
+
   /* 대한민국 공휴일 조회 — 키는 서버에만 있다(공공데이터포털 특일정보 프록시).
      실패해도 앱은 내장 표로 굴러간다(조용한 실패).
      ⚠️ sb 가드(2026-07-21): 부팅 시 renderHome→ensureHolidays가 Cloud.init()(=sb 생성)보다
@@ -165,6 +183,7 @@ var Cloud = (function () {
     pull: pull, push: push, schedulePush: schedulePush, insertEvents: insertEvents,
     setAuthFlow: setAuthFlow, inAuthFlow: inAuthFlow,
     oauthProviders: oauthProviders, signInOAuth: signInOAuth, aiAnalyze: aiAnalyze, holidays: holidays,
-    setPassword: setPassword, signOutOthers: signOutOthers, resetEmail: resetEmail
+    setPassword: setPassword, signOutOthers: signOutOthers, resetEmail: resetEmail,
+    deleteAccount: deleteAccount
   };
 })();

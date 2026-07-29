@@ -1,10 +1,12 @@
 /* 엄만달 서비스 워커 — 전 파일 캐시로 오프라인 동작.
    CACHE 버전은 이 파일에 직접 적는다(js/version.js와 같은 커밋에서 함께 올릴 것) —
    SW 갱신 감지는 본체 바이트 변경만이 전 브라우저에서 보장되기 때문(2026-07-29). */
-var CACHE = 'ummandal-v7-7-0';
+var CACHE = 'ummandal-v7-8-0';
 var ASSETS = [
   './',
   './index.html',
+  './privacy.html',
+  './account-deletion.html',
   './css/style.css',
   './js/vendor/xlsx.full.min.js',
   './js/holidays.js',
@@ -52,7 +54,18 @@ self.addEventListener('fetch', function (e) {
           var copy = res.clone();
           caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
         }
+        /* 화면 이동이 404/5xx면 앱 본체로 대신 응답 — TWA에서 오류 페이지가
+           "앱 크래시"로 집계되는 것을 막는다(2026-07-29, 플레이 심사 대응) */
+        if (e.request.mode === 'navigate' && res && res.status >= 400) {
+          return caches.match('./index.html').then(function (f) { return f || res; });
+        }
         return res;
+      }).catch(function (err) {
+        /* 오프라인에서 미캐시 화면 이동 — 캐시된 앱 본체로 폴백 */
+        if (e.request.mode === 'navigate') {
+          return caches.match('./index.html').then(function (f) { if (f) return f; throw err; });
+        }
+        throw err;
       });
     })
   );

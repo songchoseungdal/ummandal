@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>엄만달 개인정보처리방침</title>
+<style>
+  :root { --ink:#26222e; --sub:#6d6878; --brand:#6a4bc4; --line:#e6e1d8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background:#f6f3ec; color:var(--ink); font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+         line-height:1.75; font-size:16.5px; word-break:keep-all; }
+  .wrap { max-width:720px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-size:26px; margin:18px 0 6px; }
+  h2 { font-size:19px; margin:34px 0 10px; color:var(--brand); }
+  p, li { margin-bottom:8px; }
+  ul { padding-left:22px; margin-bottom:10px; }
+  .date { color:var(--sub); font-size:14.5px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0 14px; font-size:15px; background:#fff; }
+  th, td { border:1px solid var(--line); padding:9px 10px; text-align:left; vertical-align:top; }
+  th { background:#f1ecff; font-weight:700; }
+  .box { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:12px 0; }
+  a { color:var(--brand); }
+  .back { display:inline-block; margin-bottom:8px; color:var(--brand); text-decoration:none; font-weight:700; }
+  .tblwrap { overflow-x:auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="./index.html">← 엄만달로 돌아가기</a>
+  <h1>엄만달 개인정보처리방침</h1>
+  <p class="date">시행일: 2026년 7월 29일</p>
+
+  <p>엄만달(이하 "앱")은 교대근무 근무표를 만드는 서비스입니다. 운영자는 이용자의 개인정보를 소중히 다루며,
+  「개인정보 보호법」 등 관련 법령을 지킵니다. 이 방침은 앱과 웹
+  (https://songchoseungdal.github.io/ummandal/)에 똑같이 적용됩니다.</p>
+
+  <h2>1. 수집하는 정보와 이용 목적</h2>
+  <div class="tblwrap"><table>
+    <tr><th>항목</th><th>내용</th><th>목적</th></tr>
+    <tr><td>계정 정보</td><td>이메일 주소, 비밀번호(암호화 저장). 구글 로그인 시 구글 계정 이메일</td><td>로그인, 기기 간 데이터 이어쓰기</td></tr>
+    <tr><td>근무표 데이터</td><td>이용자가 직접 입력한 구성원 이름·직군·근무 기록·희망 휴무·근무 규칙</td><td>근무표 생성·저장·동기화</td></tr>
+    <tr><td>근무표 사진·PDF</td><td>「사진·PDF로 근무표 읽기」 기능에서 이용자가 올린 파일(사진 속 이름 포함)</td><td>AI가 근무표를 읽어 자동 입력(전송 전 화면에서 별도 동의를 받음)</td></tr>
+    <tr><td>사용 기록(자동)</td><td>화면 이동, 기능 사용 여부, 오류 코드(계정 ID와 연결됨). 근무표 내용·이름은 포함되지 않음</td><td>오류 파악과 서비스 품질 개선</td></tr>
+    <tr><td>자동 백업</td><td>서버에 저장된 근무표 데이터의 하루 1회 백업본</td><td>실수로 데이터를 덮어썼을 때 복구</td></tr>
+  </table></div>
+  <p>앱은 광고를 싣지 않으며, 광고·추적 목적의 정보를 수집하지 않습니다. 결제 정보도 수집하지 않습니다(전부 무료).</p>
+
+  <h2>2. 보관 기간</h2>
+  <ul>
+    <li><b>계정·근무표 데이터</b>: 회원탈퇴 시 즉시 삭제됩니다.</li>
+    <li><b>사용 기록</b>: 90일이 지나면 자동 삭제됩니다. 탈퇴 시 즉시 삭제됩니다.</li>
+    <li><b>자동 백업</b>: 30일이 지나면 자동 삭제됩니다. 탈퇴 시 즉시 삭제됩니다.</li>
+    <li><b>근무표 사진·PDF</b>: 판독이 끝나면 저장하지 않습니다(일시 처리).</li>
+  </ul>
+
+  <h2>3. 처리 위탁과 국외 이전</h2>
+  <p>앱은 서비스 운영을 위해 아래 업체에 개인정보 처리를 맡기고 있습니다. 데이터가 국외(미국)로 이전·보관되는 항목이 있습니다.</p>
+  <div class="tblwrap"><table>
+    <tr><th>받는 자</th><th>이전되는 항목</th><th>국가</th><th>이전 방법·시점</th><th>보유 기간</th></tr>
+    <tr><td>Supabase Inc. (데이터베이스·로그인 서버)</td><td>계정 정보, 근무표 데이터, 사용 기록, 자동 백업</td><td>미국</td><td>서비스 이용 시 암호화 통신(HTTPS)으로 전송·보관</td><td>탈퇴 또는 위 2번 기간까지</td></tr>
+    <tr><td>Anthropic PBC (AI 판독)</td><td>이용자가 올린 근무표 사진·PDF</td><td>미국</td><td>「사진·PDF로 근무표 읽기」 사용 시에만 전송</td><td>판독 후 저장하지 않음</td></tr>
+    <tr><td>Google LLC (구글 로그인)</td><td>구글 계정 이메일(구글 로그인 선택 시)</td><td>미국</td><td>구글 로그인 사용 시</td><td>구글 정책에 따름</td></tr>
+  </table></div>
+  <p>공휴일 정보는 한국 공공데이터포털에서 가져오며, 이때 개인정보는 전송되지 않습니다.
+  이용자는 국외 이전을 원하지 않을 경우 해당 기능(회원가입, AI 읽기)을 사용하지 않을 수 있으나, 이 경우 서비스 이용이 제한됩니다.</p>
+
+  <h2>4. 제3자 제공</h2>
+  <p>운영자는 이용자의 개인정보를 위 수탁사 외의 제3자에게 제공하거나 판매하지 않습니다.
+  법령에 따라 수사기관 등이 적법하게 요구하는 경우는 예외입니다.</p>
+
+  <h2>5. 이용자의 권리와 행사 방법</h2>
+  <div class="box">
+    <p><b>내 정보 보기·고치기</b>: 앱 안에서 언제든 직접 확인·수정할 수 있습니다.</p>
+    <p><b>회원탈퇴(전체 삭제)</b>: 앱의 <b>메뉴 → 데이터 및 계정 → 회원탈퇴</b>에서 직접 할 수 있습니다.
+    탈퇴하면 계정·근무표·사용 기록·백업이 모두 즉시 삭제되며 되돌릴 수 없습니다.</p>
+    <p><b>앱 없이 삭제 요청</b>: <a href="./account-deletion.html">계정 삭제 안내 페이지</a>를 참고하거나
+    아래 이메일로 요청하면 확인 후 7일 이내에 삭제해 드립니다.</p>
+  </div>
+
+  <h2>6. 파기 절차</h2>
+  <p>보관 기간이 끝났거나 탈퇴한 경우, 전자적 파일 형태의 개인정보는 복구할 수 없는 방법으로 즉시 삭제합니다.
+  자동 백업본도 같은 방식으로 함께 삭제됩니다.</p>
+
+  <h2>7. 안전성 확보 조치</h2>
+  <ul>
+    <li>모든 통신은 암호화(HTTPS)됩니다.</li>
+    <li>비밀번호는 암호화되어 저장되며 운영자도 볼 수 없습니다.</li>
+    <li>서버 데이터는 계정별 접근 제한(행 수준 보안)으로 본인만 읽고 쓸 수 있습니다.</li>
+  </ul>
+
+  <h2>8. 아동의 개인정보</h2>
+  <p>이 앱은 성인 근무자를 위한 서비스로, 만 14세 미만 아동을 대상으로 하지 않으며
+  아동의 개인정보를 의도적으로 수집하지 않습니다.</p>
+
+  <h2>9. 개인정보 보호책임자</h2>
+  <div class="box">
+    <p>개인정보 보호책임자: 엄만달 운영자</p>
+    <p>문의 이메일: <a href="mailto:screencl@naver.com">screencl@naver.com</a></p>
+    <p>개인정보 관련 문의·열람·정정·삭제·처리정지 요청을 보내주시면 지체 없이 답변드립니다.
+    권리 침해에 대한 상담은 개인정보침해신고센터(privacy.kisa.or.kr, 국번 없이 118)에서도 받을 수 있습니다.</p>
+  </div>
+
+  <h2>10. 방침 변경</h2>
+  <p>이 방침이 바뀌면 시행 7일 전에 앱 또는 이 페이지에 알립니다. 중요한 변경(수집 항목·위탁사 추가 등)은
+  시행 30일 전에 알립니다.</p>
+</div>
+</body>
+</html>

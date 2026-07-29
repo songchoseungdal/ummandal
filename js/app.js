@@ -1706,8 +1706,11 @@ function renderDataScreen() {
       '<div class="datarow"><span class="dr-tx"><b>로그인 계정</b></span><span class="dr-val">' + esc(u.email || '') + '</span></div>' +
       '<button class="datarow" onclick="openPwChangeSheet()">' +
       '<span class="dr-tx"><b>비밀번호 변경</b></span><span class="dr-go">' + ic('chevR') + '</span></button>' +
+      '<a class="datarow" href="./privacy.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">' +
+      '<span class="dr-tx"><b>개인정보처리방침</b></span><span class="dr-go">' + ic('chevR') + '</span></a>' +
       '</div>' +
-      '<button class="logoutbtn" onclick="cloudLogout()">로그아웃</button>'
+      '<button class="logoutbtn" onclick="cloudLogout()">로그아웃</button>' +
+      '<button class="logoutbtn" style="font-size:14.5px;opacity:.75" onclick="openDeleteAccountSheet()">회원탈퇴</button>'
     : '';
   document.getElementById('dataScreenBody').innerHTML =
     ssTop('데이터 및 계정', '완료') + syncCard + fileCard + acctCard;
@@ -1736,6 +1739,40 @@ function pwChangeApply() {
     Cloud.signOutOthers().catch(function () { });
     closeSheet();
     toast('비밀번호를 바꿨어요 ✓');
+  });
+}
+/* ---- 회원탈퇴 (플레이스토어 계정 삭제 정책 대응, 2026-07-29) ----
+   서버가 계정을 지우면 근무표·사용 기록·자동 백업이 전부 연쇄 삭제된다(되돌릴 수 없음).
+   실수 방지: 시트 안내 → 확인 문구 체크의 2단계. */
+function openDeleteAccountSheet() {
+  openSheet(
+    '<div class="sh-head"><h3>회원탈퇴</h3>' +
+    '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
+    '<p style="margin:4px 0 8px">탈퇴하면 계정과 함께 저장된 <b>근무표·사용 기록·자동 백업이 모두 지워지고,<br>되돌릴 수 없어요.</b></p>' +
+    '<p class="hint" style="margin-bottom:4px">근무표를 남기고 싶으면 먼저 「파일로 백업하기」로 저장해두세요.</p>' +
+    '<label class="hint" style="display:flex;align-items:center;gap:8px;margin:10px 0 2px;font-size:15.5px">' +
+    '<input type="checkbox" id="delAcctChk" style="width:20px;height:20px"> 안내를 읽었고, 모두 지우는 것에 동의해요</label>' +
+    '<span class="authmsg" id="delAcctMsg"></span>' +
+    '<div class="btnrow"><button class="btn gray" onclick="closeSheet()">그만두기</button>' +
+    '<button class="btn" style="background:var(--danger)" onclick="deleteAccountGo(this)">탈퇴하기</button></div>'
+  );
+}
+function deleteAccountGo(btn) {
+  var chk = document.getElementById('delAcctChk');
+  var msg = document.getElementById('delAcctMsg');
+  if (!chk || !chk.checked) { if (msg) msg.textContent = '위 확인 칸에 먼저 표시해주세요.'; return; }
+  btn.disabled = true; btn.textContent = '지우는 중…';
+  Cloud.deleteAccount().then(function (res) {
+    if (res.error) {
+      btn.disabled = false; btn.textContent = '탈퇴하기';
+      if (msg) msg.textContent = res.error.message || '탈퇴하지 못했어요. 잠시 후 다시 시도해주세요.';
+      return;
+    }
+    /* 서버는 이미 삭제됨 — 이 기기의 데이터·세션 흔적도 지우고 처음 화면으로 */
+    try { localStorage.removeItem('ummandal_v1'); localStorage.removeItem('ummandal_tel_q'); } catch (e) { }
+    try { Cloud.signOut().catch(function () { }); } catch (e) { }
+    alert('탈퇴가 끝났어요. 그동안 엄만달을 써주셔서 감사해요.');
+    location.reload();
   });
 }
 /* 우리 병동 습관 메모 — AI가 읽어 저장한 참고 목록. 자동 강제 없음(초안 참고용).
@@ -2077,7 +2114,8 @@ function renderAuth() {
       '<button class="btn big xl" onclick="cloudSignup()">회원가입</button>' +
       '<span class="authmsg" id="cloudMsg"></span>' +
       '<div class="auth-links">이미 계정이 있나요? <a class="link" onclick="cloudGoto(\'main\')">로그인</a></div>' +
-      '<p class="auth-note">가입하면 확인 메일이 가요.<br>메일함에서 링크를 한 번만 눌러주시면 가입이 끝나요.</p>' +
+      '<p class="auth-note">가입하면 확인 메일이 가요.<br>메일함에서 링크를 한 번만 눌러주시면 가입이 끝나요.<br>' +
+      '가입하면 <a class="link" href="./privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 따라 정보가 처리돼요.</p>' +
       '</div>';
   } else if (cloudView === 'newpw') {
     body.innerHTML = '<div class="auth-wrap" style="padding-top:4px">' +
@@ -2121,7 +2159,8 @@ function renderAuth() {
       '<button class="btn big xl" onclick="cloudLogin()">로그인</button>' +
       '<span class="authmsg" id="cloudMsg"></span>' +
       '<div class="auth-links"><a class="link" onclick="cloudGoto(\'emailReset\')">비밀번호 찾기</a><br>' +
-      '처음이신가요? <a class="link" onclick="cloudGoto(\'signup\')">회원가입</a></div>' +
+      '처음이신가요? <a class="link" onclick="cloudGoto(\'signup\')">회원가입</a><br>' +
+      '<a class="link" href="./privacy.html" target="_blank" rel="noopener" style="font-weight:400;font-size:14px">개인정보처리방침</a></div>' +
       '</div>';
   }
   renderIcons(body);
@@ -2451,10 +2490,34 @@ function aiImportReady() {
   if (aiBusy) return false;
   return true;
 }
+/* AI 전송 사전 동의(2026-07-29, 플레이스토어 제3자 AI 정책 대응) —
+   파일 선택창이 열리기 전에 국외 AI 전송 사실을 알리고 명시적 동의를 받는다.
+   3회뿐인 기능이라 매번 물어도 부담이 없다(동의 기록 저장 대신 매회 확인). */
+var _aiConsentNext = null;
+function aiConsentAsk(next) {
+  _aiConsentNext = next;
+  openSheet(
+    '<div class="sh-head"><h3>보내기 전에 확인해주세요</h3>' +
+    '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
+    '<p style="margin:4px 0 8px">선택한 사진·PDF는 근무표를 읽기 위해<br><b>AI 서비스(Anthropic, 미국)로 전송</b>돼요.<br>사진에 적힌 <b>이름도 함께 전송</b>돼요.</p>' +
+    '<p class="hint" style="margin-bottom:4px">읽기가 끝나면 AI 서버에 저장되지 않아요. 자세한 내용은 ' +
+    '<a class="link" href="./privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 있어요.</p>' +
+    '<div class="btnrow"><button class="btn gray" onclick="closeSheet()">그만두기</button>' +
+    '<button class="btn" onclick="aiConsentGo()">동의하고 계속</button></div>'
+  );
+}
+function aiConsentGo() {
+  var next = _aiConsentNext; _aiConsentNext = null;
+  closeSheet();
+  if (next) next();
+}
 /* 사진 — 찍기/앨범 선택 시트. 기종·브라우저마다 시스템 사진 선택창이 달라
    (카메라가 없는 선택창, 폴더 탭이 없는 선택창 등) 카메라 직행 경로를 앱이 직접 제공한다. */
 function aiImportStart() {
   if (!aiImportReady()) return;
+  aiConsentAsk(aiImportPick);
+}
+function aiImportPick() {
   openSheet(
     '<div class="sh-head"><h3>사진을 어떻게 올릴까요?</h3>' +
     '<button class="sh-x" onclick="closeSheet()" aria-label="닫기">' + ic('close') + '</button></div>' +
@@ -2472,7 +2535,7 @@ function aiImportStart() {
 /* PDF — 파일 선택창 (드물게 쓰는 경로라 따로 둔다) */
 function aiImportPdfStart() {
   if (!aiImportReady()) return;
-  document.getElementById('aiImportPdf').click();
+  aiConsentAsk(function () { document.getElementById('aiImportPdf').click(); });
 }
 /* 파일 → base64 (사진은 긴 변 2200px·JPEG로 축소해 용량·비용 절감) */
 function aiFileToB64(file) {
