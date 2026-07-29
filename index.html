@@ -215,8 +215,10 @@
 <script src="js/engine2.js"></script>
 <script src="js/store.js"></script>
 <script src="js/vendor/supabase.js"></script>
+<script src="js/version.js"></script>
 <script src="js/config.js"></script>
 <script src="js/cloud.js"></script>
+<script src="js/telemetry.js"></script>
 <script src="js/importer.js"></script>
 <script src="js/app.js"></script>
 <script>
@@ -232,14 +234,18 @@
       // 활성 서비스워커가 알려주는 버전을 화면에 표기
       navigator.serviceWorker.addEventListener('message', function (e) {
         if (!e.data || e.data.type !== 'VERSION') return;
-        var v = String(e.data.version).replace('ummandal-', '').replace(/-/g, '.');
+        var v = String(e.data.version).replace('ummandal-', '').replace(/-/g, '.').replace(/^v/, '');
         var els = document.querySelectorAll('.appver');
         for (var i = 0; i < els.length; i++) els[i].textContent = '버전 ' + v;
+        /* sw.js와 version.js는 같은 커밋에서 함께 올리는 약속 — 어긋나면 기록해 둔다 */
+        if (window.APP_VER && v !== window.APP_VER && window.Tel)
+          Tel.error('E92', { message: 'sw=' + v + ' page=' + window.APP_VER });
       });
       function askVersion() {
         if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('GET_VERSION');
       }
-      navigator.serviceWorker.register('sw.js').then(function (reg) {
+      /* updateViaCache:'none' — 갱신 검사 때 HTTP 캐시(max-age=600)를 타지 않고 항상 새로 비교 */
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
         reg.update();
         // 앱으로 다시 돌아올 때마다 + 켜둔 채로 오래 있을 때도 새 버전 확인
         document.addEventListener('visibilitychange', function () {

@@ -49,7 +49,16 @@ function krFetchYear(year, onDone) {
   _krFetching[year] = true;
   Cloud.holidays(year).then(function (res) {
     _krFetching[year] = false;
-    if (!res || res.status !== 200 || !res.data || !res.data.months) { if (onDone) onDone(false); return; }
+    if (!res || res.status !== 200 || !res.data || !res.data.months) {
+      /* status 0(부팅 순서)·401(비로그인)·오프라인은 정상 폴백 — 진짜 서버 오류만 기록(E13) */
+      try {
+        if (res && res.status && res.status !== 401 && navigator.onLine &&
+            window.Cloud && Cloud.getUser && Cloud.getUser() && window.Tel)
+          Tel.error('E13', { message: 'holidays http ' + res.status });
+      } catch (e) { }
+      if (onDone) onDone(false);
+      return;
+    }
     KR_HOLIDAY_FETCHED[year] = res.data.months;
     try { localStorage.setItem('krHoliday_' + year, JSON.stringify(res.data.months)); } catch (e) { }
     if (onDone) onDone(true);

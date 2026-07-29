@@ -140,8 +140,15 @@ var Cloud = (function () {
       .upsert({ user_id: user.id, data: data, updated_at: new Date().toISOString() })
       .then(function (res) {
         if (!res.error) lastSync = new Date();
+        /* 동기화 실패 계측 — 호출 경로 3곳(schedulePush·로그인 업로드 2곳)을 여기서 일괄 커버 */
+        else { try { window.Tel && Tel.error('E10', res.error); } catch (e) { } }
         return res;
       });
+  }
+  /* 텔레메트리 이벤트 배치 적재(telemetry.js 전용) — 실패는 호출부가 큐로 처리 */
+  function insertEvents(rows) {
+    if (!user || !sb) return Promise.resolve({ error: { message: 'not ready' } });
+    return sb.from('app_events').insert(rows);
   }
   function schedulePush(getData, done) {
     if (!user) return;
@@ -155,7 +162,7 @@ var Cloud = (function () {
     enabled: enabled, init: init, onChange: onChange,
     getUser: getUser, getLastSync: getLastSync,
     signUp: signUp, signIn: signIn, signOut: signOut,
-    pull: pull, push: push, schedulePush: schedulePush,
+    pull: pull, push: push, schedulePush: schedulePush, insertEvents: insertEvents,
     setAuthFlow: setAuthFlow, inAuthFlow: inAuthFlow,
     oauthProviders: oauthProviders, signInOAuth: signInOAuth, aiAnalyze: aiAnalyze, holidays: holidays,
     setPassword: setPassword, signOutOthers: signOutOthers, resetEmail: resetEmail

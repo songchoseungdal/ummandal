@@ -83,12 +83,14 @@ function openScreen(id) {
   document.body.classList.add('nonav');
   document.getElementById(id).classList.add('on');
   document.getElementById(id).scrollTop = 0;
+  window.Tel && Tel.screen(id.replace('screen-', ''));
 }
 function closeScreen() {
   if (!openScreenId) return;
   document.getElementById(openScreenId).classList.remove('on');
   openScreenId = null;
   document.body.classList.remove('nonav');
+  window.Tel && Tel.back();
 }
 function ssTop(title, doneLabel, doneFn) {
   return '<div class="ss-top"><button class="ss-back" onclick="' + (doneFn || 'closeScreen()') + '" aria-label="뒤로">' + ic('back') + '</button>' +
@@ -267,6 +269,7 @@ function showTab(t) {
   if (t === 'archive') { renderArchive(); renderCloudCard(); renderInstallCard(); }
   renderBrowserGate();
   window.scrollTo(0, 0);
+  window.Tel && Tel.screen('tab:' + t);
 }
 function moveMonth(dir) {
   closeSheet();
@@ -974,6 +977,9 @@ function genFixRow(dest) {
 function showGenIssuesSheet(hardIssues) {
   var groups = { rules: [], staff: [], pre: [] };
   hardIssues.forEach(function (v) { (groups[v.fix] || groups.rules).push(v); });
+  /* 어디서 막히는지 분류별 건수만 — 메시지 내용(이름 포함 가능)은 수집하지 않는다 */
+  window.Tel && Tel.event('funnel', 'gen_block', null,
+    { rules: groups.rules.length, staff: groups.staff.length, pre: groups.pre.length });
   /* 사람이 특정된 첫 충돌을 바로가기 대상으로 — 그 사람의 입력 화면이 한 장에 다 보인다 */
   var pre1 = groups.pre.filter(function (v) { return v.pid != null; })[0];
   _genFixTarget = pre1 ? { pid: pre1.pid } : null;
@@ -1030,21 +1036,24 @@ function generate() {
   pushUndo();
   var perMax = 1500, seed = Date.now() % 100000, t0 = Date.now();
   var totalMax = perMax * jobs.length;
+  window.Tel && Tel.event('funnel', 'gen_start', null, { n: staff.length });
   genShow(staff.length);
   var info = document.getElementById('genInfo');
   info.textContent = softMsgs.map(function (m) { return '⚠️ ' + m; }).join('\n');
   var ji = 0, att = 0, doneAtt = 0, best = null;
+  var applied = false;   // save() 완료 여부 — 예외 복구 때 유효한 undo 스냅샷을 지키기 위함
   var results = {};
   function accept(r) { return r.violations.length === 0 && (r.nightGap || 0) <= 2; }
   function failAll(msg) {
     genHide();
     undoStack.pop();
+    window.Tel && Tel.event('funnel', 'gen_fail', Date.now() - t0, { reason: 'exhaust' });
     showGenExhaustSheet(msg, softMsgs);
   }
   function finishAll() {
     genHide();
     var m = month(curYM);
-    var warn = [], short = [];
+    var warn = [], short = [], violTotal = 0;
     jobs.forEach(function (job) {
       var r = results[job.g];
       // 형평성(상대): 같은 직군에서 최대 휴무자보다 2일+ 덜 쉰 사람만 — 전원 고르게 쉬면(빠듯해도) 안 잡음.
@@ -1054,9 +1063,15 @@ function generate() {
       });
       var maxRest = rests.reduce(function (mx, x) { return Math.max(mx, x.rest); }, 0);
       if (job.staff.length >= 2) rests.forEach(function (x) { if (maxRest - x.rest >= 2) short.push(x.name); });
+      violTotal += r.violations.length;
       if (r.violations.length) warn.push(groupNames[job.g] + ' ' + r.violations.length + '건');
     });
     save();
+    applied = true;
+    /* 위반 있는 초안 채택도 gen_ok로 잡히므로 viol을 함께 남긴다("품질 실패" 분리 집계용).
+       short는 사람 수만 — 이름은 수집 금지(프라이버시 규칙) */
+    window.Tel && Tel.event('funnel', 'gen_ok', Date.now() - t0,
+      { viol: violTotal, short: short.length, att: doneAtt });
     renderHome();
     var lines = ['완성! (' + ((Date.now() - t0) / 1000).toFixed(1) + '초)'];
     if (warn.length) lines.push('⚠️ 다 지키진 못했어요(' + warn.join(', ') + ') — 빨간 칸을 확인해 주세요.');
@@ -1068,36 +1083,47 @@ function generate() {
     info.textContent = lines.join('\n');
     toast(warn.length ? '초안이 나왔어요 — 확인이 필요한 곳이 있어요' : '근무표 초안이 완성됐어요 🌙');
   }
+  /* batch는 setTimeout 체인이라 generate() 바깥의 try/catch로는 예외가 안 잡힌다 —
+     여기서 못 잡으면 진행 화면이 영영 안 닫히는 먹통이 된다(적대 검토 2026-07-29) */
   function batch() {
-    if (genCanceled) { failAllQuiet(); return; }
-    var job = jobs[ji];
-    var end = Math.min(att + 40, perMax);
-    for (; att < end; att++) {
-      var r = E.attempt(job.staff, job.cfg, seed + ji * 7, att);
-      if (r && r.schedule) {
-        if (accept(r)) { results[job.g] = r; break; }
-        var key = r.violations.length * 100 + (r.nightGap || 0);
-        if (!best || key < best.key) best = { r: r, key: key };
-      }
-    }
-    if (results[job.g] || att >= perMax) {
-      if (!results[job.g]) {
-        if (best) { results[job.g] = best.r; }
-        else {
-          failAll('이 조건으로는 ' + groupNames[job.g] + ' 근무표를 만들 수 없었어요.');
-          return;
+    try {
+      if (genCanceled) { failAllQuiet(); return; }
+      var job = jobs[ji];
+      var end = Math.min(att + 40, perMax);
+      for (; att < end; att++) {
+        var r = E.attempt(job.staff, job.cfg, seed + ji * 7, att);
+        if (r && r.schedule) {
+          if (accept(r)) { results[job.g] = r; break; }
+          var key = r.violations.length * 100 + (r.nightGap || 0);
+          if (!best || key < best.key) best = { r: r, key: key };
         }
       }
-      doneAtt += att;
-      ji++; att = 0; best = null;
-      if (ji >= jobs.length) { finishAll(); return; }
+      if (results[job.g] || att >= perMax) {
+        if (!results[job.g]) {
+          if (best) { results[job.g] = best.r; }
+          else {
+            failAll('이 조건으로는 ' + groupNames[job.g] + ' 근무표를 만들 수 없었어요.');
+            return;
+          }
+        }
+        doneAtt += att;
+        ji++; att = 0; best = null;
+        if (ji >= jobs.length) { finishAll(); return; }
+      }
+      genUpdate((doneAtt + att) / totalMax);
+      setTimeout(batch, 0);
+    } catch (e) {
+      genHide();
+      if (!applied) undoStack.pop();
+      window.Tel && Tel.error('E01', e);
+      window.Tel && Tel.event('funnel', 'gen_fail', Date.now() - t0, { reason: 'exception' });
+      alert('근무표를 만드는 중 문제가 생겼어요. 다시 시도해주세요. (E01)');
     }
-    genUpdate((doneAtt + att) / totalMax);
-    setTimeout(batch, 0);
   }
   function failAllQuiet() {   // 사용자가 「생성 취소」 — 조용히 원상 복구
     genHide();
     undoStack.pop();
+    window.Tel && Tel.event('funnel', 'gen_cancel', Date.now() - t0, null);
     toast('만들기를 취소했어요');
   }
   setTimeout(batch, 30);
@@ -1127,6 +1153,7 @@ function genShow(nStaff) {
     '</div>';
   el.className = 'on';
   genUpdate(0);
+  window.Tel && Tel.screen('gen');
 }
 function genUpdate(frac) {
   frac = Math.max(0, Math.min(1, frac));
@@ -1148,6 +1175,7 @@ function genUpdate(frac) {
 function genHide() {
   var el = document.getElementById('genScreen');
   el.className = ''; el.innerHTML = '';
+  window.Tel && Tel.back();
 }
 function genCancel() { genCanceled = true; }
 
@@ -1426,7 +1454,22 @@ function openWishScreen() {
   renderWishScreen();
   openScreen('screen-wish');
 }
-function closeWishScreen() { closeScreen(); renderHome(); }
+function closeWishScreen() {
+  /* 입력 완료 퍼널 — 건수 합계만(누가 언제 쉬는지는 수집하지 않는다) */
+  if (window.Tel) {
+    var m = month(curYM), w = 0, v = 0, h = 0;
+    staffList().forEach(function (p) {
+      w += (m.wish[p.id] || []).length;
+      var pins = m.pins[p.id] || {};
+      Object.keys(pins).forEach(function (d) {
+        if (pins[d] === 'V') v++;
+        else if (pins[d] === 'HA' || pins[d] === 'HP') h++;
+      });
+    });
+    Tel.event('funnel', 'wish_done', null, { w: w, v: v, h: h });
+  }
+  closeScreen(); renderHome();
+}
 function wsPickGroup(g) {
   wsGroup = g; wsIdx = 0;
   wsResetExtra();
@@ -1635,6 +1678,18 @@ function renderDataScreen() {
     '<span class="dr-val">' + (u ? '저장됨<span class="okdot"></span>' : '로그인 안 됨') + '</span></div>' +
     '<div class="datarow"><span class="dr-tx"><b>마지막 저장</b></span><span class="dr-val">' + savedTx + '</span></div>' +
     '</div>';
+  /* 덮어쓰기 직전 스냅샷이 있으면 되돌리기 줄을 노출(없으면 화면에 아예 안 보인다) */
+  var snap = getOverwriteSnap();
+  var snapRow = '';
+  if (snap) {
+    var sd = new Date(snap.ts);
+    snapRow = '<button class="datarow" onclick="restoreOverwriteSnap()">' +
+      '<span class="dr-tx"><b>덮어쓰기 전으로 되돌리기</b><span class="dr-sub">' +
+      (sd.getMonth() + 1) + '월 ' + sd.getDate() + '일 ' +
+      String(sd.getHours()).padStart(2, '0') + ':' + String(sd.getMinutes()).padStart(2, '0') +
+      ' · ' + (SNAP_REASONS[snap.reason] || '데이터 교체') + ' 직전 상태</span></span>' +
+      '<span class="dr-go">' + ic('chevR') + '</span></button>';
+  }
   var fileCard =
     '<div class="rulesec">파일 백업</div><div class="datacard">' +
     '<button class="datarow" onclick="exportData()">' +
@@ -1643,6 +1698,7 @@ function renderDataScreen() {
     '<button class="datarow" onclick="document.getElementById(\'importFile\').click()">' +
     '<span class="dr-tx"><b>백업 불러오기</b><span class="dr-sub">이전에 저장한 파일로 복원해요</span></span>' +
     '<span class="dr-go">' + ic('chevR') + '</span></button>' +
+    snapRow +
     '</div>' +
     '<input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">';
   var acctCard = u
@@ -2174,12 +2230,16 @@ function cloudLogout() {
 }
 function cloudSyncOnLogin() {
   Cloud.pull().then(function (res) {
-    if (res.error) { toast('서버에서 불러오지 못했어요'); renderCloudCard(); return; }
+    if (res.error) {
+      window.Tel && Tel.error('E11', res.error);
+      toast('서버에서 불러오지 못했어요 (E11)'); renderCloudCard(); return;
+    }
     var server = res.data && res.data.data;
     var localAt = db._updatedAt || 0;
     var serverAt = (server && server._updatedAt) || 0;
     function isEmptyDb(d) { return !d || !(d.staff && d.staff.length); }
     function adoptServer() {
+      if (!isEmptyDb(db)) snapBeforeOverwrite('server');   // 이 기기에만 있던 내용 보호
       db = server;
       Store.save(db);
       curYM = db.currentMonth || curYM;
@@ -2187,16 +2247,23 @@ function cloudSyncOnLogin() {
       toast('서버의 최신 내용을 불러왔어요 ☁');
       renderCloudCard();
     }
+    /* push 실패는 성공으로 위장하면 안 된다 — res.error 확인(E10 계측은 Cloud.push 내부) */
+    function pushUp(okMsg) {
+      Cloud.push(db).then(function (r) {
+        if (r && r.error) { toast('서버에 올리지 못했어요. 인터넷 연결을 확인해주세요 (E10)'); renderCloudCard(); return; }
+        toast(okMsg); renderCloudCard(); renderHome();
+      });
+    }
     if (!server) {
       /* 서버가 비어 있음 → 이 기기 내용을 올림 */
-      Cloud.push(db).then(function () { toast('이 기기 내용을 서버에 올렸어요 ☁'); renderCloudCard(); renderHome(); });
+      pushUp('이 기기 내용을 서버에 올렸어요 ☁');
     } else if (isEmptyDb(db) && !isEmptyDb(server)) {
       /* 새 기기(빈 상태)로 로그인 — 시계가 뭐라 하든 서버 데이터를 지킨다 (실데이터 비파괴) */
       adoptServer();
     } else if (serverAt > localAt) {
       adoptServer();
     } else {
-      Cloud.push(db).then(function () { toast('서버에 저장했어요 ☁'); renderCloudCard(); renderHome(); });
+      pushUp('서버에 저장했어요 ☁');
     }
   });
 }
@@ -2278,6 +2345,39 @@ function exportData() {
   a.click();
   toast('백업 파일을 저장했어요 💾');
 }
+/* ---- 덮어쓰기 직전 스냅샷 (2026-07-29) ----
+   서버 백업(user_backups)은 하루 1세대라 "그날 편집한 뒤 가져오기로 덮은" 당일 편집분을
+   못 지킨다(적대 검토). 데이터를 통째로 갈아치우는 3곳(가져오기 적용·백업 파일 복원·
+   서버 데이터 교체) 직전에 현재 상태를 이 기기에 1세대 보관하고,
+   「데이터 및 계정」에 되돌리기 버튼을 노출한다. 복원은 맞바꾸기라 다시 되돌릴 수 있다. */
+var SNAP_KEY = 'ummandal_pre_overwrite';
+var SNAP_REASONS = { 'import': '근무표 가져오기', 'file': '백업 파일 복원', 'server': '서버 데이터 교체' };
+function snapBeforeOverwrite(reason) {
+  try {
+    localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: Date.now(), reason: reason, data: db }));
+  } catch (e) { }
+}
+function getOverwriteSnap() {
+  try {
+    var s = JSON.parse(localStorage.getItem(SNAP_KEY) || 'null');
+    return (s && s.data) ? s : null;
+  } catch (e) { return null; }
+}
+function restoreOverwriteSnap() {
+  var s = getOverwriteSnap();
+  if (!s) return;
+  var label = SNAP_REASONS[s.reason] || '데이터 교체';
+  if (!confirm('지금 내용을 「' + label + '」 직전 상태로 되돌릴까요?\n\n되돌린 뒤에도 같은 버튼으로 다시 바꿀 수 있어요.')) return;
+  var cur = db;
+  db = s.data;
+  /* 맞바꾸기 — 방금 버린 상태를 같은 자리에 넣어 "되돌리기 취소"가 가능하게 */
+  try { localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: Date.now(), reason: s.reason, data: cur })); } catch (e) { }
+  save();
+  undoStack = [];
+  curYM = db.currentMonth || curYM;
+  renderMonthLabel(); renderRules(); renderDataScreen();
+  toast('되돌렸어요 — 확인 후 이상 없으면 그대로 쓰시면 돼요');
+}
 function importData(ev) {
   var f = ev.target.files[0];
   if (!f) return;
@@ -2286,6 +2386,7 @@ function importData(ev) {
     try {
       var data = JSON.parse(reader.result);
       if (!confirm('지금 내용을 백업 파일 내용으로 바꿀까요?')) return;
+      snapBeforeOverwrite('file');
       db = data; save();
       curYM = db.currentMonth || curYM;
       renderMonthLabel(); showTab('home');
@@ -2299,6 +2400,8 @@ function importData(ev) {
 /* ---- 기존 근무표(엑셀) 불러오기 ---- */
 var _importParse = null;   // 기준(최근) 달 parse 결과 — 확인 화면 → 적용에서 재사용
 var _importPrevSheets = [];  // 함께 올린 이전 달들 — 이력으로만 저장(사람·규칙은 기준 달로)
+var _importSrc = '';         // 가져오기 경로('ai'|'xlsx') — 퍼널 구분용
+var _importDone = false;     // applyImport 완료 표시 — 마법사 닫힘이 취소인지 구분
 var _importPatterns = [];    // AI가 관찰한 습관 메모(사진·PDF 경로만). 「맞아요」한 것만 계정에 저장(자동 강제 X)
 /* 습관 메모 dedup용 — 공백만 다른 같은 문장을 중복 저장하지 않도록 정규화 */
 function normPatText(t) { return String(t == null ? '' : t).replace(/\s+/g, ' ').trim(); }
@@ -2306,20 +2409,37 @@ function importXlsx(ev) {
   var f = ev.target.files[0];
   ev.target.value = '';
   if (!f) return;
-  if (typeof XLSX === 'undefined') { alert('엑셀 읽기 도구를 불러오지 못했어요. 인터넷에 한 번 연결한 뒤 새로고침해주세요.'); return; }
+  window.Tel && Tel.event('funnel', 'xls_start');
+  if (typeof XLSX === 'undefined') {
+    window.Tel && Tel.event('funnel', 'xls_fail', null, { code: 'lib' });
+    alert('엑셀 읽기 도구를 불러오지 못했어요. 인터넷에 한 번 연결한 뒤 새로고침해주세요.'); return;
+  }
   var reader = new FileReader();
   reader.onload = function () {
     var res;
     try { res = Importer.parse(reader.result); }
-    catch (e) { alert('엑셀 파일을 읽을 수 없어요. 근무표 엑셀(.xlsx) 파일인지 확인해주세요.'); return; }
-    if (res.error) { alert(res.error + '\n\n날짜(1, 2, 3 …)가 한 줄에 이어진 근무표 엑셀인지 확인해주세요.'); return; }
-    if (!res.rows || !res.rows.length) { alert('사람 이름을 찾지 못했어요. 이름이 한글로 적힌 근무표인지 확인해주세요.'); return; }
+    catch (e) {
+      window.Tel && Tel.event('funnel', 'xls_fail', null, { code: 'parse' });
+      alert('엑셀 파일을 읽을 수 없어요. 근무표 엑셀(.xlsx) 파일인지 확인해주세요.'); return;
+    }
+    if (res.error) {
+      window.Tel && Tel.event('funnel', 'xls_fail', null, { code: 'fmt' });
+      alert(res.error + '\n\n날짜(1, 2, 3 …)가 한 줄에 이어진 근무표 엑셀인지 확인해주세요.'); return;
+    }
+    if (!res.rows || !res.rows.length) {
+      window.Tel && Tel.event('funnel', 'xls_fail', null, { code: 'empty' });
+      alert('사람 이름을 찾지 못했어요. 이름이 한글로 적힌 근무표인지 확인해주세요.'); return;
+    }
     _importParse = res;
     _importPrevSheets = [];                 // 엑셀은 한 장짜리
     _importPatterns = [];                   // 엑셀 경로는 습관 관찰이 없다(서버 AI 경로 전용)
+    _importSrc = 'xlsx';
     renderImportReview(prevYM(curYM, 1));   // 기본값: 지난달
   };
-  reader.onerror = function () { alert('파일을 읽는 중 문제가 생겼어요. 다시 시도해주세요.'); };
+  reader.onerror = function () {
+    window.Tel && Tel.event('funnel', 'xls_fail', null, { code: 'read' });
+    alert('파일을 읽는 중 문제가 생겼어요. 다시 시도해주세요.');
+  };
   reader.readAsArrayBuffer(f);
 }
 /* ---- 사진/PDF AI 가져오기 (2단계) — 서버가 표를 읽고, 분석·확인은 엑셀과 같은 흐름 ---- */
@@ -2419,6 +2539,7 @@ function aiLoadingShow() {
     '<p class="ai-sec" id="aiSec">0초 지났어요</p>' +
     '<p class="ai-warn">⚠️ 다 될 때까지 <b>앱을 닫거나 뒤로 가지 마세요</b>.<br>중간에 멈추면 처음부터 다시 해야 해요.</p></div>';
   el.className = 'on';
+  window.Tel && Tel.screen('ai-wait');
   aiTick = setInterval(function () {
     var sec = Math.floor((Date.now() - aiT0) / 1000);
     var s = document.getElementById('aiStep'), c = document.getElementById('aiSec');
@@ -2437,6 +2558,7 @@ function aiLoadingHide() {
   window.removeEventListener('beforeunload', aiBlockUnload);
   var el = document.getElementById('aiLoading');
   if (el) { el.className = ''; el.innerHTML = ''; }
+  window.Tel && Tel.back();
   /* 막으려고 쌓아둔 기록 한 칸을 조용히 정리 — 전역 뒤로가기 핸들러가 사용자 입력으로 오인하지 않게 */
   if (history.state && history.state.ai) { backSilent++; history.back(); }
 }
@@ -2446,17 +2568,31 @@ function aiImport(ev) {
   if (!fl.length) return;
   if (fl.length > 3) { alert('한 번에 3개까지 올릴 수 있어요. (지금 ' + fl.length + '개를 고르셨어요)\n\n달이 여러 개면 최근 3개 달만 골라주세요.'); return; }
   if (aiBusy) return;                     // 두 번 눌러 겹치지 않게
+  var tAi = Date.now();
+  window.Tel && Tel.event('funnel', 'ai_start', null, { n: fl.length });
   aiLoadingShow();
   Promise.all(fl.map(aiFileToB64)).then(function (files) {
     return Cloud.aiAnalyze(files);
   }).then(function (res) {
     aiLoadingHide();
-    if (!res || !res.status) { alert((res && res.data && res.data.error) || '분석 요청에 실패했어요. 인터넷 연결을 확인해주세요.'); return; }
-    if (res.status !== 200) { alert((res.data && res.data.error) || '분석에 실패했어요. 다시 시도해주세요.'); return; }
-    applyAiResult(res.data);
-  }).catch(function () {
+    if (!res || !res.status) {
+      window.Tel && Tel.error('E20', { message: (res && res.data && res.data.error) || 'no response' });
+      window.Tel && Tel.event('funnel', 'ai_fail', Date.now() - tAi, { code: 'net' });
+      alert(((res && res.data && res.data.error) || '분석 요청에 실패했어요. 인터넷 연결을 확인해주세요.') + ' (E20)');
+      return;
+    }
+    if (res.status !== 200) {
+      window.Tel && Tel.error('E20', { message: 'http ' + res.status });
+      window.Tel && Tel.event('funnel', 'ai_fail', Date.now() - tAi, { status: res.status });
+      alert(((res.data && res.data.error) || '분석에 실패했어요. 다시 시도해주세요.') + ' (E20)');
+      return;
+    }
+    applyAiResult(res.data, tAi);
+  }).catch(function (e) {
     aiLoadingHide();
-    alert('분석 중 문제가 생겼어요. 다시 시도해주세요.');
+    window.Tel && Tel.error('E20', e);
+    window.Tel && Tel.event('funnel', 'ai_fail', Date.now() - tAi, { code: 'exception' });
+    alert('분석 중 문제가 생겼어요. 다시 시도해주세요. (E20)');
   });
 }
 /* 서버가 읽어온 표(원문 셀) 한 장을 엑셀 가져오기와 같은 형태로 변환 */
@@ -2484,11 +2620,19 @@ function aiSheetToParse(sheet) {
    2026-07-20: 예전엔 서버가 여러 장을 무조건 한 표로 합쳐서, 5·6월을 같이 올리면
    뒤섞여 한 달치만 쓴 것처럼 보였다. 이제 달별로 분리해 받는다.
    사람·규칙은 최근 달 기준(전월은 근무 패턴을 이어받기 위한 참고). */
-function applyAiResult(d) {
+function applyAiResult(d, tAi) {
   /* 옛 응답(단일 표) 호환 */
   var sheets = d.sheets && d.sheets.length ? d.sheets : [{ ym: d.ym, days: d.days, rows: d.rows }];
   var parsed = sheets.map(aiSheetToParse).filter(function (p) { return p.rows.length; });
-  if (!parsed.length) { alert('사람 이름을 찾지 못했어요. 표 전체가 잘 보이게 다시 찍어주세요.'); return; }
+  if (!parsed.length) {
+    /* 서버는 200이어도 사용자 관점 실패 — ai_ok로 잡지 않는다 */
+    window.Tel && Tel.event('funnel', 'ai_fail', tAi ? Date.now() - tAi : null, { code: 'empty' });
+    alert('사람 이름을 찾지 못했어요. 표 전체가 잘 보이게 다시 찍어주세요.');
+    return;
+  }
+  window.Tel && Tel.event('funnel', 'ai_ok', tAi ? Date.now() - tAi : null,
+    { sheets: parsed.length, rows: parsed[parsed.length - 1].rows.length });
+  _importSrc = 'ai';
 
   /* 연-월을 아는 것끼리는 날짜순, 모르는 것은 받은 순서 유지 → 마지막이 가장 최근 달 */
   var known = parsed.filter(function (p) { return p.ym; }).sort(function (a, b) { return a.ym < b.ym ? -1 : 1; });
@@ -2603,12 +2747,18 @@ function wizSetMonth() {
 function closeImportReview() {
   var h = document.getElementById('importReview');
   h.className = ''; h.innerHTML = '';
+  /* 적용 없이 닫혔다 = 마법사 이탈 — 어느 단계에서 포기하는지 남긴다 */
+  if (_wiz && !_importDone)
+    window.Tel && Tel.event('funnel', 'import_cancel', null, { step: _wiz.step, src: _importSrc });
+  _importDone = false;
   _importParse = null; _wiz = null;
+  window.Tel && Tel.back();
 }
 function renderImportReview(ym) {
   if (!_importParse) return;
   _wiz = wizBuild(ym, null, null);
   renderWiz();
+  window.Tel && Tel.screen('import-wiz');
 }
 /* 마법사 렌더 — 현재 단계만 그린다 */
 function renderWiz() {
@@ -2728,6 +2878,7 @@ function wizPatternsHTML() {
 }
 function applyImport() {
   if (!_wiz) return;
+  try {
   wizReadStep();                 // 지금 단계(습관) 선택을 마지막으로 반영
   var ym = _wiz.ym;
 
@@ -2749,6 +2900,7 @@ function applyImport() {
   });
   if (!staff.length) { alert('등록할 사람이 없어요. 「빼기」를 하나 이상 풀어주세요.'); return; }
   if (staffList().length && !confirm('인원을 이 근무표 기준으로 다시 등록합니다.\n이름이 같은 사람은 지난 달 근무 기록이 이어지고,\n이 근무표에 없는 사람은 목록에서 빠져요. 계속할까요?')) return;
+  snapBeforeOverwrite('import');   // 덮어쓰기 직전 상태를 이 기기에 1세대 보관(당일 편집분 보호)
 
   /* 규칙: 마법사에서 확정한 값(_wiz.rules)을 그대로 쓴다. 직군 편집은 wizDeriveRules로 이미 반영됨. */
   var r = rules2();
@@ -2806,6 +2958,8 @@ function applyImport() {
   }
   save();
   undoStack = [];   // 이전 편집 스냅샷이 「되돌리기」로 방금 불러온 달을 덮어쓰지 않게
+  _importDone = true;
+  window.Tel && Tel.event('funnel', 'import_apply', null, { staff: staff.length, prev: histSaved, src: _importSrc });
   closeImportReview();
   renderRules();
   showTab('home');
@@ -2815,6 +2969,10 @@ function applyImport() {
   if (patAdded) msg += ' · 습관 메모 ' + patAdded + '개 저장';
   else if (patShown) msg += ' (습관 메모는 저장하지 않았어요)';
   toast(msg);
+  } catch (e) {
+    window.Tel && Tel.error('E21', e);
+    alert('근무표를 적용하는 중 문제가 생겼어요. 다시 시도해주세요. (E21)');
+  }
 }
 
 /* ---- 이미지로 저장 ---- */
@@ -2959,12 +3117,21 @@ function exportImage() {
   ctx.textAlign = 'center';
   ctx.fillText('엄만달로 1분 만에 만들었어요 · 인터넷 없이 동작하는 근무표 앱', W / 2, H - 16);
   cv.toBlob(function (blob) {
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = '엄만달_' + pt.y + '년' + pt.m + '월.png';
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
-    toast('근무표 이미지를 저장했어요 📤');
+    /* 캔버스가 너무 크거나 메모리가 모자라면 blob이 null로 온다 — 조용한 무반응이 되지 않게 */
+    try {
+      if (!blob) throw new Error('toBlob null ' + cv.width + 'x' + cv.height);
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '엄만달_' + pt.y + '년' + pt.m + '월.png';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+      toast('근무표 이미지를 저장했어요 📤');
+      window.Tel && Tel.event('funnel', 'export_ok', null, { w: cv.width, h: cv.height });
+    } catch (e) {
+      window.Tel && Tel.error('E30', e);
+      window.Tel && Tel.event('funnel', 'export_fail');
+      alert('이미지 저장에 실패했어요. 다시 시도해주세요. (E30)');
+    }
   });
 }
 
@@ -2984,6 +3151,10 @@ function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').
 renderIcons();
 document.getElementById('kebabBtn').innerHTML = ic('kebab');
 renderMonthLabel();
+/* 텔레메트리 세션 시작 — 첫 화면 기록(showTab) 전에 app_open의 내용 공급자를 등록한다 */
+window.Tel && Tel.boot(function () {
+  return { standalone: isStandalone(), staff: staffList().length };
+});
 showTab('home');
 checkAlreadyInstalled();   // 이미 홈 화면에 있으면 버튼·안내를 그에 맞게 바꾼다
 /* 소셜 로그인 실패로 돌아온 경우 — URL의 error_description을 사람 말로 알려주고 주소를 정리한다 */
@@ -3203,11 +3374,13 @@ function openGridFull() {
   fitGridFull();                                 // 회전 전 우선 적합, 회전 완료되면 재적합
   renderViewerPanel();                           // 우측 라이브 오류 패널
   if (!openGridFull._hint) { openGridFull._hint = 1; toast('두 손가락으로 벌리면 크게 볼 수 있어요'); }
+  window.Tel && Tel.screen('viewer');
 }
 function closeGridFull(ev) {
   if (ev) ev.stopPropagation();
   vzReset();
   document.body.classList.remove('grid-open');
+  window.Tel && Tel.back();
   var area = document.getElementById('gridArea');
   if (area) { area.style.transform = ''; area.style.width = ''; area.style.height = '';
     var _t = area.querySelector('table.duty'); if (_t) { _t.style.transform = ''; _t.style.transition = ''; } }
