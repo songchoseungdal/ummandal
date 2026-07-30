@@ -2175,7 +2175,9 @@ function renderAuth() {
     var socials = '';
     if (provs.indexOf('google') >= 0)
       socials += '<button class="btn-google" onclick="cloudOAuth(\'google\')">' + GOOGLE_SVG + 'Google로 계속하기</button>';
-    socials += '<button class="btn-kakao soon" onclick="kakaoSoon()">' + KAKAO_SVG + '카카오로 계속하기</button>';
+    socials += (provs.indexOf('kakao') >= 0)
+      ? '<button class="btn-kakao" onclick="cloudOAuth(\'kakao\')">' + KAKAO_SVG + '카카오로 계속하기</button>'
+      : '<button class="btn-kakao soon" onclick="kakaoSoon()">' + KAKAO_SVG + '카카오로 계속하기</button>';
     body.innerHTML = '<div class="auth-wrap">' + authLogo() +
       '<p class="auth-title">다시 만나서 반가워요</p>' +
       '<p class="auth-sub">로그인하면 어느 기기에서든<br>같은 근무표를 이어서 쓸 수 있어요.</p>' +
