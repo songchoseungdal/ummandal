@@ -141,7 +141,11 @@ h2 { font-size: 21px; margin: 4px 0 12px; font-weight: 700; }
 
 /* ===== 준비 화면(09) 한 화면 맞춤 (2026-07-30 초승달 지시) =====
    글자 크기는 지키고(큰 글씨 철학) 여백을 조여 만들기 버튼까지 스크롤 없이 보이게 한다.
-   아주 낮은 화면에서만 제목 한 단계 축소. */
+   낮은 화면(680px 이하)에서만 여백 압축·제목 한 단계 축소.
+   (740→680 보정 2026-07-30: 뷰포트 384×694 폰 실측 — 정상 레이아웃으로도 버튼 y=572 < 탭 y=624로
+   한 화면에 들어가는데 압축이 과잉 발동해 제목·카드가 붙고 하단에 70px 죽은 공간이 생겼음.
+   단, 좁은 폭(≤370px)은 줄바꿈으로 내용이 ~90px 길어져 740px까지 압축 유지 —
+   360×720 실측에서 정상 레이아웃이면 버튼이 탭에 16px 가림) */
 #homePrep .monthnav { margin: 0 0 2px; }
 #homePrep .pagetitle { margin: 4px 0 4px; }
 #homePrep .pagesub { margin: 0 0 12px; }
@@ -149,7 +153,7 @@ h2 { font-size: 21px; margin: 4px 0 12px; font-weight: 700; }
 #homePrep .preprow { padding: 13px 0; }
 #homePrep .fairnote { margin: 0 0 12px; padding: 11px 16px; font-size: 15px; }
 #homePrep .prep-caption { margin: 8px 0 0; }
-@media (max-height: 740px) {
+@media (max-height: 680px), (max-width: 370px) and (max-height: 740px) {
   header { padding: 6px 20px 2px; }
   .brand .moon { width: 30px; height: 30px; }
   .brand h1 { font-size: 20px; }
