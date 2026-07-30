@@ -1188,10 +1188,16 @@ function genHide() {
 function genCancel() { genCanceled = true; }
 
 /* ---- 우리 병동(06) — 이름·요약 목록, 행을 누르면 편집 바텀시트(07) ---- */
-/* 그룹 접힘 상태(세션 한정, 기본 = 펼침)와 검색어 — 2026-07-30 초승달 지시(긴 명단 보기 편하게) */
+/* 그룹 접힘 상태(세션 한정)와 검색어 — 2026-07-30 초승달 지시(긴 명단 보기 편하게).
+   기본값 = 그룹이 2개 이상이면 접힘(두 그룹을 한눈에 — 같은 날 초승달 결정), 하나뿐이면 펼침(접으면 빈 화면만 남음).
+   wardFold[g]: undefined = 기본값, true/false = 사용자가 토글한 값. */
 var wardFold = {};
 var wardQuery = '';
-function toggleWardFold(g) { wardFold[g] = !wardFold[g]; renderStaff(); }
+function wardFolded(g) {
+  if (wardFold[g] !== undefined) return wardFold[g];
+  return groupsPresent().length >= 2;
+}
+function toggleWardFold(g) { wardFold[g] = !wardFolded(g); renderStaff(); }
 function wardSearchChange(v) { wardQuery = v == null ? '' : v; renderStaff(); }
 function renderStaff() {
   var el = document.getElementById('staffList');
@@ -1211,7 +1217,7 @@ function renderStaff() {
     var shown = q ? gStaff.filter(function (p) { return p.name.indexOf(q) >= 0; }) : gStaff;
     if (q && !shown.length) return;              /* 검색 중엔 결과가 있는 그룹만 */
     found += shown.length;
-    var folded = !q && wardFold[g];              /* 검색 중엔 항상 펼쳐 보여준다 */
+    var folded = !q && wardFolded(g);            /* 검색 중엔 항상 펼쳐 보여준다 */
     html += '<button class="grouplabel glbtn" onclick="toggleWardFold(\'' + g + '\')" aria-expanded="' + !folded + '">' +
       groupNames[g] + '<span>' + gStaff.length + '명</span>' +
       '<span class="gl-chev">' + (folded ? '펼치기 ▾' : '접기 ▴') + '</span></button>';
