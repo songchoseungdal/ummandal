@@ -152,8 +152,12 @@ var Cloud = (function () {
     if (!user) return Promise.resolve({ data: null });
     return sb.from('user_data').select('data, updated_at').eq('user_id', user.id).maybeSingle();
   }
-  function push(data) {
-    if (!user) return Promise.resolve({ error: null });
+  function push(data, expectUid) {
+    /* 세션이 없으면 '성공'으로 위장하지 않는다 — 호출부가 저장됐다고 착각하고
+       소유 계정을 확정하거나 「저장됨」을 표시하던 문제(2026-07-30 적대 검토). */
+    if (!user) return Promise.resolve({ error: { code: 'no-session', message: '로그인이 풀렸어요. 다시 로그인해주세요.' } });
+    /* 올리려던 계정과 지금 계정이 다르면 쓰지 않는다 (비동기 사이 계정이 바뀐 경우) */
+    if (expectUid && user.id !== expectUid) return Promise.resolve({ error: { code: 'account-changed', message: '로그인 계정이 바뀌었어요.' } });
     return sb.from('user_data')
       .upsert({ user_id: user.id, data: data, updated_at: new Date().toISOString() })
       .then(function (res) {
@@ -170,9 +174,10 @@ var Cloud = (function () {
   }
   function schedulePush(getData, done) {
     if (!user) return;
+    var uid = user.id;   // 예약 시점의 계정 — 2.5초 뒤 계정이 바뀌었으면 쓰지 않는다
     clearTimeout(pushTimer);
     pushTimer = setTimeout(function () {
-      push(getData()).then(function (res) { if (done) done(res); });
+      push(getData(), uid).then(function (res) { if (done) done(res); });
     }, 2500);
   }
 
