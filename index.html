@@ -108,7 +108,6 @@
         <button class="gridfull-close" onclick="closeGridFull(event)" aria-label="닫기">✕ 닫기</button>
         <div class="gridwrap" id="gridArea"></div>
         <div id="viewerPanel"></div>
-        <div class="gridthumb-cta"><span>근무표 검토하기</span></div>
       </div>
       <button class="btn big xl" style="margin-top:12px" onclick="openGridFull()">근무표 검토하기</button>
       <div class="btnrow">
@@ -169,14 +168,15 @@
   <div id="tab-archive" style="display:none">
     <p class="pagetitle">보관함</p>
     <p class="pagesub">완성한 근무표와 지난 기록을 한곳에서 확인하세요.</p>
-    <div class="card" id="installCard" style="display:none">
-      <h2>홈 화면에 바로가기 만들기</h2>
-      <div id="installBody"></div>
-    </div>
     <!-- 비밀번호 재설정(메일 링크 복귀) 전용 자리 -->
     <div class="card" id="cloudCard" style="display:none"><div id="cloudBody"></div></div>
     <h2 style="margin-top:4px">최근 근무표</h2>
     <div id="histList"></div>
+    <button class="listrow" id="installRow" style="display:none" onclick="installEntry()">
+      <span class="lr-ico" data-ic="link"></span>
+      <span class="lr-tx"><b>홈 화면에 바로가기 만들기</b><span class="lr-sub">달 아이콘으로 주소 없이 바로 열어요</span></span>
+      <span class="lr-go" data-ic="chevR"></span>
+    </button>
     <button class="listrow" onclick="openDataScreen()">
       <span class="lr-ico" data-ic="doc"></span>
       <span class="lr-tx"><b>데이터 및 백업</b><span class="lr-sub">파일로 저장하거나 이전 백업 불러오기</span></span>

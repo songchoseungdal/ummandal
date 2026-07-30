@@ -93,9 +93,13 @@ function closeScreen() {
   window.Tel && Tel.back();
 }
 function ssTop(title, doneLabel, doneFn) {
+  /* doneLabel이 빈 문자열이면 오른쪽 버튼을 뺀다(자동 저장 화면 — 완료=뒤로 중복 제거, UI_GUIDE §6).
+     보이지 않는 스페이서로 제목 가운데 정렬은 유지한다. */
+  var right = doneLabel === ''
+    ? '<span class="ss-done" style="visibility:hidden" aria-hidden="true">완료</span>'
+    : '<button class="ss-done" onclick="' + (doneFn || 'closeScreen()') + '">' + (doneLabel || '완료') + '</button>';
   return '<div class="ss-top"><button class="ss-back" onclick="' + (doneFn || 'closeScreen()') + '" aria-label="뒤로">' + ic('back') + '</button>' +
-    '<span class="ss-title">' + title + '</span>' +
-    '<button class="ss-done" onclick="' + (doneFn || 'closeScreen()') + '">' + (doneLabel || '완료') + '</button></div>';
+    '<span class="ss-title">' + title + '</span>' + right + '</div>';
 }
 
 /* ===== 머리글 ⋮ 메뉴 ===== */
@@ -418,7 +422,11 @@ function renderDoneHead() {
   chips += short.length
     ? '<button class="chip red" onclick="openGridFull()">공평성 확인 ' + short.length + '명</button>'
     : '<span class="chip green">공평성 양호</span>';
-  document.getElementById('doneChips').innerHTML = chips;
+  /* 확인할 곳이 있어도 "완성" 제목과 모순되게 읽히지 않도록 — 초안 철학을 한 줄로 안심시킨다 */
+  var note = (v.length || short.length)
+    ? '<p class="chipnote">고치기 좋은 초안이에요 — 빨간 버튼을 누르면 하나씩 확인할 수 있어요.</p>'
+    : '';
+  document.getElementById('doneChips').innerHTML = chips + note;
 }
 /* 같은 직군에서 남들(최대 휴무자)보다 2일+ 덜 쉰 사람 이름 목록 */
 function fairnessShortNames() {
@@ -1367,7 +1375,7 @@ function renderRulesScreen() {
     '<label class="tgl"><input type="checkbox"' + (+r.backward ? ' checked' : '') + ' onchange="ruleBackward(this.checked)"><span class="knob"></span></label></div>' +
     '</div>';
   document.getElementById('rulesScreenBody').innerHTML =
-    ssTop('근무 규칙', '완료') + seg +
+    ssTop('근무 규칙', '') + seg +
     '<div class="rulesec" style="margin-top:8px">하루 필요 인원 <span class="hint" style="font-weight:400">— 최소~최대예요. 바꾸면 바로 저장돼요.</span></div>' +
     need + limits;
 }
@@ -1509,6 +1517,7 @@ function renderWishScreen() {
     for (var i = 0; i < n; i++) {
       cells += '<input class="wsd-in" type="number" inputmode="numeric" min="1" max="' + days + '" ' +
         'value="' + (ds[i] != null ? ds[i] : '') + '" aria-label="' + r.label + ' 날짜" ' +
+        (i === 0 ? 'placeholder="날짜" ' : '') +   /* 빈 칸에 뭘 적는지 첫 칸이 알려준다(UI_GUIDE §0 판정 2) */
         'onchange="wsDayChange(\'' + r.key + '\',' + i + ',this.value)">';
     }
     return '<div class="wsrow ' + r.cls + '">' +
@@ -1713,7 +1722,7 @@ function renderDataScreen() {
       '<button class="logoutbtn" style="font-size:14.5px;opacity:.75" onclick="openDeleteAccountSheet()">회원탈퇴</button>'
     : '';
   document.getElementById('dataScreenBody').innerHTML =
-    ssTop('데이터 및 계정', '완료') + syncCard + fileCard + acctCard;
+    ssTop('데이터 및 계정', '') + syncCard + fileCard + acctCard;
 }
 function openPwChangeSheet() {
   openSheet(
@@ -2043,21 +2052,13 @@ function closeInstallModal() {
   m.className = ''; m.innerHTML = '';
 }
 function renderInstallCard() {
-  var card = document.getElementById('installCard');
-  var body = document.getElementById('installBody');
-  if (!card || !body) return;
-  /* 이미 바로가기(PWA)로 실행 중이면 설치 안내 카드를 아예 띄우지 않는다(UI_SPEC §10) */
-  if (isStandalone()) { card.style.display = 'none'; body.innerHTML = ''; return; }
-  card.style.display = '';
-  if (alreadyInstalled) {
-    body.innerHTML = '<p>✅ 홈 화면에 <b>이미 만들어져 있어요</b>.<br>홈 화면의 🌙 <b>엄만달</b> 아이콘으로 열어주세요.</p>';
-    return;
-  }
-  body.innerHTML =
-    '<p>홈 화면에 달 모양 아이콘이 생겨서, 주소를 찾지 않고 바로 열 수 있어요.</p>' +
-    (deferredInstall
-      ? '<button class="btn big xl" onclick="installApp()">지금 만들기</button>'
-      : installStepsHtml());
+  /* 보관함의 설치 안내 — 큰 카드가 화면 주인공(최근 근무표)을 밀어내던 것을
+     한 줄 목록 행으로 축소(2026-07-30, UI_GUIDE §0 판정 3). 원터치 불가 기기는
+     installEntry()가 알아서 손 안내 모달을 띄운다. */
+  var row = document.getElementById('installRow');
+  if (!row) return;
+  /* 앱으로 실행 중이거나 이미 만들어져 있으면 아예 감춘다(UI_SPEC §10) */
+  row.style.display = (isStandalone() || alreadyInstalled) ? 'none' : '';
 }
 /* 아이폰 등에서 주소만 복사 — 다른 브라우저로 옮겨가야 할 때 */
 function copyAppLink() {

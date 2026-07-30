@@ -140,6 +140,9 @@ h2 { font-size: 21px; margin: 4px 0 12px; font-weight: 700; }
 .chip.red { color: var(--danger); border-color: var(--danger); }
 .chip.green { color: var(--ok); border-color: var(--ok); }
 .chip.plain { color: var(--sub); border-color: var(--line); cursor: default; }
+/* 칩 아래 안심 문구 — "완성" 제목과 빨간 칩이 모순으로 읽히지 않게 */
+.chipnote { flex-basis: 100%; text-align: center; color: var(--sub); font-size: 14.5px;
+  line-height: 1.5; margin: 2px 0 0; }
 
 /* ===== 온보딩(04) ===== */
 .onboard-opts { display: flex; flex-direction: column; gap: 12px; margin: 0 auto 6px; }
@@ -221,7 +224,9 @@ body.loginview main { padding-top: 0; }
 #sheet .btnrow { position: sticky; bottom: 0; z-index: 5; background: var(--card);
   margin-top: 8px; padding: 10px 0 2px; box-shadow: 0 -12px 14px -12px rgba(29, 27, 32, .30); }
 .sh-grip { width: 48px; height: 5px; border-radius: 999px; background: var(--line); margin: 4px auto 12px; }
-.sh-head { display: flex; align-items: center; margin-bottom: 14px; }
+/* 시트 제목 줄은 sticky — 긴 시트를 내려도 제목·닫기(X)가 항상 보인다(UI_GUIDE §4) */
+.sh-head { display: flex; align-items: center; margin-bottom: 14px;
+  position: sticky; top: 0; z-index: 6; background: var(--card); padding: 4px 0; }
 .sh-head h3 { font-size: 20px; font-weight: 800; margin: 0; flex: 1; }
 .sh-head.center h3 { text-align: center; }
 .sh-x { width: 42px; height: 42px; margin-right: -8px; border: none; background: none; cursor: pointer;
@@ -372,6 +377,8 @@ input.wsa-in { width: 76px; height: 44px; text-align: center; font-size: 19px; f
 .wsrow .wsr-ins { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 input.wsd-in { width: 48px; height: 44px; text-align: center; font-size: 19px; font-weight: 700;
   padding: 6px 2px; border-radius: 12px; -moz-appearance: textfield; }
+/* 첫 칸의 「날짜」 힌트 — 값과 헷갈리지 않게 작고 흐리게 */
+input.wsd-in::placeholder { font-size: 13px; font-weight: 600; color: var(--faint); }
 input.wsd-in::-webkit-outer-spin-button, input.wsd-in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .wsrow.wr-wish input.wsd-in { border-color: var(--moon); background: var(--moon-soft); color: #8a5d00; }
 .wsr-add { flex: none; width: 42px; height: 44px; border-radius: 12px; border: 1px dashed var(--line);
@@ -650,10 +657,7 @@ footer { text-align: center; color: var(--faint); padding: 20px; font-size: 14px
   overflow: hidden; cursor: pointer; background: var(--card); margin: 6px 0 4px;
   -webkit-tap-highlight-color: transparent; }
 .gridthumb .gridwrap { overflow: visible; pointer-events: none; }
-.gridthumb-cta { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px;
-  background: var(--brand); color: #fff; font-size: 15px; font-weight: 800;
-  padding: 10px 16px; border-radius: 999px; box-shadow: 0 3px 12px rgba(29, 27, 32, .28);
-  pointer-events: none; }
+/* 썸네일 위 「근무표 검토하기」 알약은 2026-07-30 제거 — 아래 전폭 버튼과 보라 CTA 중복(UI_GUIDE §6-2) */
 .gridthumb::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 44px;
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--card)); pointer-events: none; }
 .gridfull-close { display: none; }
@@ -662,7 +666,6 @@ body.grid-open .gridthumb { position: fixed; inset: 0; z-index: 1000; height: 10
   margin: 0; border: none; border-radius: 0; overflow: hidden; cursor: default;
   display: flex; flex-direction: row; align-items: stretch; padding: 0; background: var(--bg); }
 body.grid-open .gridthumb::after { display: none; }
-body.grid-open .gridthumb-cta { display: none; }
 body.grid-open .gridthumb .gridwrap { flex: 1; min-width: 0; overflow: hidden; pointer-events: auto;
   display: flex; align-items: center; justify-content: center; padding: 8px;
   touch-action: none; }
