@@ -130,11 +130,30 @@ document.addEventListener('click', function (ev) {
   if (m.classList.contains('on') && !m.contains(ev.target)) hideKebab();
 });
 
+/* 이 기기 내용이 지금 로그인한 계정의 것인가 (Store.owner 기준).
+   owner를 아직 모르는 기기(구버전에서 올라온 경우)는 판단을 미룬다 — 로그인 동기화가 정하게 한다. */
+function localOwnerId() { return Store.owner(); }
+function loggedInId() { var u = (window.Cloud && Cloud.enabled()) ? Cloud.getUser() : null; return u ? u.id : null; }
+function otherAccountData() {
+  var uid = loggedInId(), own = localOwnerId();
+  return !!(uid && own && own !== uid);
+}
+/* 서버 저장 상태 — '로그인했으니 저장됐다'로 뭉개지 않는다(2026-07-30).
+   실제로 이 계정과 연결된 내용일 때만 저장됨으로 말한다. */
+function syncStateTx() {
+  var uid = loggedInId();
+  if (!uid) return { sub: '로그인하면 서버에 저장돼요', val: '로그인 안 됨' };
+  if (localOwnerId() === uid) return { sub: '서버에 안전하게 저장됨<span class="okdot"></span>', val: '저장됨<span class="okdot"></span>' };
+  return { sub: '아직 서버에 올리지 않았어요', val: '올리지 않음' };
+}
 function save() {
   db.currentMonth = curYM;
   db._updatedAt = Date.now();
   Store.save(db);
   if (window.Cloud && Cloud.enabled() && Cloud.getUser()) {
+    /* 다른 계정에서 쓰던 내용은 서버로 올리지 않는다 — 로그인 동기화가 정리하기 전까지 보류.
+       (계정을 바꿔 로그인했을 때 앞 계정 근무표가 새 계정 서버로 복제되던 사고 차단, 2026-07-30) */
+    if (otherAccountData()) return;
     Cloud.schedulePush(function () { return db; }, function (res) {
       if (!res.error) renderCloudCard();
     });
@@ -1711,7 +1730,7 @@ function renderDataScreen() {
   var syncCard =
     '<div class="rulesec">동기화</div><div class="datacard">' +
     '<div class="datarow"><span class="dr-tx"><b>서버 동기화</b><span class="dr-sub">로그인한 기기에서 같은 근무표를 이어서 쓸 수 있어요.</span></span>' +
-    '<span class="dr-val">' + (u ? '저장됨<span class="okdot"></span>' : '로그인 안 됨') + '</span></div>' +
+    '<span class="dr-val">' + syncStateTx().val + '</span></div>' +
     '<div class="datarow"><span class="dr-tx"><b>마지막 저장</b></span><span class="dr-val">' + savedTx + '</span></div>' +
     '</div>';
   /* 덮어쓰기 직전 스냅샷이 있으면 되돌리기 줄을 노출(없으면 화면에 아예 안 보인다) */
@@ -1805,7 +1824,8 @@ function deleteAccountGo(btn) {
       return;
     }
     /* 서버는 이미 삭제됨 — 이 기기의 데이터·세션 흔적도 지우고 처음 화면으로 */
-    try { localStorage.removeItem('ummandal_v1'); localStorage.removeItem('ummandal_tel_q'); } catch (e) { }
+    try { localStorage.removeItem('ummandal_v1'); localStorage.removeItem('ummandal_tel_q'); localStorage.removeItem(SNAP_KEY); } catch (e) { }
+    Store.setOwner(null);
     try { Cloud.signOut().catch(function () { }); } catch (e) { }
     alert('탈퇴가 끝났어요. 그동안 엄만달을 써주셔서 감사해요.');
     location.reload();
@@ -2297,7 +2317,11 @@ function cloudLogout() {
     showTab('home');   // 어느 탭에 있었든 로그인 화면(홈)으로 돌려보낸다
   });
 }
+var syncedThisBoot = false;   // 이번 실행에서 로그인 동기화가 돌았는지 (안전망 중복 실행 방지)
 function cloudSyncOnLogin() {
+  syncedThisBoot = true;
+  var uid = loggedInId();
+  var own = localOwnerId();
   Cloud.pull().then(function (res) {
     if (res.error) {
       window.Tel && Tel.error('E11', res.error);
@@ -2310,7 +2334,7 @@ function cloudSyncOnLogin() {
     function adoptServer() {
       if (!isEmptyDb(db)) snapBeforeOverwrite('server');   // 이 기기에만 있던 내용 보호
       db = server;
-      Store.save(db);
+      Store.save(db); Store.setOwner(uid);
       curYM = db.currentMonth || curYM;
       renderMonthLabel(); renderRules(); showTab('home');
       toast('서버의 최신 내용을 불러왔어요 ☁');
@@ -2320,8 +2344,35 @@ function cloudSyncOnLogin() {
     function pushUp(okMsg) {
       Cloud.push(db).then(function (r) {
         if (r && r.error) { toast('서버에 올리지 못했어요. 인터넷 연결을 확인해주세요 (E10)'); renderCloudCard(); return; }
+        Store.setOwner(uid);
         toast(okMsg); renderCloudCard(); renderHome();
       });
+    }
+    /* 앞 계정 내용을 새 계정에 올리지 않고, 이 계정의 빈 상태로 시작한다.
+       버린 내용은 스냅샷으로 남아 「데이터 및 백업」에서 되돌릴 수 있다. */
+    function startFresh() {
+      snapBeforeOverwrite('account');
+      db = {};
+      Store.save(db); Store.setOwner(uid);
+      renderMonthLabel(); renderRules(); showTab('home'); renderCloudCard();
+      toast('다른 계정에서 쓰던 근무표는 올리지 않았어요');
+    }
+    /* ── 계정 경계 검사 (2026-07-30) ──
+       로컬 저장 자리는 하나뿐이라, 계정을 바꿔 로그인하면 앞 계정 근무표가 그대로 남는다.
+       그걸 새 계정 서버에 올려버리면 남의 명단이 복제되므로, 올리기 전에 소유 계정을 따진다. */
+    if (own && uid && own !== uid && !isEmptyDb(db)) {
+      /* 소유 계정이 다르다(확실) — 물어보지 않고 안전한 쪽으로 */
+      if (!isEmptyDb(server)) adoptServer(); else startFresh();
+      return;
+    }
+    if (!own && !isEmptyDb(db) && !server) {
+      /* 소유 계정을 모르는 기기 + 서버가 빈 계정 — 올려도 되는지 한 번만 확인한다(기기당 1회) */
+      var u = Cloud.getUser();
+      var who = (u && u.email) ? u.email : '지금 로그인한 계정';
+      if (!confirm('이 기기에 있는 근무표를 ' + who + ' 계정에 올릴까요?\n\n다른 사람(다른 계정) 근무표라면 「취소」를 눌러주세요.')) {
+        startFresh();
+        return;
+      }
     }
     if (!server) {
       /* 서버가 비어 있음 → 이 기기 내용을 올림 */
@@ -2358,10 +2409,7 @@ function renderArchive() {
   }).join('') || '<p class="hint" style="margin:4px 0 14px">아직 기록이 없어요. 근무표를 만들면 자동으로 이곳에 쌓여요.</p>';
   /* 계정 및 동기화 행의 상태 문구 */
   var sync = document.getElementById('syncSub');
-  if (sync) {
-    var u = window.Cloud && Cloud.enabled() && Cloud.getUser();
-    sync.innerHTML = u ? '서버에 안전하게 저장됨<span class="okdot"></span>' : '로그인하면 서버에 저장돼요';
-  }
+  if (sync) sync.innerHTML = syncStateTx().sub;
 }
 /* 보관함 달 카드의 상태 — 그 달 기준 규칙으로 위반·형평성을 계산한다(읽기 전용) */
 function archMonthStatus(ym) {
@@ -2420,7 +2468,7 @@ function exportData() {
    서버 데이터 교체) 직전에 현재 상태를 이 기기에 1세대 보관하고,
    「데이터 및 계정」에 되돌리기 버튼을 노출한다. 복원은 맞바꾸기라 다시 되돌릴 수 있다. */
 var SNAP_KEY = 'ummandal_pre_overwrite';
-var SNAP_REASONS = { 'import': '근무표 가져오기', 'file': '백업 파일 복원', 'server': '서버 데이터 교체' };
+var SNAP_REASONS = { 'import': '근무표 가져오기', 'file': '백업 파일 복원', 'server': '서버 데이터 교체', 'account': '다른 계정으로 로그인' };
 function snapBeforeOverwrite(reason) {
   try {
     localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: Date.now(), reason: reason, data: db }));
@@ -3270,13 +3318,26 @@ if (window.Cloud && Cloud.enabled()) {
       return;
     }
     if (Cloud.inAuthFlow()) return;   // 가입 인증·재설정 진행 중 — 화면을 덮지 않는다
-    if (event === 'SIGNED_IN' && userChanged) cloudSyncOnLogin();
+    /* INITIAL_SESSION도 동기화 대상 (2026-07-30 실측 수정).
+       소셜 로그인은 리다이렉트로 돌아오므로 세션이 '페이지 첫 로드'에서 만들어진다 →
+       라이브러리가 INITIAL_SESSION을 먼저 내보내 userChanged를 소진하고, 뒤따르는
+       SIGNED_IN은 userChanged=false가 되어 동기화가 통째로 건너뛰어졌다(카카오·구글 공통).
+       Cloud.pull() 호출부는 여기 하나뿐이라 그 경우 서버에서 내려받을 방법이 아예 없었다. */
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && userChanged) cloudSyncOnLogin();
     /* 지금 보이는 탭의 인증 UI를 갱신한다. 홈이면 홈 로그인 카드(homeLoginBody),
        아니면 보관함 카드(cloudBody). 초기 INITIAL_SESSION이 홈 카드를 지우지 않게 하기 위함. */
     else if (document.getElementById('tab-home').style.display !== 'none') renderHome();
     else renderCloudCard();
   });
   Cloud.init();
+  /* 안전망 — 이벤트 경로에 의존하지 않는 마지막 방어 (2026-07-30).
+     로그인 이벤트의 종류·순서는 라이브러리 판(版)과 복귀 경로(저장 세션 복원 / 리다이렉트 프래그먼트)에
+     따라 달라진다. 실제로 카카오 첫 로그인에서 동기화가 통째로 건너뛰어져 서버에 기록이 안 남았다.
+     그래서 "세션이 있는데 이번 실행에 한 번도 동기화하지 않았다"면 여기서 직접 한 번 돌린다.
+     pull은 읽기라 안전하고, 이후 판단은 cloudSyncOnLogin의 계정·시각 비교가 맡는다. */
+  setTimeout(function () {
+    if (!syncedThisBoot && Cloud.enabled() && Cloud.getUser() && !Cloud.inAuthFlow()) cloudSyncOnLogin();
+  }, 2000);
 }
 
 /* 근무표 보기: 세로에선 축소 미리보기(미니맵), 탭하면 가로 전체화면으로 '표 전체'를 크게 본다.
