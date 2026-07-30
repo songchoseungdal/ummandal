@@ -15,6 +15,13 @@
   --v-bg: #f3ead8; --v-tx: #8a6d3b;
 }
 * { box-sizing: border-box; }
+/* 스크롤바 — 지금 어디쯤인지 잘 보이게 브랜드색으로(2026-07-30 초승달 지시).
+   ⚠️ 안드로이드 크롬은 본문(문서) 스크롤바 커스텀을 무시할 수 있다 — 내부 스크롤 영역(그리드·시트)엔 확실히 적용 */
+html { scrollbar-color: rgba(106, 75, 196, .45) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(106, 75, 196, .45); border-radius: 999px; }
+::-webkit-scrollbar-thumb:active { background: var(--brand); }
 /* overscroll-behavior: 목록을 끝까지 당겨도 브라우저 당김-새로고침이 발동하지 않게 —
    실수 리로드로 보던 탭·되돌리기 기록이 날아가는 것을 막는다(새로고침은 ⋮ 메뉴에 있음) */
 html { -webkit-text-size-adjust: 100%; overscroll-behavior-y: contain; }
@@ -131,6 +138,36 @@ h2 { font-size: 21px; margin: 4px 0 12px; font-weight: 700; }
   color: var(--brand); display: flex; align-items: center; justify-content: center; }
 .fairnote .fn-ico .svgi { width: 22px; height: 22px; }
 .prep-caption { text-align: center; color: var(--sub); font-size: 14.5px; margin: 10px 0 0; }
+
+/* ===== 준비 화면(09) 한 화면 맞춤 (2026-07-30 초승달 지시) =====
+   글자 크기는 지키고(큰 글씨 철학) 여백을 조여 만들기 버튼까지 스크롤 없이 보이게 한다.
+   아주 낮은 화면에서만 제목 한 단계 축소. */
+#homePrep .monthnav { margin: 0 0 2px; }
+#homePrep .pagetitle { margin: 4px 0 4px; }
+#homePrep .pagesub { margin: 0 0 12px; }
+#homePrep .prepcard { margin: 10px 0 10px; }
+#homePrep .preprow { padding: 13px 0; }
+#homePrep .fairnote { margin: 0 0 12px; padding: 11px 16px; font-size: 15px; }
+#homePrep .prep-caption { margin: 8px 0 0; }
+@media (max-height: 740px) {
+  header { padding: 6px 20px 2px; }
+  .brand .moon { width: 30px; height: 30px; }
+  .brand h1 { font-size: 20px; }
+  main { padding-top: 4px; }
+  nav { padding: 4px 8px calc(6px + env(safe-area-inset-bottom)); }
+  body { padding-bottom: 84px; }
+  body footer { padding: 10px 20px 6px; }  /* 기본 footer 규칙이 파일 뒤에 있어 특이도로 이긴다 */
+  #homePrep .pagetitle { font-size: 26px; margin: 2px 0 2px; }
+  /* 부제는 체크리스트와 같은 말 — 낮은 화면에선 겹치는 정보부터 뺀다(잡스 §0-1) */
+  #homePrep .pagesub { display: none; }
+  #homePrep .prepcard { margin: 8px 0 8px; }
+  #homePrep .preprow { padding: 9px 0; }
+  #homePrep .preprow .pr-ico { width: 38px; height: 38px; }
+  #homePrep .preprow .pr-tx b { font-size: 17.5px; }
+  #homePrep .fairnote { font-size: 14px; padding: 8px 14px; margin-bottom: 8px; }
+  #homePrep .fairnote .fn-ico { width: 34px; height: 34px; }
+  #homePrep .btn.big.xl { padding: 14px 20px; font-size: 19px; }
+}
 
 /* ===== 완료 화면(11) — 상태 칩 ===== */
 .chiprow { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 4px 0 14px; }
@@ -296,6 +333,14 @@ input.sh-input:focus, .sh-input:focus { outline: 2px solid var(--brand); border-
 .addbtn .svgi { width: 18px; height: 18px; }
 .grouplabel { font-size: 17px; font-weight: 800; margin: 18px 0 10px; }
 .grouplabel span { font-size: 14px; color: var(--sub); font-weight: 600; margin-left: 5px; }
+/* 그룹 머리글 = 접기/펼치기 버튼 (2026-07-30) — 오른쪽에 상태 글자로 눌린다는 걸 알린다 */
+button.glbtn { display: flex; align-items: center; width: 100%; border: none; background: none;
+  font-family: inherit; color: var(--ink); text-align: left; cursor: pointer; padding: 6px 2px;
+  border-radius: 10px; }
+button.glbtn:active { background: var(--card2); }
+.glbtn .gl-chev { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--brand); }
+/* 이름 검색(7명 이상일 때만 노출) */
+input.wardsearch { width: 100%; margin: 4px 0 4px; padding: 11px 14px; font-size: 17px; }
 .personrow .lr-ico { background: var(--brand-soft); color: var(--brand); border-radius: 999px; }
 
 /* ===== 근무 규칙(08) — 스테퍼 ===== */

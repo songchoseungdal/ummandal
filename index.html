@@ -160,6 +160,8 @@
       <span class="lr-go" data-ic="chevR"></span>
     </button>
     <input type="file" id="importFileXlsx" accept=".xlsx,.xls,.csv" style="display:none" onchange="importXlsx(event)">
+    <input type="text" class="wardsearch" id="wardSearch" placeholder="이름으로 찾기" style="display:none"
+           oninput="wardSearchChange(this.value)" aria-label="구성원 이름 검색">
     <div id="staffList"></div>
     <p class="hint" id="sampleHint" style="margin:4px 0 14px">처음이라면 <a class="link" onclick="trySample()">예시 인원 12명 넣기</a>로 연습해보세요.</p>
   </div>

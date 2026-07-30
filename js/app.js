@@ -1188,15 +1188,35 @@ function genHide() {
 function genCancel() { genCanceled = true; }
 
 /* ---- 우리 병동(06) — 이름·요약 목록, 행을 누르면 편집 바텀시트(07) ---- */
+/* 그룹 접힘 상태(세션 한정, 기본 = 펼침)와 검색어 — 2026-07-30 초승달 지시(긴 명단 보기 편하게) */
+var wardFold = {};
+var wardQuery = '';
+function toggleWardFold(g) { wardFold[g] = !wardFold[g]; renderStaff(); }
+function wardSearchChange(v) { wardQuery = v == null ? '' : v; renderStaff(); }
 function renderStaff() {
   var el = document.getElementById('staffList');
   var staff = staffList();
   document.getElementById('wardCount').textContent = staff.length + '명';
-  var html = '';
+  var q = wardQuery.trim();
+  /* 검색창은 명단이 한 화면을 넘길 즈음(7명+)부터만 — 적을 땐 군더더기 */
+  var searchEl = document.getElementById('wardSearch');
+  if (searchEl) {
+    var showSearch = staff.length >= 7;
+    searchEl.style.display = showSearch ? '' : 'none';
+    if (!showSearch && q) { wardQuery = q = ''; searchEl.value = ''; }
+  }
+  var html = '', found = 0;
   groupsPresent().forEach(function (g) {
     var gStaff = groupStaff(g);
-    html += '<div class="grouplabel">' + groupNames[g] + '<span>' + gStaff.length + '명</span></div>';
-    gStaff.forEach(function (p) {
+    var shown = q ? gStaff.filter(function (p) { return p.name.indexOf(q) >= 0; }) : gStaff;
+    if (q && !shown.length) return;              /* 검색 중엔 결과가 있는 그룹만 */
+    found += shown.length;
+    var folded = !q && wardFold[g];              /* 검색 중엔 항상 펼쳐 보여준다 */
+    html += '<button class="grouplabel glbtn" onclick="toggleWardFold(\'' + g + '\')" aria-expanded="' + !folded + '">' +
+      groupNames[g] + '<span>' + gStaff.length + '명</span>' +
+      '<span class="gl-chev">' + (folded ? '펼치기 ▾' : '접기 ▴') + '</span></button>';
+    if (folded) return;
+    shown.forEach(function (p) {
       var i = staff.indexOf(p);
       html += '<button class="listrow personrow" onclick="openStaffSheet(' + i + ')">' +
         '<span class="lr-ico">' + ic('people') + '</span>' +
@@ -1206,6 +1226,7 @@ function renderStaff() {
         '<span class="lr-go">' + ic('chevR') + '</span></button>';
     });
   });
+  if (q && !found) html += '<p class="hint" style="margin:8px 0 14px">「' + esc(q) + '」에 맞는 사람이 없어요.</p>';
   el.innerHTML = html || '<p class="hint" style="margin:8px 0 14px">아직 등록된 사람이 없어요. 위 「사람 추가」나 「기존 근무표 불러오기」로 시작해보세요.</p>';
   document.getElementById('sampleHint').style.display = staff.length ? 'none' : '';
   renderPatternMemo();
