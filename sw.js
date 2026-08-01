@@ -1,7 +1,7 @@
 /* 엄만달 서비스 워커 — 전 파일 캐시로 오프라인 동작.
    CACHE 버전은 이 파일에 직접 적는다(js/version.js와 같은 커밋에서 함께 올릴 것) —
    SW 갱신 감지는 본체 바이트 변경만이 전 브라우저에서 보장되기 때문(2026-07-29). */
-var CACHE = 'ummandal-v7-9-2';
+var CACHE = 'ummandal-v7-10-0';
 var ASSETS = [
   './',
   './index.html',

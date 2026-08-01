@@ -6,7 +6,7 @@
   --brand: #6A4BC4; --brand-dk: #55389f; --brand-soft: #F1ECFB;
   --danger: #D93025; --danger-soft: #FFF1F0;
   --ok: #2F9E44; --ok-soft: #EFF9F1;
-  --warn: #E89B16; --warn-soft: #FFF6E3;
+  --warn: #E89B16; --warn-soft: #FFF6E3; --warn-ink: #8a5d00;   /* -ink = warn-soft 위에 올리는 글자색(대비 확보) */
   --moon: #f2b705; --moon-soft: #fff3d0;
   --d: #2f9e44; --d-soft: #e6f7eb;
   --e: #e8590c; --e-soft: #ffeede;
@@ -480,6 +480,25 @@ input.wsd-in::-webkit-outer-spin-button, input.wsd-in::-webkit-inner-spin-button
 #banner { padding: 13px 16px; border-radius: 14px; margin-bottom: 12px; font-size: 16px; display: none; line-height: 1.6; }
 #banner.ok { display: block; background: var(--ok-soft); color: var(--ok); border: 1px solid #c9ecd4; }
 #banner.bad { display: block; background: var(--danger-soft); color: #c22525; border: 1px solid #f6cfcf; }
+/* 서버 보류 알림(홈 맨 위) — 못 올린 상태일 때만 나타난다. 평소엔 display:none이라
+   v7.8.4에서 맞춘 '한 화면' 레이아웃을 건드리지 않는다. 누르면 「데이터 및 계정」으로 간다. */
+#syncBanner { display: none; }
+#syncBanner.warn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px;
+  padding: 11px 14px; margin: 0 0 10px; text-align: left; line-height: 1.5;
+  background: var(--warn-soft); color: var(--warn-ink); border: 1px solid var(--warn);
+  border-radius: 14px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; }
+#syncBanner.warn:active { background: var(--card2); }
+/* 알림이 뜬 동안에는 준비 화면 설명 부제를 접어 '한 화면'을 지킨다(384×694 실측 보정) */
+body.syncwarn #homePrep .pagesub { display: none; }
+/* 낮은 화면에서는 부제가 이미 접혀 있어(압축 규칙) 그만큼을 다른 데서 마련해야 한다 —
+   형평성 안내를 접는다(알림띠가 더 급한 정보다. 2026-07-30 적대 검토가 지적한 ≤640px 가림 보정) */
+@media (max-height: 680px), (max-width: 370px) and (max-height: 740px) {
+  body.syncwarn #homePrep .fairnote { display: none; }
+}
+#syncBanner .sb-ico { flex: 0 0 20px; display: flex; }
+#syncBanner .sb-ico svg { width: 20px; height: 20px; }
+#syncBanner .sb-tx { flex: 1 1 auto; }
+#syncBanner > svg { width: 18px; height: 18px; flex: 0 0 18px; opacity: .7; }
 .viol-item { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .violmore { display: inline-block; margin-top: 6px; font-weight: 700; }
 
@@ -824,7 +843,12 @@ td.cell.fix-flash {
 #toast { position: fixed; left: 50%; bottom: 110px; transform: translateX(-50%) translateY(20px);
          background: var(--ink); color: #fff; font-size: 16px; font-weight: 700;
          padding: 12px 24px; border-radius: 999px; opacity: 0; pointer-events: none;
-         transition: opacity .25s, transform .25s; z-index: 260; white-space: nowrap; max-width: 92vw; }
+         transition: opacity .25s, transform .25s; z-index: 260;
+         /* 긴 안내(보관 실패·인원 축소 등)가 잘리지 않게 줄바꿈을 허용한다 — nowrap이면 앞부분만 보였다
+            (2026-07-30 적대 검토). width:max-content가 있어야 짧은 문구가 한 줄 알약을 유지한다 —
+            없으면 shrink-to-fit이 어절 폭까지 좁혀 세로로 찌부러진다(실측 160×233px). */
+         width: max-content; max-width: 92vw;
+         white-space: normal; word-break: keep-all; text-align: center; line-height: 1.45; }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 body.nonav #toast, body.loginview #toast { bottom: 40px; }
 

@@ -44,6 +44,9 @@
 <main>
   <!-- ===== 근무표(홈) ===== -->
   <div id="tab-home">
+    <!-- 서버에 못 올린 상태일 때만 나타나는 한 줄 알림 (평소엔 비어 있어 자리를 차지하지 않는다) -->
+    <button id="syncBanner" onclick="openDataScreen()"></button>
+
     <!-- 상태 0: 로그인 전 — 로그인/가입/비밀번호찾기 (01·02·03) -->
     <div id="homeLoginCard" style="display:none"><div id="homeLoginBody"></div></div>
 

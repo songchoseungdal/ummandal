@@ -180,12 +180,15 @@ var Cloud = (function () {
       push(getData(), uid).then(function (res) { if (done) done(res); });
     }, 2500);
   }
+  /* 예약된 올리기를 취소한다 — 서버와 어긋난 상태를 발견했을 때 낡은 내용이 발사되는 것을 막는다
+     (2026-07-30 적대 검토: 서버 채택을 취소해도 예약된 push가 서버를 덮었다) */
+  function cancelPush() { clearTimeout(pushTimer); pushTimer = null; }
 
   return {
     enabled: enabled, init: init, onChange: onChange,
     getUser: getUser, getLastSync: getLastSync,
     signUp: signUp, signIn: signIn, signOut: signOut,
-    pull: pull, push: push, schedulePush: schedulePush, insertEvents: insertEvents,
+    pull: pull, push: push, schedulePush: schedulePush, cancelPush: cancelPush, insertEvents: insertEvents,
     setAuthFlow: setAuthFlow, inAuthFlow: inAuthFlow,
     oauthProviders: oauthProviders, signInOAuth: signInOAuth, aiAnalyze: aiAnalyze, holidays: holidays,
     setPassword: setPassword, signOutOthers: signOutOthers, resetEmail: resetEmail,

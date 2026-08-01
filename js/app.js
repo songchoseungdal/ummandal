@@ -139,28 +139,43 @@ function loggedInId() { var u = (window.Cloud && Cloud.enabled()) ? Cloud.getUse
    보류된 편집은 로컬에 그대로 남아, 소유 계정이 확정되는 순간 동기화가 올려준다. */
 function canPushNow() {
   var uid = loggedInId();
-  return !!(uid && localOwnerId() === uid);
+  /* syncDeferred = 서버와 이 기기 내용이 어긋난 채 판단이 보류된 상태. 이때 자동으로 올리면
+     서버의 더 새로운 근무표를 낡은 로컬이 덮는다(v7.10.0 적대 검토 확정). 알림띠로 알리고 멈춘다. */
+  return !!(uid && localOwnerId() === uid && !syncDeferred);
 }
 /* 이번 실행에서 '서버에 이 계정 근무표가 있음'을 실제로 확인했는가(받았거나 올리기 성공).
    화면의 저장 상태 문구는 이 값으로만 초록불을 켠다 — 로그인 여부나 소유 표시만으로 켜면
    서버에 아무것도 없는데 「안전하게 저장됨」이라고 말하는 거짓 안심이 된다. */
-var serverLinked = false;
+/* 불린이 아니라 '어느 계정의 서버 내용을 확인했는지'를 담는다 — 불린이면 계정을 바꾸거나
+   올리기에 실패해도 초록불이 그대로 남는다(v7.10.0 적대 검토 확정: false로 되돌리는 코드가 없었다). */
+var serverLinkedUid = null;
+function serverLinked() { var u = loggedInId(); return !!u && serverLinkedUid === u; }
 function syncStateTx() {
   var uid = loggedInId();
   if (!uid) return { sub: '로그인하면 서버에 저장돼요', val: '로그인 안 됨' };
-  if (serverLinked) return { sub: '서버에 안전하게 저장됨<span class="okdot"></span>', val: '저장됨<span class="okdot"></span>' };
+  if (serverLinked()) return { sub: '서버에 안전하게 저장됨<span class="okdot"></span>', val: '저장됨<span class="okdot"></span>' };
   return { sub: '이 기기에만 저장돼 있어요', val: '이 기기에만' };
 }
-function save() {
+/* silent = 사람이 고친 게 아니라 앱이 스스로 적는 저장(달 넘기기·공휴일 자동 채움).
+   이때는 '마지막으로 고친 시각'을 올리지 않는다 — 그 시각은 어느 쪽이 최신인지 가리는 기준이고,
+   동기화 중 편집을 감지하는 기준이기도 해서, 사람이 안 건드린 저장까지 세면 판단이 어긋난다
+   (v7.10.0 적대 검토 확정: 공휴일 자동 채움이 서버 채택을 무음 취소시켰다). */
+function save(silent) {
   db.currentMonth = curYM;
+  if (silent) { Store.save(db); return; }
   db._updatedAt = Date.now();
   Store.save(db);
   if (window.Cloud && Cloud.enabled() && Cloud.getUser()) {
     /* 소유 계정이 확정·일치할 때만 올린다 (계정을 바꿔 로그인했을 때 앞 계정 근무표가
        새 계정 서버로 복제되던 사고 차단, 2026-07-30) */
-    if (!canPushNow()) return;
+    if (!canPushNow()) { renderSyncBanner(); return; }
     Cloud.schedulePush(function () { return db; }, function (res) {
-      if (!res.error) { serverLinked = true; renderCloudCard(); }
+      if (!res.error) { serverLinkedUid = loggedInId(); renderCloudCard(); renderSyncBanner(); return; }
+      /* 올리기 실패를 성공으로 위장하지 않는다 — 초록불을 내리고, 알림띠를 띄우고, 다시 시도한다.
+         ⚠️ 사다리(syncRetryN)를 여기서 0으로 되돌리면 안 된다 — 저장할 때마다 리셋돼 5초 간격
+         무한 재시도가 된다(2차 적대 검토 확정). 사다리는 성공했을 때·상황이 바뀐 이벤트에서만 푼다. */
+      serverLinkedUid = null; syncFailed = true;
+      renderCloudCard(); renderSyncBanner(); scheduleSyncRetry();
     });
   }
 }
@@ -302,7 +317,7 @@ function showTab(t) {
 function moveMonth(dir) {
   closeSheet();
   curYM = prevYM(curYM, -dir);
-  save(); renderMonthLabel(); renderHome();
+  save(true); renderMonthLabel(); renderHome();   // 달 넘기기는 '보는 위치'일 뿐 — 고친 게 아니다
 }
 function renderMonthLabel() {
   var p = ymParts(curYM);
@@ -349,12 +364,13 @@ function ensureHolidays(ym) {
     var m = db.months && db.months[ym];
     if (m && m.holidaysAuto === false) return;   // 사람이 정한 달은 건드리지 않는다
     month(ym);                                    // 새 값으로 다시 채워진다
-    save();
+    save(true);   // 사람이 고친 게 아니다 — '마지막으로 고친 시각'을 올리지 않는다(동기화 판단 오염 방지)
     if (document.getElementById('tab-home').style.display !== 'none') renderGrid();
   });
 }
 function renderHome() {
   renderMonthLabel();
+  renderSyncBanner();   // 서버에 못 올린 상태면 위쪽에 한 줄 알림(정상이면 아무것도 안 뜬다)
   ensureHolidays(curYM);
   var staff = staffList();
   var empty = document.getElementById('homeEmpty');
@@ -2315,6 +2331,9 @@ function cloudSetNewPw() {
 }
 function cloudLogout() {
   Cloud.signOut().then(function () {
+    /* 앞 계정의 판단(초록불·재시도 사다리·보류)을 전부 버린다 — 페이지를 새로 열지 않으므로
+       남겨두면 다음 계정이 그 상태를 물려받는다(v7.10.0 적대 검토 확정). */
+    resetSyncState();
     toast('로그아웃했어요'); cloudView = 'main';
     /* 「로그인 없이 쓰기」 선택은 해제한다 — 안 그러면 로그아웃해도 로그인 카드가 안 뜬다.
        예전 버전이 기기에 저장해둔 영구 플래그도 함께 지운다 */
@@ -2325,6 +2344,43 @@ function cloudLogout() {
   });
 }
 var syncedThisBoot = false;   // 이번 실행에서 로그인 동기화가 돌았는지 (안전망 중복 실행 방지)
+var syncInFlight = false;     // 지금 서버와 맞추는 중 — 겹쳐 돌면 판단이 엇갈린다
+var syncFailed = false;       // 서버에서 읽지 못한 채로 남아 있는가 (재시도 대상)
+var syncDecided = false;      // 판단이 한 번이라도 끝났는가 (부팅 직후 보류 알림이 깜빡이지 않게)
+var syncDeferred = false;     // 서버와 어긋난 채 판단을 미룬 상태 — 자동 올리기를 멈춘다
+var syncEverDeferred = false; // 이번 실행에서 한 번이라도 미룬 적이 있는가 (미뤘다 올리는 길엔 서버 내용을 보관한다)
+var syncRetryN = 0;
+var syncRetryTimer = null;
+/* 로그인 세션이 바뀌면(로그아웃·계정 전환) 이 실행에서 쌓인 판단을 전부 버린다 —
+   안 버리면 새 계정에서 앞 계정의 초록불·재시도 사다리가 그대로 이어진다(v7.10.0 적대 검토 확정). */
+function resetSyncState() {
+  serverLinkedUid = null;
+  syncFailed = false; syncDecided = false; syncDeferred = false; syncEverDeferred = false;
+  syncRetryN = 0; syncedThisBoot = false; syncInFlight = false;
+  clearTimeout(syncRetryTimer); syncRetryTimer = null;
+  if (window.Cloud && Cloud.cancelPush) Cloud.cancelPush();
+}
+/* 서버 읽기 실패 후 되풀이 시도 — online 이벤트 하나에만 기대지 않는다(휴대폰에서 잘 오지 않는다).
+   실패한 채로 두면 사용자는 저장되는 줄 알고 계속 쓴다(2026-07-30 적대 검토 지적 ⑤). */
+var SYNC_RETRY_MS = [5000, 20000, 60000];
+function scheduleSyncRetry() {
+  clearTimeout(syncRetryTimer);   // 사다리는 하나만 — 여러 실패가 겹쳐도 타이머가 쌓이지 않게
+  if (syncRetryN >= SYNC_RETRY_MS.length) return;
+  syncRetryTimer = setTimeout(syncNowIfNeeded, SYNC_RETRY_MS[syncRetryN++]);
+}
+/* 지금 서버와 맞춰야 하는 상태인가 — 재시도·연결 복구·앱 복귀에서 공통으로 쓴다.
+   fromEvent = 연결 복구·앱 복귀처럼 '상황이 달라졌다'는 신호를 받고 부른 경우.
+   이때는 사다리를 처음으로 되돌린다 — 안 그러면 앱을 몇 번 껐다 켠 것만으로 재시도가 소진된다. */
+function syncNowIfNeeded(fromEvent) {
+  if (syncInFlight) return;
+  if (!(window.Cloud && Cloud.enabled() && Cloud.getUser())) return;
+  if (Cloud.inAuthFlow() || isRecoveryReturn()) return;
+  /* 실패했거나 판단을 미룬 상태에서만 다시 시도한다 — 정상 상태(hold·none 포함)에서
+     앱을 열 때마다 서버를 읽으면 낭비이고, 판단이 이미 끝난 것은 다시 물어도 같은 답이다. */
+  if (!syncFailed && !syncDeferred) return;
+  if (fromEvent === true) syncRetryN = 0;
+  cloudSyncOnLogin();
+}
 /* 비밀번호 재설정 링크로 돌아온 것인가 — 이때는 동기화가 재설정 화면을 밀어내면 안 된다.
    (라이브러리가 INITIAL_SESSION을 PASSWORD_RECOVERY보다 먼저 내보내므로 inAuthFlow가 아직 false다) */
 function isRecoveryReturn() {
@@ -2336,51 +2392,112 @@ function uiBusy() {
   return !!openScreenId || !!(w && w.className === 'on');
 }
 function cloudSyncOnLogin() {
+  if (syncInFlight) return;
+  syncInFlight = true;
   syncedThisBoot = true;
   var uid = loggedInId();
   var own = localOwnerId();
+  /* pull이 도는 동안 사용자가 편집을 시작했는지 판별할 기준점 — 사람이 고친 저장만 _updatedAt을
+     올리므로(save(silent)는 올리지 않는다) 이 값이 달라졌으면 "지금 손대는 중"이다(적대 검토 지적 ②). */
+  var startedAt = db._updatedAt || 0;
+  var isEmptyDb = SyncRules.isEmptyDb;
+  function staffN(d) { return (d && d.staff && d.staff.length) || 0; }
+  /* 응답도 오류도 영영 오지 않으면(모바일에서 요청 중 앱이 얼었다 깨어나는 경우 등) syncInFlight가
+     계속 참으로 남아 재시도·연결복구·앱복귀가 전부 막힌다 — 30초 워치독으로 잠금을 푼다
+     (2차 적대 검토 확정. AI 분석에도 같은 이유로 타임아웃을 둔 선례가 있다). */
+  var settled = false;
+  var watchdog = setTimeout(function () {
+    if (!settled) readFailed({ message: 'pull timeout' });
+  }, 30000);
+  /* 서버를 못 읽었을 때의 공통 처리 — 어떤 이유든 앱에는 들어갈 수 있어야 한다.
+     (오프라인·서버 오류에 로그인 화면에 갇히던 문제, 2026-07-30 적대 검토) */
+  function readFailed(err) {
+    if (settled) return;              // 워치독과 실제 응답이 겹쳐도 한 번만 처리한다
+    settled = true; clearTimeout(watchdog);
+    var first = (syncRetryN === 0);   // 재시도마다 같은 토스트를 반복하지 않는다 — 알림띠가 상태를 계속 보여준다
+    syncInFlight = false; syncFailed = true; syncDecided = true;
+    serverLinkedUid = null;
+    window.Tel && Tel.error('E11', err);
+    scheduleSyncRetry();
+    if (first) toast('서버에서 불러오지 못했어요. 이 기기에 저장된 내용으로 계속 쓸 수 있어요 (E11)');
+    renderCloudCard(); renderHome();
+  }
   Cloud.pull().then(function (res) {
-    /* 불러오지 못해도 앱에는 들어갈 수 있어야 한다 — 화면 갱신을 반드시 한다.
-       (오프라인·서버 오류에 로그인 화면에 갇히던 문제, 2026-07-30 적대 검토) */
-    if (res.error) {
-      window.Tel && Tel.error('E11', res.error);
-      toast('서버에서 불러오지 못했어요. 이 기기에 저장된 내용으로 계속 쓸 수 있어요 (E11)');
-      renderCloudCard(); renderHome(); return;
-    }
+    if (settled) return;              // 워치독이 이미 실패로 처리했다면 뒤늦은 응답으로 화면을 뒤집지 않는다
+    if (res && res.error) { readFailed(res.error); return; }
+    settled = true; clearTimeout(watchdog);
+    syncInFlight = false;
+    syncFailed = false; syncRetryN = 0; syncDecided = true;
     /* 비밀번호 재설정 화면이 떠 있는 사이 pull이 끝났다면 화면을 밀어내지 않는다 */
-    if (Cloud.inAuthFlow()) { serverLinked = true; return; }
+    if (Cloud.inAuthFlow()) { serverLinkedUid = uid; return; }
     var server = res.data && res.data.data;
-    function isEmptyDb(d) { return !d || !(d.staff && d.staff.length); }
     function paint(moveHome) {
       renderMonthLabel(); renderRules();
       if (moveHome && !uiBusy()) showTab('home');
       renderCloudCard(); renderHome();
     }
     function adoptServer() {
-      if (!isEmptyDb(db)) snapBeforeOverwrite('server');   // 이 기기에만 있던 내용 보호
+      /* 이 기기에만 있던 내용은 반드시 스냅샷으로 남기고 덮는다. 보관에 실패하면(저장 공간 부족 등)
+         덮지 않는다 — 안전망 없는 자동 덮어쓰기는 하지 않는다(적대 검토 지적 ③). */
+      if (!isEmptyDb(db) && !snapBeforeOverwrite('server')) {
+        toast('이 기기 내용을 안전하게 보관하지 못해 서버 내용을 받지 않았어요. 저장 공간을 확인해주세요');
+        paint(false); return;
+      }
+      var before = staffN(db);
       db = server;
       Store.save(db); Store.setOwner(uid);
       curYM = db.currentMonth || curYM;
-      serverLinked = true;
+      serverLinkedUid = uid;
       paint(true);
-      toast('서버의 최신 내용을 불러왔어요 ☁');
+      /* 서버를 받았더니 인원이 크게 줄었다 — 지나가는 토스트로 넘기지 않고 되돌릴 길을 함께 보여준다
+         (다른 기기에 거의 빈 내용이 더 최신으로 올라가 있던 조합, 적대 검토 지적 ①) */
+      if (SyncRules.isBigShrink(before, staffN(db))) shrinkNotice(before, staffN(db));
+      else toast('서버의 최신 내용을 불러왔어요 ☁');
     }
     /* push 실패는 성공으로 위장하면 안 된다 — res.error 확인(E10 계측은 Cloud.push 내부) */
     function pushUp(okMsg) {
+      function failed() {
+        var first = (syncRetryN === 0);   // 재시도마다 같은 토스트를 반복하지 않는다(알림띠가 상태를 계속 보여준다)
+        serverLinkedUid = null; syncFailed = true;
+        if (first) toast('서버에 올리지 못했어요. 인터넷 연결을 확인해주세요 (E10)');
+        scheduleSyncRetry(); renderCloudCard(); renderHome();
+      }
       Cloud.push(db, uid).then(function (r) {
-        if (r && r.error) { toast('서버에 올리지 못했어요. 인터넷 연결을 확인해주세요 (E10)'); renderCloudCard(); renderHome(); return; }
+        if (r && r.error) { failed(); return; }
         Store.setOwner(uid);
-        serverLinked = true;
+        serverLinkedUid = uid;
         toast(okMsg); paint(false);
-      });
+      }, failed);
     }
     var act = SyncRules.decideSync({
       own: own, uid: uid,
       localEmpty: isEmptyDb(db), serverEmpty: isEmptyDb(server),
       localAt: db._updatedAt || 0, serverAt: (server && server._updatedAt) || 0
     });
+    /* 읽는 사이에 사용자가 편집했다 — 그 편집분을 서버 내용으로 덮지 않는다.
+       ⚠️ 'adopt일 때만' 막으면 안 된다: 편집이 곧 localAt을 최신으로 만들기 때문에 같은 계정에서는
+       판단이 항상 push로 확정돼 가드가 원리적으로 발동하지 않는다(2차 적대 검토 확정 — 보호가 허상이었다).
+       그래서 편집이 있었으면 '무엇을 하기로 했든' 이번 판단은 미룬다. 예약된 올리기도 취소한다. */
+    var editedWhileReading = (db._updatedAt || 0) !== startedAt;
+    if (editedWhileReading && act !== 'none') {
+      syncDeferred = true; syncEverDeferred = true;
+      if (window.Cloud && Cloud.cancelPush) Cloud.cancelPush();
+      serverLinkedUid = null;
+      scheduleSyncRetry();   // 앱을 계속 쓰는 동안에도 스스로 다시 판단한다(보류가 굳지 않게)
+      toast('고치는 중이라 서버와 맞추는 것을 잠시 미뤘어요. 곧 다시 맞춰요');
+      paint(false); return;
+    }
+    syncDeferred = false;   // 판단이 끝났다 — 보류 해제
     if (act === 'adopt') { adoptServer(); return; }
-    if (act === 'push') { pushUp(isEmptyDb(server) ? '이 기기 내용을 서버에 올렸어요 ☁' : '서버에 저장했어요 ☁'); return; }
+    if (act === 'push') {
+      /* 한 번 미뤘다가(편집 중이라) 올리는 길이면, 그 사이 서버가 더 새것이었을 수 있다 —
+         덮이는 서버 내용을 되돌릴 수 있게 남긴다. adopt에만 스냅샷이 있고 push 경로엔 없어서
+         이 방향의 손실에는 복구 수단이 아예 없었다(2차 적대 검토). 평상시 push에는 남기지 않는다 —
+         매번 덮으면 사용자가 가져오기 직전 상태로 되돌리려던 스냅샷을 잃는다. */
+      if (!isEmptyDb(server) && syncEverDeferred) snapServerBeforePush(server, uid);
+      pushUp(isEmptyDb(server) ? '이 기기 내용을 서버에 올렸어요 ☁' : '서버에 저장했어요 ☁');
+      return;
+    }
     if (act === 'hold') {
       /* 다른 계정에서 쓰던 근무표다 — 올리지도 지우지도 않는다(소유 계정 표시를 그대로 둬
          save()의 올리기 차단이 계속 걸리게 한다). 되돌릴 수 없는 삭제를 기본 동작으로 삼지 않는다. */
@@ -2389,9 +2506,44 @@ function cloudSyncOnLogin() {
     }
     /* none — 올릴 것도 받을 것도 없음. 소유 계정만 확정한다(이 기기 내용이 이 계정 것임이 확인된 상태) */
     Store.setOwner(uid);
-    if (!isEmptyDb(server)) serverLinked = true;
+    if (!isEmptyDb(server)) serverLinkedUid = uid;
     paint(false);
+  }, function (err) {
+    /* 네트워크가 끊기면 라이브러리가 예외로 거절하기도 한다 — 여기서 받지 않으면
+       화면 갱신이 통째로 건너뛰어져 로그인 화면에 갇힌다(v7.9.1 회귀와 같은 계열). */
+    readFailed(err);
   });
+}
+/* 서버를 받았더니 인원이 크게 줄었을 때 — 무엇이 바뀌었는지 숫자로 보여주고 되돌릴 길을 준다 */
+function shrinkNotice(before, after) {
+  /* 다른 화면·시트가 떠 있으면 그 위에 겹쳐 열지 않는다 — 가려져 조작이 안 되거나
+     뒤로가기를 한 번 삼킨다(v7.10.0 적대 검토 확정). 그때는 알림띠와 토스트로 알린다. */
+  if (uiBusy() || document.body.classList.contains('grid-open')) {
+    toast('서버 내용으로 맞추면서 인원이 ' + before + '명 → ' + after + '명으로 줄었어요. 「데이터 및 계정」에서 되돌릴 수 있어요');
+    return;
+  }
+  openSheet('<div class="sh-head"><h3>인원이 줄어들었어요</h3></div>' +
+    '<p class="hint" style="margin:0 0 12px">서버에 저장돼 있던 내용으로 맞췄어요. 그 과정에서 명단이 <b>' + before +
+    '명 → ' + after + '명</b>으로 줄었어요.<br>다른 기기에서 정리하신 게 맞다면 그대로 두시면 돼요.</p>' +
+    '<div class="btnrow">' +
+    '<button class="btn gray" onclick="undoServerAdopt()">되돌리기</button>' +
+    '<button class="btn big" onclick="closeSheet()">그대로 둘게요</button></div>');
+}
+function undoServerAdopt() { closeSheet(); restoreOverwriteSnap(true); }
+/* 홈 위쪽 보류 알림 — '서버에 못 올린 상태'일 때만 나타난다(정상이면 아무것도 없다).
+   여기 오는 경우: 오프라인·서버 오류(E11), 다른 계정 근무표라 보류(hold), 올리기 실패(E10).
+   종전에는 이 사실이 「데이터 및 계정」 화면 안에만 있어 사용자가 알 길이 없었다(적대 검토 지적 ⑥). */
+function renderSyncBanner() {
+  var el = document.getElementById('syncBanner');
+  if (!el) return;
+  var show = !!loggedInId() && syncDecided && !serverLinked() && !SyncRules.isEmptyDb(db);
+  el.className = show ? 'warn' : '';
+  /* 문구는 한 줄에 들어가는 길이로 — 두 줄이 되면 320px 폰에서 「만들기」 버튼을 밀어낸다(실측).
+     누를 수 있다는 신호는 글자 대신 꺾쇠로 준다(목록 행과 같은 관례). */
+  el.innerHTML = show ? '<span class="sb-ico">' + ic('bang') + '</span><span class="sb-tx">이 기기에만 저장돼 있어요</span>' + ic('chevR') : '';
+  /* 알림이 뜨는 동안에는 준비 화면의 설명 부제를 접는다 — 한 화면 안에 「만들기」 버튼이
+     남아 있어야 한다(UI_GUIDE §5). 비정상 상태에서는 설명보다 이 알림이 먼저다. */
+  document.body.classList.toggle('syncwarn', show);
 }
 
 function renderArchive() {
@@ -2459,7 +2611,7 @@ function archMiniHtml(ym) {
   });
   return html + '</table>';
 }
-function goMonth(ym) { curYM = ym; save(); renderMonthLabel(); showTab('home'); }
+function goMonth(ym) { curYM = ym; save(true); renderMonthLabel(); showTab('home'); }   // 보관함에서 달 열기 = 탐색
 function exportData() {
   var blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
   var a = document.createElement('a');
@@ -2474,13 +2626,41 @@ function exportData() {
    서버 데이터 교체) 직전에 현재 상태를 이 기기에 1세대 보관하고,
    「데이터 및 계정」에 되돌리기 버튼을 노출한다. 복원은 맞바꾸기라 다시 되돌릴 수 있다. */
 var SNAP_KEY = 'ummandal_pre_overwrite';
-var SNAP_REASONS = { 'import': '근무표 가져오기', 'file': '백업 파일 복원', 'server': '서버 데이터 교체', 'account': '다른 계정으로 로그인' };
-function snapBeforeOverwrite(reason) {
+var SNAP_REASONS = { 'import': '근무표 가져오기', 'file': '백업 파일 복원', 'server': '서버 데이터 교체', 'account': '다른 계정으로 로그인', 'server-lost': '서버에 있던 내용 덮어쓰기' };
+/* 이 기기 내용을 서버에 올려 '서버에 있던 더 새로운 내용'이 사라지는 경우, 그 서버 내용을 보관한다.
+   되돌리기를 누르면 서버에 있던 쪽으로 돌아간다(2차 적대 검토: push 방향엔 복구 수단이 아예 없었다). */
+function snapServerBeforePush(server, uid) {
   try {
-    /* 소유 계정을 함께 적어둔다 — 되돌릴 때 '이게 누구 근무표였는지'를 알아야
-       다른 계정 명단을 지금 계정 서버로 올리는 일을 막을 수 있다(2026-07-30). */
-    localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: Date.now(), reason: reason, owner: Store.owner(), data: db }));
-  } catch (e) { }
+    localStorage.setItem(SNAP_KEY, JSON.stringify({ ts: Date.now(), reason: 'server-lost', owner: uid || null, data: server }));
+    return true;
+  } catch (e) { window.Tel && Tel.error('E12', e); return false; }
+}
+/* 보관에 성공했는지를 돌려준다(true/false) — 종전에는 실패를 조용히 삼켜서, 저장 공간이
+   부족한 기기에서는 '안전망이 있다고 믿고' 그대로 덮어썼다(2026-07-30 적대 검토 지적 ③).
+   실패하면 자동 덮어쓰기(서버 채택)는 중단하고, 사용자가 직접 시킨 덮어쓰기는 경고 후 진행한다. */
+function snapBeforeOverwrite(reason) {
+  /* 소유 계정을 함께 적어둔다 — 되돌릴 때 '이게 누구 근무표였는지'를 알아야
+     다른 계정 명단을 지금 계정 서버로 올리는 일을 막을 수 있다(2026-07-30). */
+  var body = JSON.stringify({ ts: Date.now(), reason: reason, owner: Store.owner(), data: db });
+  try {
+    localStorage.setItem(SNAP_KEY, body);
+    return true;
+  } catch (e) {
+    /* 공간 부족이면 낡은 스냅샷을 비우고 한 번만 다시 시도한다.
+       ⚠️ 그 시도마저 실패하면 이전 스냅샷을 되살려 놓는다 — 안 그러면 새 보관에 실패한 대가로
+       예전 되돌리기까지 잃는다(v7.10.0 적대 검토 확정). */
+    var prev = null;
+    try { prev = localStorage.getItem(SNAP_KEY); } catch (e0) { }
+    try {
+      localStorage.removeItem(SNAP_KEY);
+      localStorage.setItem(SNAP_KEY, body);
+      return true;
+    } catch (e2) {
+      if (prev) { try { localStorage.setItem(SNAP_KEY, prev); } catch (e3) { } }
+      window.Tel && Tel.error('E12', e2);
+      return false;
+    }
+  }
 }
 function getOverwriteSnap() {
   try {
@@ -2488,11 +2668,12 @@ function getOverwriteSnap() {
     return (s && s.data) ? s : null;
   } catch (e) { return null; }
 }
-function restoreOverwriteSnap() {
+/* skipConfirm — 이미 시트에서 물어본 경우(인원 축소 안내의 「되돌리기」)엔 다시 묻지 않는다 */
+function restoreOverwriteSnap(skipConfirm) {
   var s = getOverwriteSnap();
-  if (!s) return;
+  if (!s) { toast('되돌릴 직전 상태가 없어요'); return; }
   var label = SNAP_REASONS[s.reason] || '데이터 교체';
-  if (!confirm('지금 내용을 「' + label + '」 직전 상태로 되돌릴까요?\n\n되돌린 뒤에도 같은 버튼으로 다시 바꿀 수 있어요.')) return;
+  if (!skipConfirm && !confirm('지금 내용을 「' + label + '」 직전 상태로 되돌릴까요?\n\n되돌린 뒤에도 같은 버튼으로 다시 바꿀 수 있어요.')) return;
   var cur = db, curOwner = Store.owner();
   db = s.data;
   /* 맞바꾸기 — 방금 버린 상태를 같은 자리에 넣어 "되돌리기 취소"가 가능하게 */
@@ -2500,10 +2681,15 @@ function restoreOverwriteSnap() {
   /* 소유 계정도 함께 되돌린다 — 다른 계정 근무표를 되살린 경우 서버 올리기가 자동 보류된다
      (save() 안의 canPushNow가 소유 계정 일치를 요구하므로) */
   Store.setOwner(s.owner || null);
+  /* 올릴 수 없는 상태로 되돌아갔다면 초록불도 함께 내린다 — 안 내리면 「저장됨」이라 말하면서
+     실제로는 어떤 편집도 서버에 안 올라가고, 알림띠까지 막힌다(2차 적대 검토 확정). */
+  if (localOwnerId() !== loggedInId()) serverLinkedUid = null;
   save();
   undoStack = [];
   curYM = db.currentMonth || curYM;
-  renderMonthLabel(); renderRules(); renderDataScreen();
+  /* 홈까지 다시 그린다 — 안 그리면 되돌렸는데도 화면에는 줄어든 표가 그대로 남아
+     "되돌리기가 안 됐다"고 읽힌다(v7.10.0 적대 검토 확정) */
+  renderMonthLabel(); renderRules(); renderDataScreen(); renderHome(); renderSyncBanner();
   toast('되돌렸어요 — 확인 후 이상 없으면 그대로 쓰시면 돼요');
 }
 function importData(ev) {
@@ -2514,11 +2700,11 @@ function importData(ev) {
     try {
       var data = JSON.parse(reader.result);
       if (!confirm('지금 내용을 백업 파일 내용으로 바꿀까요?')) return;
-      snapBeforeOverwrite('file');
+      var kept = snapBeforeOverwrite('file');
       db = data; save();
       curYM = db.currentMonth || curYM;
       renderMonthLabel(); showTab('home');
-      toast('백업을 불러왔어요 📂');
+      toast(kept ? '백업을 불러왔어요 📂' : '백업을 불러왔어요 📂 ⚠️ 직전 상태는 보관하지 못했어요(되돌리기 불가)');
     } catch (e) { alert('파일을 읽을 수 없어요. 엄만달에서 저장한 백업 파일인지 확인해주세요.'); }
   };
   reader.readAsText(f);
@@ -3052,7 +3238,9 @@ function applyImport() {
   });
   if (!staff.length) { alert('등록할 사람이 없어요. 「빼기」를 하나 이상 풀어주세요.'); return; }
   if (staffList().length && !confirm('인원을 이 근무표 기준으로 다시 등록합니다.\n이름이 같은 사람은 지난 달 근무 기록이 이어지고,\n이 근무표에 없는 사람은 목록에서 빠져요. 계속할까요?')) return;
-  snapBeforeOverwrite('import');   // 덮어쓰기 직전 상태를 이 기기에 1세대 보관(당일 편집분 보호)
+  /* 덮어쓰기 직전 상태를 이 기기에 1세대 보관(당일 편집분 보호).
+     보관에 실패해도 사용자가 직접 시킨 작업이라 진행하되, 되돌리기가 안 된다는 사실은 알린다. */
+  var _snapKept = snapBeforeOverwrite('import');
 
   /* 규칙: 마법사에서 확정한 값(_wiz.rules)을 그대로 쓴다. 직군 편집은 wizDeriveRules로 이미 반영됨. */
   var r = rules2();
@@ -3120,6 +3308,7 @@ function applyImport() {
   else if (ym !== curYM) msg += ' (이력으로 저장됨 — 다음 달 만들 때 반영)';
   if (patAdded) msg += ' · 습관 메모 ' + patAdded + '개 저장';
   else if (patShown) msg += ' (습관 메모는 저장하지 않았어요)';
+  if (!_snapKept) msg += ' ⚠️ 직전 상태는 보관하지 못했어요(되돌리기 불가)';
   toast(msg);
   } catch (e) {
     window.Tel && Tel.error('E21', e);
@@ -3352,8 +3541,13 @@ if (window.Cloud && Cloud.enabled()) {
   }, 2000);
   /* 인터넷이 돌아오면 한 번 더 시도 — 오프라인으로 첫 동기화가 실패하면 소유 계정이 확정되지 않아
      그 실행 내내 서버 저장이 보류된다(그 상태로 방치하면 사용자는 저장되는 줄 알고 계속 쓴다). */
-  window.addEventListener('online', function () {
-    if (Cloud.enabled() && Cloud.getUser() && !Cloud.inAuthFlow() && !localOwnerId()) cloudSyncOnLogin();
+  /* ⚠️ 리스너에 함수를 그대로 넘기면 첫 인자가 Event 객체라 fromEvent===true가 아니게 되어
+     사다리 초기화가 죽은 코드가 된다(2차 적대 검토 확정). 반드시 감싸서 true를 넘긴다. */
+  window.addEventListener('online', function () { syncNowIfNeeded(true); });
+  /* 앱으로 돌아올 때도 확인한다 — 휴대폰에서는 online 이벤트가 오지 않는 경우가 많고,
+     화면을 껐다 켜는 사이에 연결이 회복되는 일이 흔하다(2026-07-30 적대 검토 지적 ⑤). */
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') syncNowIfNeeded(true);
   });
 }
 
