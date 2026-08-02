@@ -633,6 +633,55 @@ section('T9 월 여력 소프트 경고 (생성 막지 않음·warnings로만)')
   ok(turn && turn.msg.includes('E(이브닝)'), 'T10c 전환 문구 E(이브닝) 병기 (실제 ' + (turn && turn.msg) + ')');
 }
 
+/* ========== T11 61병동 어휘 — M(미드)·H(하프)·DE(16시간)·공가·지원 유형 (2026-07-31) ========== */
+section('T11 M·H·DE·공가·지원 (61병동 실표 어휘)');
+{
+  ok(E2.fam('M') === 'M' && E2.fam('H') === 'M', 'T11a M·H는 M(미드) 계열');
+  ok(E2.fam('D') === 'D' && E2.fam('MD') === 'D', 'T11b 기존 D 계열 불변');
+  ok(E2.fam('DE') === null, 'T11c DE는 단일 계열이 아니다(fam은 null)');
+
+  /* 1일=목요일(firstWeekday=4) → 3일이 토요일 */
+  const staff = [
+    { id: 't0', name: '삼교대0', type: 'three' },
+    { id: 't1', name: '삼교대1', type: 'three' },
+    { id: 's0', name: '지원', type: 'support' },
+  ];
+  const need = { D: [1, 2], E: [1, 2], N: [0, 2], M: [0, 1] };
+  const cfg = {
+    days: 3, firstWeekday: 4, holidays: [], maxConsecWork: 6, maxConsecN: 3,
+    offAfterNights: 0, forbidBackward: false,
+    required: { weekday: { ...need }, holiday: { ...need } },
+  };
+
+  let vs = E2.validate({ t0: ['DE', 'D', 'D'], t1: ['O', 'E', 'E'], s0: ['M', 'O', 'H'] }, staff, cfg);
+  ok(!vs.some(v => v.rule === '인원' && v.day === 1), 'T11d DE 한 칸이 D·E 두 계열을 동시에 채운다');
+  ok(!vs.some(v => v.rule === '유형' && v.pid === 's0'), 'T11e 지원은 M·H를 설 수 있다');
+  ok(!vs.some(v => v.day === 3 && v.rule === '유형'), 'T11f 토요일 H는 통과');
+
+  vs = E2.validate({ t0: ['D', 'D', 'D'], t1: ['E', 'E', 'E'], s0: ['D', 'O', 'O'] }, staff, cfg);
+  ok(vs.some(v => v.rule === '유형' && v.pid === 's0' && v.day === 1), 'T11g 지원은 D를 설 수 없다(독단 금지)');
+
+  vs = E2.validate({ t0: ['D', 'D', 'D'], t1: ['E', 'E', 'E'], s0: ['H', 'O', 'O'] }, staff, cfg);
+  ok(vs.some(v => v.pid === 's0' && v.day === 1 && /토요일/.test(v.msg)), 'T11h 하프는 토요일에만');
+
+  vs = E2.validate({ t0: ['O', 'D', 'D'], t1: ['O', 'E', 'E'], s0: ['M', 'O', 'O'] }, staff, cfg);
+  ok(vs.some(v => v.rule === '지원' && v.day === 1), 'T11i 지원만 근무하는 날은 독단 위반');
+
+  const staff2 = staff.concat([{ id: 's1', name: '지원2', type: 'support' }]);
+  vs = E2.validate({ t0: ['D', 'D', 'D'], t1: ['E', 'E', 'E'], s0: ['M', 'O', 'O'], s1: ['M', 'O', 'O'] }, staff2, cfg);
+  ok(vs.some(v => v.rule === '인원' && v.fam === 'M' && v.over === true && v.day === 1), 'T11j M 계열 최대 초과 검출');
+
+  vs = E2.validate({ t0: ['D', 'GO', 'D'], t1: ['E', 'E', 'E'], s0: ['M', 'O', 'H'] }, staff, cfg);
+  ok(!vs.some(v => v.pid === 't0' && v.rule === '유형'), 'T11k 공가는 어느 유형이든 쉴 수 있다');
+
+  const oldCfg = { ...cfg, required: { weekday: { D: [1, 2], E: [1, 2], N: [0, 2] }, holiday: { D: [1, 2], E: [1, 2], N: [0, 2] } } };
+  vs = E2.validate({ t0: ['D', 'D', 'D'], t1: ['E', 'E', 'E'], s0: ['M', 'M', 'M'] }, staff, oldCfg);
+  ok(!vs.some(v => v.rule === '인원' && v.fam === 'M'), 'T11l M 요구가 없는 병동은 M 인원 검사 안 함(하위 호환)');
+
+  vs = E2.validate({ t0: ['M', 'D', 'D'], t1: ['E', 'E', 'E'], s0: ['O', 'O', 'O'] }, staff, cfg);
+  ok(vs.some(v => v.rule === '유형' && v.pid === 't0' && v.day === 1), 'T11m 3교대는 미드를 설 수 없다');
+}
+
 /* ========== 결과 ========== */
 console.log('');
 console.log(`결과: ${pass} 통과 / ${fail} 실패`);

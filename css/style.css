@@ -312,6 +312,10 @@ input.sh-input:focus, .sh-input:focus { outline: 2px solid var(--brand); border-
 .codebtn.cX .cb-big { color: var(--faint); }
 /* 반차 — 두 글자라 큰 글씨를 한 단계 줄인다 */
 .codebtn.cHA .cb-big, .codebtn.cHP .cb-big { color: #8a6d3b; font-size: 19px; }
+/* 61병동 어휘(2026-07-31): 미드·하프는 청록(주간과 구분), 16시간 겸무는 보라, 공가는 교육과 같은 갈색 계열 */
+.codebtn.cM .cb-big { color: #0c8599; } .codebtn.cH .cb-big { color: #22b8cf; }
+.codebtn.cDE .cb-big { color: #7048e8; font-size: 19px; }
+.codebtn.cGO .cb-big { color: #8a6d3b; }
 .pinrow { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 14px;
   padding: 12px 16px; margin: 12px 0 2px; }
 .pinrow .pin-tx { flex: 1; }
@@ -527,7 +531,11 @@ td.cell.E { background: var(--e); color: #fff; box-shadow: inset 0 -2px 0 rgba(0
 td.cell.E2 { background: #f08c00; color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12); font-size: 13px; }
 td.cell.N { background: var(--n); color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
 td.cell.O { background: var(--o-bg); color: var(--o-tx); font-weight: 700; }
-td.cell.V, td.cell.CO, td.cell.EDU { background: var(--v-bg); color: var(--v-tx); font-weight: 800; }
+td.cell.V, td.cell.CO, td.cell.EDU, td.cell.GO { background: var(--v-bg); color: var(--v-tx); font-weight: 800; }
+/* 61병동 어휘(2026-07-31): M=미드·H=하프는 청록(주간 D·E와 한눈에 구분), DE=16시간 겸무는 보라 */
+td.cell.M { background: #0c8599; color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12); }
+td.cell.H { background: #22b8cf; color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12); }
+td.cell.DE { background: #7048e8; color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); font-size: 12px; }
 /* 반차(전반·후반) — 휴식 톤은 연차와 같게, 두 글자라 글씨만 줄인다 */
 td.cell.HA, td.cell.HP { background: var(--v-bg); color: var(--v-tx); font-weight: 800; font-size: 12px; }
 td.cell.Wm { background: var(--moon-soft); color: #8a6d00; }

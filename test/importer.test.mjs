@@ -127,5 +127,36 @@ ok(anOne.rulesByGroup.RN.wd.D[0] === RN.wd.D[0] && anOne.rulesByGroup.RN.wd.D[1]
 ok(anOne.rulesByGroup.NA.wd.D[1] === NA.wd.D[1],
   '상한은 관찰 최댓값 유지 (실제 ' + anOne.rulesByGroup.NA.wd.D[1] + ')');
 
+/* ========== ⑩ 61병동 실표 어휘 (2026-07-31) ========== */
+section('⑩ 61병동 어휘 — / · M · H · DE · 공가');
+const NC = (s) => Importer._normCode(s, []);
+ok(NC('/') === 'O', 'normCode("/")=O — 실제 병동 표의 오프 표기');
+ok(NC('／') === 'O', 'normCode("／" 전각)=O');
+ok(NC('M') === 'M', 'normCode("M")=M(미드)');
+ok(NC('m') === 'M', 'normCode 소문자 m=M');
+ok(NC('미드') === 'M', 'normCode("미드")=M');
+ok(NC('H') === 'H', 'normCode("H")=H(하프)');
+ok(NC('하프') === 'H', 'normCode("하프")=H');
+ok(NC('DE') === 'DE', 'normCode("DE")=DE(16시간)');
+ok(NC('D/E') === 'DE', 'normCode("D/E")=DE');
+ok(NC('공가') === 'GO', 'normCode("공가")=GO');
+ok(NC('D') === 'D' && NC('E') === 'E' && NC('N') === 'N', '기존 코드 불변');
+const unk = [];
+['/', 'M', 'H', 'DE', '공가', 'D', 'E', 'N', '연차'].forEach(c => Importer._normCode(c, unk));
+ok(unk.length === 0, '표의 주요 기호가 미인식으로 새지 않음 (실제 [' + unk + '])');
+
+{
+  const days = 4;
+  const rows = [
+    { name: '가나다', group: 'RN', codes: ['DE', 'D', 'D', 'D'] },
+    { name: '라마바', group: 'RN', codes: ['O', 'E', 'E', 'E'] },
+    { name: '사아자', group: 'RN', codes: ['M', 'H', 'M', 'O'] },
+  ];
+  const a = Importer.analyze(rows, days, '2026-06');
+  const RNr = a.rulesByGroup.RN;
+  ok(RNr.wd.M && RNr.wd.M[1] >= 1, 'M 계열이 규칙으로 도출됨 (실제 [' + (RNr.wd.M || []) + '])');
+  ok(RNr.wd.D[1] >= 1 && RNr.wd.E[1] >= 1, 'DE가 D·E 양쪽 관찰에 계상됨 (D[' + RNr.wd.D + '] E[' + RNr.wd.E + '])');
+}
+
 console.log('\n결과: ' + pass + ' 통과 / ' + fail + ' 실패');
 process.exit(fail ? 1 : 0);

@@ -26,14 +26,21 @@
     if (s === 'NA' || s === '조무사') return 'NA';
     return null;
   }
-  /* 근무 코드 → 패밀리 (D계열=D+MD, E계열=E+E2, N) */
+  /* 근무 코드 → 패밀리 (D계열=D+MD, E계열=E+E2, N, M계열=M+H) — engine2.js의 FAM과 같은 기준 */
   function famOf(c) {
     if (c === 'D' || c === 'MD') return 'D';
     if (c === 'E' || c === 'E2') return 'E';
     if (c === 'N') return 'N';
+    if (c === 'M' || c === 'H') return 'M';
     return null;
   }
-  function isRestCode(c) { return c === 'O' || c === 'V' || c === 'CO' || c === 'EDU' || c === 'HA' || c === 'HP'; }
+  /* 이 코드가 채우는 계열들 — DE(16시간)만 D·E 두 곳을 채운다 */
+  function famsOfCode(c) {
+    if (c === 'DE') return ['D', 'E'];
+    var f = famOf(c);
+    return f ? [f] : [];
+  }
+  function isRestCode(c) { return c === 'O' || c === 'V' || c === 'CO' || c === 'EDU' || c === 'HA' || c === 'HP' || c === 'GO'; }
 
   /* 코드 정규화 — 대소문자 무시, 앞뒤 공백·★ 제거. 미인식은 unknown에 원문 수집 */
   function normCode(raw, unknown) {
@@ -43,13 +50,21 @@
     if (s.indexOf('대휴') >= 0) return 'CO';               // "5/3 대휴" 등
     if (u === 'D') return 'D';
     if (u === 'MD') return 'MD';
+    /* DE(데이+이브닝 16시간 연속)는 D·E보다 먼저 걸러야 한다 — 순서가 바뀌면 D로 잘못 읽힌다 */
+    if (u === 'DE' || u === 'D/E' || u === 'D+E') return 'DE';
     if (u === 'E') return 'E';
     if (u === 'E2') return 'E2';
     if (u === 'N') return 'N';
+    /* 61병동 실표 어휘(2026-07-31 초승달 확정): M=미드(09~17) · H=하프(09~13, 토요일·지원 전용) */
+    if (u === 'M' || s === '미드') return 'M';
+    if (u === 'H' || s === '하프') return 'H';
+    if (s === '공가' || u === 'GO') return 'GO';
     /* 반차 — 전반/후반. '전반차'가 '전반'보다 먼저 오도록 완전일치로만 비교한다 */
     if (s === '전반차' || s === '오전반차' || s === '반차(전반)' || s === '전반' || u === 'HA') return 'HA';
     if (s === '후반차' || s === '오후반차' || s === '반차(후반)' || s === '후반' || u === 'HP') return 'HP';
-    if (u === 'OFF' || s === '오프' || u === 'O' || s === '－' || s === '-' || u === 'X') return 'O';
+    /* 「/」는 실제 병동 표에서 가장 흔한 오프 표기다 — 이걸 못 읽으면 표 전체가 빈칸이 되고
+       하루 인원 관찰값까지 어긋나 규칙 도출이 통째로 틀어진다(2026-07-31 61병동 표에서 확인) */
+    if (u === 'OFF' || s === '오프' || u === 'O' || s === '－' || s === '-' || s === '/' || s === '／' || u === 'X') return 'O';
     if (s === '휴' || s === '연차' || u === 'V') return 'V';
     if (s === '대') return 'CO';
     if (s === '교' || s === '교육') return 'EDU';
@@ -186,8 +201,9 @@
     var byDay = {};
     rows.forEach(function (row) {
       var g = row.group === 'NA' ? 'NA' : 'RN';
-      if (!byDay[g]) { byDay[g] = []; for (var d = 0; d < days; d++) byDay[g].push({ D: 0, E: 0, N: 0 }); }
-      row.codes.forEach(function (c, i) { var f = famOf(c); if (f) byDay[g][i][f]++; });
+      if (!byDay[g]) { byDay[g] = []; for (var d = 0; d < days; d++) byDay[g].push({ D: 0, E: 0, N: 0, M: 0 }); }
+      /* DE(16시간)는 D·E 두 계열을 동시에 채운다 — 한 칸을 둘로 센다(2026-07-31) */
+      row.codes.forEach(function (c, i) { famsOfCode(c).forEach(function (f) { byDay[g][i][f]++; }); });
     });
 
     /* 빈 날 = 전 직군 통틀어 근무 기록이 하나도 없는 날(사진·표에 안 채워진 날).
@@ -197,7 +213,7 @@
     var dayFilled = [];
     for (var fd = 0; fd < days; fd++) dayFilled.push(false);
     rows.forEach(function (row) {
-      row.codes.forEach(function (c, i) { if (famOf(c)) dayFilled[i] = true; });
+      row.codes.forEach(function (c, i) { if (famsOfCode(c).length) dayFilled[i] = true; });
     });
 
     var rulesByGroup = {};
@@ -221,8 +237,8 @@
       /* 상한이 하한+4 초과면 눌러 담기(이상치 완충). N은 관찰값 그대로 */
       function soft(rg) { if (rg[1] > rg[0] + 4) rg[1] = rg[0] + 4; return rg; }
       rulesByGroup[g] = {
-        wd: { D: soft(range(false, 'D')), E: soft(range(false, 'E')), N: range(false, 'N') },
-        hd: { D: soft(range(true, 'D')), E: soft(range(true, 'E')), N: range(true, 'N') }
+        wd: { D: soft(range(false, 'D')), E: soft(range(false, 'E')), N: range(false, 'N'), M: range(false, 'M') },
+        hd: { D: soft(range(true, 'D')), E: soft(range(true, 'E')), N: range(true, 'N'), M: range(true, 'M') }
       };
     });
 
@@ -232,7 +248,7 @@
       var run = 0, nrun = 0;
       for (var d = 0; d < days; d++) {
         var c = row.codes[d];
-        if (famOf(c)) { run++; if (run > maxWork) maxWork = run; } else run = 0;
+        if (famsOfCode(c).length) { run++; if (run > maxWork) maxWork = run; } else run = 0;
         if (c === 'N') { nrun++; if (nrun > maxN) maxN = nrun; }
         else {
           if (nrun > 0) {   // N 블록 종료 → 직후 연속 휴식 개수

@@ -5,14 +5,19 @@ var now = new Date();
 var curYM = db.currentMonth || (now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0'));
 var undoStack = [];
 /* 근무 형태. two = 2교대(데이·이브닝만, 나이트 없음) — 어머니 병동이 이 방식(2026-07-20).
-   MD·E2 같은 건 데이/이브닝의 변형이라 별도 형태가 아니다. */
-var typeNames = { three: '3교대', two: '2교대(데이·이브닝)', night: '나이트 전담', day: '평일 상근' };
-var TYPE_ORDER = ['three', 'two', 'night', 'day'];
+   MD·E2 같은 건 데이/이브닝의 변형이라 별도 형태가 아니다.
+   support = 지원(신규자) — 미드·하프만 서고 혼자 한 시간대를 책임지지 않는다(2026-07-31 초승달 확정). */
+var typeNames = { three: '3교대', two: '2교대(데이·이브닝)', night: '나이트 전담', day: '평일 상근', support: '지원(미드·하프)' };
+var TYPE_ORDER = ['three', 'two', 'night', 'day', 'support'];
 var groupNames = { RN: '간호사', NA: '조무사' };
 var prefNames = { '': '자동', D: '데이 위주', E: '이브닝 위주' };
-/* 셀 표시: 근무 5종 + 휴무 6종(반차 HA 전반·HP 후반 포함 — 이번 버전은 하루 쉼으로 계산) */
-var codeDisp = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', CO: '대', EDU: '교', HA: '전반', HP: '후반' };
-var codeLabels = { D: '데이', MD: '미들데이', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육',
+/* 셀 표시: 근무 8종 + 휴무 7종(반차 HA 전반·HP 후반 포함 — 이번 버전은 하루 쉼으로 계산).
+   M(미드)·H(하프)·DE(16시간)·공가는 61병동 실표 어휘(2026-07-31 추가). */
+var codeDisp = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', M: 'M', H: 'H', DE: 'DE',
+  O: '－', V: '휴', CO: '대', EDU: '교', GO: '공', HA: '전반', HP: '후반' };
+var codeLabels = { D: '데이', MD: '미들데이', E: '이브닝', E2: '이브닝2', N: '나이트',
+  M: '미드(9~17시)', H: '하프(9~13시·토)', DE: '데이+이브닝(16시간)',
+  O: '오프', V: '연차', CO: '대휴', EDU: '교육', GO: '공가',
   HA: '반차(전반)', HP: '반차(후반)' };
 function staffGroup(p) { return p.group === 'NA' ? 'NA' : 'RN'; }
 function groupsPresent() {
@@ -282,12 +287,16 @@ function engineConfig(ym, g) {
   gStaff.forEach(function (p) { if (m.wish[p.id] && m.wish[p.id].length) wish[p.id] = m.wish[p.id]; });
   var nightCount = gStaff.filter(function (p) { return p.type === 'night'; }).length;
   var maxNmin = Math.max(gr.wd.N[0], gr.hd.N[0]);
+  var req = {
+    weekday: { D: gr.wd.D.slice(), E: gr.wd.E.slice(), N: gr.wd.N.slice() },
+    holiday: { D: gr.hd.D.slice(), E: gr.hd.E.slice(), N: gr.hd.N.slice() }
+  };
+  /* 미드(M)는 쓰는 병동만 넘긴다 — 안 쓰는 병동에 [0,0]을 주면 기존 표의 미드가 전부 위반이 된다 */
+  if (gr.wd.M) req.weekday.M = gr.wd.M.slice();
+  if (gr.hd.M) req.holiday.M = gr.hd.M.slice();
   return {
     days: daysInYM(ym), firstWeekday: firstWeekdayYM(ym), holidays: m.holidays.slice(),
-    required: {
-      weekday: { D: gr.wd.D.slice(), E: gr.wd.E.slice(), N: gr.wd.N.slice() },
-      holiday: { D: gr.hd.D.slice(), E: gr.hd.E.slice(), N: gr.hd.N.slice() }
-    },
+    required: req,
     maxConsecWork: r.maxWork, maxConsecN: r.maxN, offAfterNights: r.offAfterN,
     forbidBackward: !!+r.backward,
     /* 전담이 나이트 수요를 홀로 감당 못 하는 구성(예시 병동 등)이면 3교대도 나이트 허용 */
@@ -879,14 +888,18 @@ function tapCell(ev, pid, d) {
   ev.stopPropagation();
   openCodeSheet(pid, d);
 }
+/* 2026-07-31: 61병동 실표 어휘 추가 — M(미드)·H(하프)·DE(16시간)·공가.
+   자주 쓰는 순서를 지킨다 — 첫 줄은 매일 쓰는 것, 아래로 갈수록 가끔 쓰는 것. */
 var CODE_SHEET_ROWS = [
   ['D', 'E', 'N', 'O'],
-  ['V', 'CO', 'EDU', 'W'],
+  ['M', 'V', 'CO', 'W'],
+  ['DE', 'H', 'GO', 'EDU'],
   ['MD', 'E2', 'HA', 'HP', 'X']
 ];
-var codeBig = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', O: '－', V: '휴', CO: '대', EDU: '교',
-  HA: '전반', HP: '후반', W: '★', X: '✕' };
-var codeSheetLbl = { D: '데이', MD: '미들', E: '이브닝', E2: '이브닝2', N: '나이트', O: '오프', V: '연차', CO: '대휴', EDU: '교육',
+var codeBig = { D: 'D', MD: 'MD', E: 'E', E2: 'E2', N: 'N', M: 'M', H: 'H', DE: 'DE',
+  O: '－', V: '휴', CO: '대', EDU: '교', GO: '공', HA: '전반', HP: '후반', W: '★', X: '✕' };
+var codeSheetLbl = { D: '데이', MD: '미들', E: '이브닝', E2: '이브닝2', N: '나이트',
+  M: '미드 9~17', H: '하프 9~13', DE: '데이+이브닝', O: '오프', V: '연차', CO: '대휴', EDU: '교육', GO: '공가',
   HA: '반차(전반)', HP: '반차(후반)', W: '희망 휴무', X: '지움' };
 function openCodeSheet(pid, d) {
   var p = staffList().filter(function (x) { return x.id === pid; })[0];
@@ -3333,8 +3346,9 @@ function exportImage() {
   var days = daysInYM(curYM), fw = firstWeekdayYM(curYM), m = month(curYM), pt = ymParts(curYM);
   var gs = groupsPresent();
   var wdNames = ['일', '월', '화', '수', '목', '금', '토'];
-  var codeColors = { D: '#2f9e44', MD: '#66a80f', E: '#e8590c', E2: '#f08c00', N: '#3b5bdb' };
-  var restDisp = { O: '－', V: '휴', CO: '대', EDU: '교', HA: '전반', HP: '후반' };
+  var codeColors = { D: '#2f9e44', MD: '#66a80f', E: '#e8590c', E2: '#f08c00', N: '#3b5bdb',
+    M: '#0c8599', H: '#22b8cf', DE: '#7048e8' };   // 미드·하프는 청록, 16시간은 보라(2026-07-31)
+  var restDisp = { O: '－', V: '휴', CO: '대', EDU: '교', GO: '공', HA: '전반', HP: '후반' };
   var FF = '"Malgun Gothic","Apple SD Gothic Neo",sans-serif';
   var S = 2;
   var left = 20, top = 76;

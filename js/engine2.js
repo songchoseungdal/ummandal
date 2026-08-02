@@ -26,22 +26,33 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var FAM = { D: 'D', MD: 'D', E: 'E', E2: 'E', N: 'N' };      // 근무 코드 → 패밀리
-  var REST = { O: 1, V: 1, CO: 1, EDU: 1, HA: 1, HP: 1 };       // 휴식 취급 코드(반차 HA·HP 포함)
-  var WISH_OK = { O: 1, V: 1, CO: 1 };                          // 희망오프 충족 코드(EDU·반차 제외)
-  var ALL_CODES = ['D', 'MD', 'E', 'E2', 'N', 'O', 'V', 'CO', 'EDU', 'HA', 'HP'];
+  /* 근무 코드 → 패밀리.
+     M 계열(2026-07-31 신설, 61병동 실표 기준): M=미드(09:00~17:00) · H=하프(09:00~13:00, 토요일·지원 전용).
+     D·E·N과 겹쳐 도는 보조 근무라 별도 계열로 센다 — D에 합치면 「D 3명」 요구에 미드가 섞여 실제와 어긋난다. */
+  var FAM = { D: 'D', MD: 'D', E: 'E', E2: 'E', N: 'N', M: 'M', H: 'M' };
+  /* DE = 데이+이브닝 16시간 연속 근무. 한 칸이지만 D와 E를 **동시에** 채운다 —
+     계열이 1:1이 아닌 유일한 코드라 fam()이 아니라 famsOf()로 다룬다(2026-07-31). */
+  var MULTI_FAM = { DE: ['D', 'E'] };
+  var REST = { O: 1, V: 1, CO: 1, EDU: 1, HA: 1, HP: 1, GO: 1 };  // 휴식 취급(GO=공가 추가 2026-07-31)
+  var WISH_OK = { O: 1, V: 1, CO: 1 };                          // 희망오프 충족 코드(EDU·반차·공가 제외)
+  var ALL_CODES = ['D', 'MD', 'E', 'E2', 'N', 'M', 'H', 'DE', 'O', 'V', 'CO', 'EDU', 'HA', 'HP', 'GO'];
+  var FAMS = ['D', 'E', 'N', 'M'];                              // 인원 요구·집계를 도는 계열 순서
 
   function fam(c) { return FAM[c] || null; }
+  /* 이 코드가 채우는 계열 목록 — 보통 1개, DE만 2개 */
+  function famsOf(c) { return MULTI_FAM[c] || (FAM[c] ? [FAM[c]] : []); }
   function isRest(c) { return !!REST[c]; }
-  function isWork(c) { return !!FAM[c]; }
+  function isWork(c) { return !!(FAM[c] || MULTI_FAM[c]); }
 
   /* 사용자 표시용 근무 이름 — 위반 문구에 약자만 쓰면 못 알아듣는다(2026-07-25 초승달 지시).
      D 계열엔 MD, E 계열엔 E2가 포함되지만 문구는 대표 이름으로 짧게 쓴다. */
-  var FAM_DISP = { D: 'D(데이)', E: 'E(이브닝)', N: 'N(나이트)' };
+  var FAM_DISP = { D: 'D(데이)', E: 'E(이브닝)', N: 'N(나이트)', M: 'M(미드)' };
   var CODE_DISP = { D: 'D(데이)', MD: 'MD(미들)', E: 'E(이브닝)', E2: 'E2(이브닝2)', N: 'N(나이트)',
-                    O: '－(오프)', V: '휴(연차)', CO: '대(대휴)', EDU: '교(교육)',
+                    M: 'M(미드)', H: 'H(하프)', DE: 'DE(데이+이브닝 16시간)',
+                    O: '－(오프)', V: '휴(연차)', CO: '대(대휴)', EDU: '교(교육)', GO: '공(공가)',
                     HA: '전반(반차·전반)', HP: '후반(반차·후반)' };
   function codeDisp(c) { return CODE_DISP[c] || c; }
+  function isSaturday(day, firstWeekday) { return (firstWeekday + day - 1) % 7 === 6; }
 
   function isWeekend(day, firstWeekday) {
     var wd = (firstWeekday + day - 1) % 7;
@@ -92,6 +103,10 @@
       weekday: { D: toRange(wd.D || 0), E: toRange(wd.E || 0), N: toRange(wd.N || 0) },
       holiday: { D: toRange(hd.D || 0), E: toRange(hd.E || 0), N: toRange(hd.N || 0) }
     };
+    /* M(미드)은 쓰는 병동만 준다 — 안 준 병동에서 [0,0]으로 굳으면 기존 표의 미드가
+       전부 "최대 초과" 위반이 된다. 값이 있을 때만 계열을 세운다(2026-07-31). */
+    if (wd.M) cfg.required.weekday.M = toRange(wd.M);
+    if (hd.M) cfg.required.holiday.M = toRange(hd.M);
 
     // 선입력: preAssigned + 행 단위 locked 흡수 (locked 배열의 빈 값은 'O')
     // 범위 밖 일자는 버림 — O 예산 회계(preNonORemain·capOf)를 영구 왜곡하기 때문
@@ -128,6 +143,11 @@
     if (type === 'day') return f === 'D';
     /* 2교대 — 데이·이브닝만 돈다(나이트 없음). MD·E2 같은 변형 근무는 각 계열에 속하므로 허용된다 */
     if (type === 'two') return f === 'D' || f === 'E';
+    /* 지원(신규자) — 혼자 한 시간대를 책임지지 않는다. 미드·하프만 서고 D·E·N은 서지 않는다
+       (2026-07-31 초승달 확정: "지원은 말 그대로 지원이라 독단 근무가 안 된다"). */
+    if (type === 'support') return f === 'M';
+    /* 3교대는 미드·하프를 서지 않는다 — 미드는 보조 인력의 자리다(DE는 D·E 겸무라 허용) */
+    if (f === 'M') return false;
     return true;
   }
 
@@ -182,8 +202,9 @@
 
     // 0) 규칙 자체 오류: min > max
     ['weekday', 'holiday'].forEach(function (kind) {
-      ['D', 'E', 'N'].forEach(function (f) {
+      FAMS.forEach(function (f) {
         var r = cfg.required[kind][f];
+        if (!r) return;   // M 요구를 안 준 병동(기존 저장 규칙)은 그 계열을 검사하지 않는다 — 하위 호환
         if (r[0] > r[1])
           issues.push({ day: null, pid: null, rule: '사전검사', fix: 'rules', msg: (kind === 'weekday' ? '평일' : '휴일') + ' ' + FAM_DISP[f] + ' — 최소 ' + r[0] + '명이 최대 ' + r[1] + '명보다 큽니다' });
       });
@@ -216,13 +237,17 @@
     // 1) 일자별 가용 — 풀 분리(나이트/주간): 휴일의 상근, 전담제의 비전담을 가용으로 세면 안 된다
     for (var d = 1; d <= cfg.days; d++) {
       var need = cfg.isRestDay(d) ? cfg.required.holiday : cfg.required.weekday;
-      var famPre = { D: 0, E: 0, N: 0 };
+      var famPre = { D: 0, E: 0, N: 0, M: 0 };
       var availAll = 0, availN = 0, availDE = 0;
       staff.forEach(function (p) {
         var c = cfg.pre[p.id] && cfg.pre[p.id][d];
         /* 선입력 근무 — 슬롯에 계상. 단 그 사람 유형이 설 수 없는 근무면 정원으로 세지 않는다
-           (세면 "나이트 가능 인원 부족" 경고가 가려져 수정 왕복이 늘어난다 — 2026-07-20) */
-        if (c !== undefined && fam(c)) { if (typeAllows(p.type, c)) famPre[fam(c)]++; return; }
+           (세면 "나이트 가능 인원 부족" 경고가 가려져 수정 왕복이 늘어난다 — 2026-07-20)
+           DE는 D·E 두 계열을 동시에 채운다(famsOf). */
+        if (c !== undefined && isWork(c)) {
+          if (typeAllows(p.type, c)) famsOf(c).forEach(function (f) { famPre[f]++; });
+          return;
+        }
         if ((c !== undefined && isRest(c)) || (cfg.wishSet[p.id] || {})[d]) return; // 선입력 휴무·희망오프 — 강제 휴식
         availAll++;
         if (capableFam(p, 'N', d)) availN++;
@@ -236,7 +261,8 @@
         issues.push({ day: d, pid: null, rule: '사전검사', fix: 'staff', msg: d + '일 — 나이트 가능 인원 ' + (famPre.N + availN) + '명 < 최소 ' + need.N[0] + '명' });
       if (famPre.D + famPre.E + availDE < need.D[0] + need.E[0])
         issues.push({ day: d, pid: null, rule: '사전검사', fix: 'rules', msg: d + '일 — 주간(D·E) 가능 인원 ' + (famPre.D + famPre.E + availDE) + '명 < 최소 ' + (need.D[0] + need.E[0]) + '명' });
-      ['D', 'E', 'N'].forEach(function (f) {
+      FAMS.forEach(function (f) {
+        if (!need[f]) return;
         if (famPre[f] > need[f][1])
           issues.push({ day: d, pid: null, rule: '사전검사', fix: 'pre', msg: d + '일 — ' + FAM_DISP[f] + ' 선입력 ' + famPre[f] + '명 > 최대 ' + need[f][1] + '명' });
       });
@@ -332,12 +358,20 @@
     var v = [];
     for (var d = 1; d <= cfg.days; d++) {
       var need = cfg.isRestDay(d) ? cfg.required.holiday : cfg.required.weekday;
-      var cnt = { D: 0, E: 0, N: 0 };
+      var cnt = { D: 0, E: 0, N: 0, M: 0 };
       staff.forEach(function (p) {
-        var f = fam(schedule[p.id][d - 1]);
-        if (f) cnt[f]++;
+        /* DE(16시간)는 D와 E를 동시에 채운다 — 한 칸이지만 두 계열에 센다(2026-07-31) */
+        famsOf(schedule[p.id][d - 1]).forEach(function (f) { cnt[f]++; });
       });
-      ['D', 'E', 'N'].forEach(function (f) {
+      /* 지원(신규자)은 혼자 근무하지 않는다 — 지원자가 일하는 날엔 낮 근무자(D·E)가 반드시 있어야 한다.
+         "말 그대로 지원이라 독단 근무가 안 된다"(2026-07-31 초승달). 미드·하프는 D·E와 겹쳐 도는 시간대다. */
+      var supportOn = staff.some(function (p) {
+        return p.type === 'support' && isWork(schedule[p.id][d - 1]);
+      });
+      if (supportOn && cnt.D + cnt.E === 0)
+        v.push({ day: d, pid: null, rule: '지원', msg: d + '일 — 지원 인력만 근무하고 있어요. 지원은 혼자 근무할 수 없어요' });
+      FAMS.forEach(function (f) {
+        if (!need[f]) return;   // 그 계열을 안 쓰는 병동 — 검사하지 않는다(하위 호환)
         /* fam·over 필드 = 제안(suggestForViol)이 문구 파싱 없이 계열·방향을 아는 구조화 통로(2026-07-25) */
         if (cnt[f] < need[f][0])
           v.push({ day: d, pid: null, rule: '인원', fam: f, over: false, msg: d + '일 ' + FAM_DISP[f] + ' 근무 ' + cnt[f] + '명 (최소 ' + need[f][0] + '명 부족)' });
@@ -358,6 +392,9 @@
           v.push({ day: day, pid: p.id, rule: '유형', msg: p.name + ' ' + day + '일 — 상근은 휴일에 쉬어야 해요' });
         if (cfg.restrictNToNight && fam(c) === 'N' && !cfg.nightStaffIds[p.id])
           v.push({ day: day, pid: p.id, rule: '전담', msg: p.name + ' ' + day + '일 — 나이트는 전담 인원만 설 수 있어요' });
+        /* 하프(H)는 토요일 근무다 — 지원 인력이 토요일에만 반나절 돕는 자리(2026-07-31 초승달 확정) */
+        if (c === 'H' && !isSaturday(day, cfg.firstWeekday))
+          v.push({ day: day, pid: p.id, rule: '유형', msg: p.name + ' ' + day + '일 — ' + codeDisp('H') + '는 토요일에만 설 수 있어요' });
       }
       for (var i = 1; i < seq.length; i++) {
         var a = seq[i - 1], b = seq[i];
