@@ -299,8 +299,11 @@ function engineConfig(ym, g) {
     required: req,
     maxConsecWork: r.maxWork, maxConsecN: r.maxN, offAfterNights: r.offAfterN,
     forbidBackward: !!+r.backward,
-    /* 전담이 나이트 수요를 홀로 감당 못 하는 구성(예시 병동 등)이면 3교대도 나이트 허용 */
-    allowGenericNight: nightCount < 2 * maxNmin,
+    /* 전담이 나이트 수요를 홀로 감당 못 하는 구성(예시 병동 등)이면 3교대도 나이트 허용.
+       ⚠️ N 최소가 0인 병동(직군 교차로 나이트를 채우는 61병동 등)에서 2*0=0이 되면
+       전담 1명만 있어도 전담제가 켜져 3교대 나이트가 전부 위반이 됐다(2026-08-02 실측 41건).
+       수요 바닥을 1로 두어, 전담이 2명 이상일 때만 전담제가 켜지게 한다. */
+    allowGenericNight: nightCount < 2 * Math.max(maxNmin, 1),
     wishOffs: wish, history: buildHistory(ym),
     preAssigned: collectPre(ym, gStaff), maxAttempts: 1500
   };
@@ -3019,7 +3022,9 @@ function clampNum(v, lo, hi, fb) { var n = parseInt(v, 10); if (isNaN(n)) return
 /* analyze 결과로 작업 상태를 만든다. prevByName가 있으면(월 변경 등) 직군·빼기 편집을 이름으로 잇는다. */
 function wizBuild(ym, prevByName, keepPatterns) {
   var res = _importParse;
-  var an = Importer.analyze(res.rows, res.days, ym);
+  /* 이전 달들도 규칙 관찰에 섞는다(2026-08-02) — 한 달에 우연히 없던 패턴(역행·6연속 등)이
+     「금지」로 굳어 이력 달들이 위반 수십 건으로 채점되던 것의 근본 수정 */
+  var an = Importer.analyze(res.rows, res.days, ym, _importPrevSheets);
   var staff = res.rows.map(function (row, i) {
     var s = an.staff[i];
     var prev = prevByName && prevByName[row.name];
@@ -3042,7 +3047,7 @@ function wizDeriveRules() {
   var res = _importParse;
   var eff = _wiz.staff.filter(function (s) { return !s.exc; })
     .map(function (s) { return { name: s.name, group: s.group, codes: s.codes }; });
-  var an = Importer.analyze(eff.length ? eff : res.rows, res.days, _wiz.ym);
+  var an = Importer.analyze(eff.length ? eff : res.rows, res.days, _wiz.ym, _importPrevSheets);
   _wiz.rules = an.rulesByGroup;
   _wiz.global = { maxWork: an.global.maxWork, maxN: an.global.maxN, offAfterN: an.global.offAfterN, backward: an.global.backward };
 }
@@ -3140,7 +3145,7 @@ function wizPeopleHTML() {
   var monthSel = '<div class="wz-month">📅 <select id="wzYear" onchange="wizSetMonth()">' + yearOpts + '</select> ' +
     '<select id="wzMonth" onchange="wizSetMonth()">' + monOpts + '</select> 근무표예요</div>';
   var multi = _importPrevSheets.length
-    ? '<p class="hint wz-note">📚 ' + (_importPrevSheets.length + 1) + '개 달을 읽었어요. 사람·규칙은 이 달 기준, 이전 달은 기록으로만 저장돼요.</p>' : '';
+    ? '<p class="hint wz-note">📚 ' + (_importPrevSheets.length + 1) + '개 달을 읽었어요. 사람은 이 달 기준이고, 규칙은 여러 달을 함께 보고 잡았어요. 이전 달은 기록으로 저장돼요.</p>' : '';
   var warn = (_wiz.unknownCodes && _wiz.unknownCodes.length)
     ? '<p class="hint wz-note">못 알아본 표시: ' + _wiz.unknownCodes.map(esc).join(', ') + ' (빈칸으로 들어가요)</p>' : '';
 

@@ -159,11 +159,26 @@
   }
 
   /* ================= 2. analyze ================= */
-  function analyze(rows, days, ym) {
+  /* prevSheets(선택): 함께 올린 이전 달들 [{ym, rows}] — 규칙 관찰에 **섞어서** 쓴다(2026-08-02).
+     종전에는 최근 달 한 장에서만 규칙을 뽑아, 그 달에 우연히 없던 패턴(E→D 역행, 6연속 근무,
+     교차 직군 나이트)이 전부 「금지」로 굳었고 이력 달들이 위반 수십 건으로 채점됐다(61병동 실증).
+     사람·메타는 여전히 최근 달 기준 — 규칙 관찰만 여러 달을 합친다. */
+  function analyze(rows, days, ym, prevSheets) {
     var a = String(ym).split('-');
     var y = +a[0], mo = +a[1];
     var fw = new Date(y, mo - 1, 1).getDay();
     function isWeekendDay(dayNum) { var wd = (fw + dayNum - 1) % 7; return wd === 0 || wd === 6; }
+
+    /* 관찰 대상 달 목록 — [0]=기준(최근) 달. 이전 달 행에 직군이 없으면 기준 달의 같은 이름에서 찾는다 */
+    var groupByName = {};
+    rows.forEach(function (r) { groupByName[r.name] = (r.group === 'NA' ? 'NA' : 'RN'); });
+    var monthsObs = [{ rows: rows, days: days, ym: ym }];
+    (prevSheets || []).forEach(function (sh) {
+      if (sh && sh.rows && sh.rows.length && sh.ym) monthsObs.push({ rows: sh.rows, days: (sh.rows[0].codes || []).length || days, ym: sh.ym });
+    });
+    function fwOf(mym) { var p = String(mym).split('-'); return new Date(+p[0], +p[1] - 1, 1).getDay(); }
+    function isWeekendIn(mym, dayNum) { var wd = (fwOf(mym) + dayNum - 1) % 7; return wd === 0 || wd === 6; }
+    function groupOfRow(r) { return r.group ? (r.group === 'NA' ? 'NA' : 'RN') : (groupByName[r.name] || 'RN'); }
 
     /* --- 인당 staff --- */
     var staff = rows.map(function (row) {
@@ -203,40 +218,50 @@
       };
     });
 
-    /* --- 그룹별 일자 집계 --- */
-    var byDay = {};
-    rows.forEach(function (row) {
-      var g = row.group === 'NA' ? 'NA' : 'RN';
-      if (!byDay[g]) { byDay[g] = []; for (var d = 0; d < days; d++) byDay[g].push({ D: 0, E: 0, N: 0, M: 0 }); }
-      /* DE(16시간)는 D·E 두 계열을 동시에 채운다 — 한 칸을 둘로 센다(2026-07-31) */
-      row.codes.forEach(function (c, i) { famsOfCode(c).forEach(function (f) { byDay[g][i][f]++; }); });
+    /* --- 그룹별 일자 집계 (관찰 대상 달 전부) --- */
+    var obsByMonth = monthsObs.map(function (mo2) {
+      var byDay = {};
+      mo2.rows.forEach(function (row) {
+        var g = groupOfRow(row);
+        if (!byDay[g]) { byDay[g] = []; for (var d = 0; d < mo2.days; d++) byDay[g].push({ D: 0, E: 0, N: 0, M: 0 }); }
+        /* DE(16시간)는 D·E 두 계열을 동시에 채운다 — 한 칸을 둘로 센다(2026-07-31) */
+        row.codes.forEach(function (c, i) { if (i < mo2.days) famsOfCode(c).forEach(function (f) { byDay[g][i][f]++; }); });
+      });
+      /* 빈 날 = 전 직군 통틀어 근무 기록이 하나도 없는 날(사진·표에 안 채워진 날).
+         하루만 비어 있어도 모든 계열 하한이 0으로 굳어 "아무도 근무 안 해도 규칙 통과"가
+         되므로(2026-07-25 실병동 재현) 인원 범위 관찰에서 뺀다. 직군별 0은 정당할 수
+         있어(소인원 직군의 휴식일) 전체 합계가 0인 날만 제외한다. */
+      var dayFilled = [];
+      for (var fd = 0; fd < mo2.days; fd++) dayFilled.push(false);
+      mo2.rows.forEach(function (row) {
+        row.codes.forEach(function (c, i) { if (i < mo2.days && famsOfCode(c).length) dayFilled[i] = true; });
+      });
+      return { ym: mo2.ym, days: mo2.days, byDay: byDay, dayFilled: dayFilled };
     });
 
-    /* 빈 날 = 전 직군 통틀어 근무 기록이 하나도 없는 날(사진·표에 안 채워진 날).
-       하루만 비어 있어도 모든 계열 하한이 0으로 굳어 "아무도 근무 안 해도 규칙 통과"가
-       되므로(2026-07-25 실병동 재현) 인원 범위 관찰에서 뺀다. 직군별 0은 정당할 수
-       있어(소인원 직군의 휴식일) 전체 합계가 0인 날만 제외한다. */
-    var dayFilled = [];
-    for (var fd = 0; fd < days; fd++) dayFilled.push(false);
-    rows.forEach(function (row) {
-      row.codes.forEach(function (c, i) { if (famsOfCode(c).length) dayFilled[i] = true; });
-    });
+    /* 규칙을 만들 직군 = 기준(최근) 달에 실존하는 직군만 — 옛 달에만 있던 직군의 규칙을 만들지 않는다 */
+    var baseGroups = {};
+    rows.forEach(function (r) { baseGroups[groupOfRow(r)] = true; });
 
     var rulesByGroup = {};
-    Object.keys(byDay).forEach(function (g) {
-      var arr = byDay[g];
+    Object.keys(baseGroups).forEach(function (g) {
       function range(weekendWanted, fam) {
         var vals = [];
-        for (var d = 0; d < days; d++) {
-          if (isWeekendDay(d + 1) !== weekendWanted) continue;
-          if (!dayFilled[d]) continue;
-          vals.push(arr[d][fam]);
-        }
+        obsByMonth.forEach(function (ob) {
+          var arr = ob.byDay[g];
+          if (!arr) return;
+          for (var d = 0; d < ob.days; d++) {
+            if (isWeekendIn(ob.ym, d + 1) !== weekendWanted) continue;
+            if (!ob.dayFilled[d]) continue;
+            vals.push(arr[d][fam]);
+          }
+        });
         if (!vals.length) return [0, 0];
         vals.sort(function (a, b) { return a - b; });
         /* 하한 = 관찰 2번째 최솟값(2026-07-26): 하루짜리 특이일(오독·행사 등)이 하한을
            끌어내려 "0명이어도 통과"가 되는 것을 막는다(7월 실데이터에서 재현·초승달 승인).
-           같은 최솟값이 이틀 이상 관찰되면 정렬 2번째도 같은 값이라 진짜 최소로 존중된다. */
+           같은 최솟값이 이틀 이상 관찰되면 정렬 2번째도 같은 값이라 진짜 최소로 존중된다.
+           여러 달을 섞으면 관찰 표본이 커져 이 하한이 실제 운영에 더 가깝게 잡힌다(2026-08-02). */
         var lo = vals.length > 1 ? vals[1] : vals[0];
         return [lo, vals[vals.length - 1]];
       }
@@ -253,26 +278,28 @@
       };
     });
 
-    /* --- 전역 규칙 --- */
+    /* --- 전역 규칙 (관찰 대상 달 전부 — 달 경계는 잇지 않는다) --- */
     var maxWork = 0, maxN = 0, offMins = [], backAllowed = false;
-    rows.forEach(function (row) {
-      var run = 0, nrun = 0;
-      for (var d = 0; d < days; d++) {
-        var c = row.codes[d];
-        if (famsOfCode(c).length) { run++; if (run > maxWork) maxWork = run; } else run = 0;
-        if (c === 'N') { nrun++; if (nrun > maxN) maxN = nrun; }
-        else {
-          if (nrun > 0) {   // N 블록 종료 → 직후 연속 휴식 개수
-            var rest = 0;
-            for (var e = d; e < days; e++) { if (isRestCode(row.codes[e])) rest++; else break; }
-            offMins.push(rest);
+    monthsObs.forEach(function (mo2) {
+      mo2.rows.forEach(function (row) {
+        var run = 0, nrun = 0;
+        for (var d = 0; d < mo2.days; d++) {
+          var c = row.codes[d];
+          if (famsOfCode(c).length) { run++; if (run > maxWork) maxWork = run; } else run = 0;
+          if (c === 'N') { nrun++; if (nrun > maxN) maxN = nrun; }
+          else {
+            if (nrun > 0) {   // N 블록 종료 → 직후 연속 휴식 개수
+              var rest = 0;
+              for (var e = d; e < mo2.days; e++) { if (isRestCode(row.codes[e])) rest++; else break; }
+              offMins.push(rest);
+            }
+            nrun = 0;
           }
-          nrun = 0;
         }
-      }
-      for (var b = 0; b < days - 1; b++) {
-        if (famOf(row.codes[b]) === 'E' && famOf(row.codes[b + 1]) === 'D') backAllowed = true;
-      }
+        for (var b = 0; b < mo2.days - 1; b++) {
+          if (famOf(row.codes[b]) === 'E' && famOf(row.codes[b + 1]) === 'D') backAllowed = true;
+        }
+      });
     });
     function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
     var offAfterN = offMins.length ? Math.min.apply(null, offMins) : 0;

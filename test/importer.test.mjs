@@ -167,5 +167,34 @@ ok(unk.length === 0, '표의 주요 기호가 미인식으로 새지 않음 (실
   ok(three && three.type !== 'support', 'DE·D를 서는 사람은 지원이 아니다 (실제 ' + (three && three.type) + ')');
 }
 
+/* ========== ⑪ 여러 달 믹스 도출 (2026-08-02) — 규칙은 올린 달 전부를 보고 잡는다 ========== */
+section('⑪ 여러 달 믹스 — 한 달에 없던 패턴이 「금지」로 굳지 않는다');
+{
+  /* 기준 달(=최근): 얌전한 달 — 역행 없음, 최대 3연속, D 1~2명 */
+  const base = [
+    { name: '가나다', group: 'RN', codes: ['D','D','D','O','E','E','O','D','D','O'] },
+    { name: '라마바', group: 'RN', codes: ['E','E','O','D','D','O','D','E','E','O'] },
+  ];
+  /* 이전 달: 이 병동의 실제 패턴 — E→D 역행 있음, 6연속 근무, D 3명인 날 */
+  const prev = [{ ym: '2026-05', rows: [
+    { name: '가나다', group: 'RN', codes: ['E','D','D','D','D','D','D','O','D','D'] },   // E→D + 6연속(2~7일)
+    { name: '라마바', group: 'RN', codes: ['D','D','E','E','O','D','D','D','O','E'] },
+    { name: '사아자', group: 'RN', codes: ['D','O','D','O','D','O','D','O','D','O'] },
+  ] }];
+  const solo = Importer.analyze(base, 10, '2026-06');
+  const mixed = Importer.analyze(base, 10, '2026-06', prev);
+  ok(solo.global.backward === 1, '한 달만 보면 역행 금지로 굳는다 (실제 ' + solo.global.backward + ')');
+  ok(mixed.global.backward === 0, '이전 달의 E→D를 보고 역행 허용으로 잡는다 (실제 ' + mixed.global.backward + ')');
+  ok(mixed.global.maxWork >= 6, '이전 달의 6연속을 보고 최대 연속을 넓힌다 (실제 ' + mixed.global.maxWork + ')');
+  ok(solo.global.maxWork < mixed.global.maxWork, '한 달 관찰(' + solo.global.maxWork + ') < 믹스 관찰(' + mixed.global.maxWork + ')');
+  ok(mixed.rulesByGroup.RN.wd.D[1] >= 3, '인원 상한도 여러 달 관찰로 넓어진다 (실제 ' + mixed.rulesByGroup.RN.wd.D[1] + ')');
+  /* 사람은 여전히 기준 달 — 이전 달에만 있던 사람(사아자)이 명단에 나타나면 안 된다 */
+  ok(mixed.staff.length === 2 && !mixed.staff.some(s => s.name === '사아자'),
+    '사람은 기준 달만 — 이전 달 인원이 명단에 섞이지 않는다 (실제 ' + mixed.staff.length + '명)');
+  /* prevSheets 없으면 종전과 완전 동일(하위 호환) */
+  ok(JSON.stringify(solo.rulesByGroup) === JSON.stringify(Importer.analyze(base, 10, '2026-06', []).rulesByGroup),
+    'prevSheets 빈 배열 = 종전과 동일');
+}
+
 console.log('\n결과: ' + pass + ' 통과 / ' + fail + ' 실패');
 process.exit(fail ? 1 : 0);
