@@ -664,8 +664,12 @@ section('T11 M·H·DE·공가·지원 (61병동 실표 어휘)');
   vs = E2.validate({ t0: ['D', 'D', 'D'], t1: ['E', 'E', 'E'], s0: ['H', 'O', 'O'] }, staff, cfg);
   ok(vs.some(v => v.pid === 's0' && v.day === 1 && /토요일/.test(v.msg)), 'T11h 하프는 토요일에만');
 
+  /* T11i 변경(2026-08-02 적대 검토): '지원 단독 근무' 검사를 뺐다.
+     validate는 직군(RN/NA)별로 도는데 조무사 그룹에 지원이 한 명 있으면 그 그룹엔 D·E가 없어
+     매일 오탐이 났다. 독단 금지의 본질은 typeAllows(T11g)가 이미 강제한다.
+     병동 전체를 가로지르는 검사는 별도 층위가 필요해 다음 단계로 미룬다. */
   vs = E2.validate({ t0: ['O', 'D', 'D'], t1: ['O', 'E', 'E'], s0: ['M', 'O', 'O'] }, staff, cfg);
-  ok(vs.some(v => v.rule === '지원' && v.day === 1), 'T11i 지원만 근무하는 날은 독단 위반');
+  ok(!vs.some(v => v.rule === '지원'), 'T11i 지원 단독 검사는 오탐 때문에 제거됨(직군별 검증)');
 
   const staff2 = staff.concat([{ id: 's1', name: '지원2', type: 'support' }]);
   vs = E2.validate({ t0: ['D', 'D', 'D'], t1: ['E', 'E', 'E'], s0: ['M', 'O', 'O'], s1: ['M', 'O', 'O'] }, staff2, cfg);

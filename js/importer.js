@@ -167,14 +167,20 @@
 
     /* --- 인당 staff --- */
     var staff = rows.map(function (row) {
-      var famD = 0, famE = 0, nCnt = 0, work = 0, weekendWork = 0;
+      var famD = 0, famE = 0, nCnt = 0, mCnt = 0, work = 0, weekendWork = 0;
       row.codes.forEach(function (c, i) {
-        var f = famOf(c);
-        if (f === 'D') famD++; else if (f === 'E') famE++; else if (f === 'N') nCnt++;
-        if (f) { work++; if (isWeekendDay(i + 1)) weekendWork++; }
+        /* DE(16시간)는 D·E 두 자리를 채운다 — 근무일수·성향 판정에서도 둘 다로 센다 */
+        var fs = famsOfCode(c);
+        fs.forEach(function (f) {
+          if (f === 'D') famD++; else if (f === 'E') famE++; else if (f === 'N') nCnt++; else if (f === 'M') mCnt++;
+        });
+        if (fs.length) { work++; if (isWeekendDay(i + 1)) weekendWork++; }
       });
       var type, note = '';
       if (work === 0) { type = 'three'; note = '근무 없음'; }
+      /* 미드·하프만 서는 사람 = 지원 인력(2026-08-02). 이 판정이 없으면 3교대로 굳어
+         그 사람 미드 칸이 전부 「이 근무를 설 수 없어요」 유형 위반이 된다(적대 검토 확정). */
+      else if (mCnt > 0 && famD + famE + nCnt === 0) { type = 'support'; note = '미드·하프만 — 지원으로 봤어요'; }
       else if (nCnt > 0 && famD + famE === 0) type = 'night';
       else if (famD > 0 && famE === 0 && nCnt === 0 && weekendWork === 0) type = 'day';
       /* 나이트를 한 번도 안 섰고 데이·이브닝을 충분히 도는 사람 = 2교대 (2026-07-20 추가).
@@ -236,9 +242,14 @@
       }
       /* 상한이 하한+4 초과면 눌러 담기(이상치 완충). N은 관찰값 그대로 */
       function soft(rg) { if (rg[1] > rg[0] + 4) rg[1] = rg[0] + 4; return rg; }
+      /* ⚠️ M(미드) 요구는 저장하지 않는다(2026-08-02 적대 검토 확정).
+         엔진이 아직 M을 **자동 배정하지 않기 때문**에, 규칙만 만들어 두면 생성기가 영원히 못 채워
+         매일 「미드 부족」 위반이 쌓이고 규칙 화면엔 M 칸이 없어 사용자가 지울 수도 없다.
+         미드 없는 병동도 [0,0]이 저장돼 하위 호환 가드(if (gr.wd.M))가 무력화된다.
+         M 자동 배정이 들어오는 단계에서 함께 켠다. */
       rulesByGroup[g] = {
-        wd: { D: soft(range(false, 'D')), E: soft(range(false, 'E')), N: range(false, 'N'), M: range(false, 'M') },
-        hd: { D: soft(range(true, 'D')), E: soft(range(true, 'E')), N: range(true, 'N'), M: range(true, 'M') }
+        wd: { D: soft(range(false, 'D')), E: soft(range(false, 'E')), N: range(false, 'N') },
+        hd: { D: soft(range(true, 'D')), E: soft(range(true, 'E')), N: range(true, 'N') }
       };
     });
 

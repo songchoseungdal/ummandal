@@ -363,13 +363,10 @@
         /* DE(16시간)는 D와 E를 동시에 채운다 — 한 칸이지만 두 계열에 센다(2026-07-31) */
         famsOf(schedule[p.id][d - 1]).forEach(function (f) { cnt[f]++; });
       });
-      /* 지원(신규자)은 혼자 근무하지 않는다 — 지원자가 일하는 날엔 낮 근무자(D·E)가 반드시 있어야 한다.
-         "말 그대로 지원이라 독단 근무가 안 된다"(2026-07-31 초승달). 미드·하프는 D·E와 겹쳐 도는 시간대다. */
-      var supportOn = staff.some(function (p) {
-        return p.type === 'support' && isWork(schedule[p.id][d - 1]);
-      });
-      if (supportOn && cnt.D + cnt.E === 0)
-        v.push({ day: d, pid: null, rule: '지원', msg: d + '일 — 지원 인력만 근무하고 있어요. 지원은 혼자 근무할 수 없어요' });
+      /* ⚠️ '지원 단독 근무' 검사는 뺐다(2026-08-02 적대 검토) — validate는 **직군(RN/NA)별로** 돌기
+         때문에, 조무사 그룹에 지원이 한 명 있으면 그 그룹엔 D·E가 없어 매일 오탐이 났다.
+         독단 금지의 본질(지원은 D·E·N을 혼자 책임지지 않는다)은 typeAllows가 이미 강제한다.
+         병동 전체를 가로질러 보는 검사는 별도 층위가 필요하므로 다음 단계로 미룬다. */
       FAMS.forEach(function (f) {
         if (!need[f]) return;   // 그 계열을 안 쓰는 병동 — 검사하지 않는다(하위 호환)
         /* fam·over 필드 = 제안(suggestForViol)이 문구 파싱 없이 계열·방향을 아는 구조화 통로(2026-07-25) */
@@ -814,6 +811,9 @@
   return {
     generate: generate, attempt: attempt, validate: validate, report: report,
     preflight: preflight, isWeekend: isWeekend, fam: fam, isRest: isRest,
+    /* isWork·famsOf를 밖으로 낸다 — 화면·이미지 저장이 fam()만 보면 DE(16시간)를 오프로 센다
+       (2026-08-02 적대 검토 확정: 이미지에 근무자가 사라지고 하루 인원 줄이 위반 목록과 어긋났다) */
+    isWork: isWork, famsOf: famsOf,
     normalizeConfig: normalizeConfig
   };
 });

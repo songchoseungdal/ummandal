@@ -538,13 +538,16 @@ function renderGrid() {
       for (var d = 1; d <= days; d++) {
         var c = cellCode(p.id, d);
         var w = isWish(p.id, d);
-        var f = E.fam(c);
-        if (f) { dayCnt[d][f]++; cnt[f]++; }
+        /* DE(16시간)는 D·E 두 자리를 채운다 — fam()만 보면 오프로 세어 화면 숫자가
+           위반 목록과 어긋난다(2026-08-02 적대 검토 확정) */
+        var fs = E.famsOf ? E.famsOf(c) : (E.fam(c) ? [E.fam(c)] : []);
+        var f = fs.length === 1 ? fs[0] : null;
+        if (fs.length) fs.forEach(function (ff) { dayCnt[d][ff]++; cnt[ff]++; });
         else if (c) cnt.O++;
         var cls = 'cell';
         var disp = '';
         if (!c) { if (w) { cls += ' Wm'; disp = '★'; } }
-        else if (f) { cls += ' ' + c; disp = codeDisp[c] + (w ? '★' : ''); }
+        else if (fs.length) { cls += ' ' + c; disp = codeDisp[c] + (w ? '★' : ''); }
         else { cls += (c === 'O' && w) ? ' Wm' : ' ' + c; disp = (c === 'O' && w) ? '★' : codeDisp[c]; }
         if (pins[d]) cls += ' pin';
         if (violMap[p.id + '_' + d]) cls += ' viol';
@@ -2597,7 +2600,7 @@ function archMonthStatus(ym) {
       var codes = ((db.months[ym].codes || {})[p.id] || []).slice(0, days);
       for (var i = 0; i < days; i++) if (!codes[i]) codes[i] = 'O';
       sched[p.id] = codes;
-      var rc = codes.filter(function (c) { return !E.fam(c); }).length;
+      var rc = codes.filter(function (c) { return !(E.isWork ? E.isWork(c) : E.fam(c)); }).length;   /* DE도 근무로 센다 */
       rests.push(rc); if (rc > maxRest) maxRest = rc;
     });
     try { viols += E.validate(sched, gStaff, engineConfig(ym, g)).length; } catch (e) { }
@@ -2615,9 +2618,9 @@ function archMiniHtml(ym) {
     html += '<tr>';
     for (var d = 1; d <= 7; d++) {
       var c = (mrec.codes[p.id] || [])[d - 1] || '';
-      var f = E.fam(c);
+      var f = E.fam(c) || (c === 'DE' ? 'D' : null);   /* 미니 미리보기: DE는 D 색으로 (2026-08-02) */
       var cls = f ? 'a' + f : (c && c !== 'O' ? 'aV' : 'aO');
-      var tx = f ? f : (c && c !== 'O' ? '휴' : '－');
+      var tx = f ? (c === 'DE' ? 'DE' : f) : (c && c !== 'O' ? '휴' : '－');
       html += '<td class="' + cls + '">' + tx + '</td>';
     }
     html += '</tr>';
@@ -3410,11 +3413,14 @@ function exportImage() {
     for (var d = 1; d <= days; d++) {
       var c = cellCode(p.id, d) || 'O';
       var w = isWish(p.id, d);
-      var f = E.fam(c);
-      if (f) { dayCntG[g][d][f]++; cnt[f]++; } else cnt.O++;
+      /* DE(16시간)는 D·E 두 자리 — fam()만 보면 내보낸 이미지에서 근무자가 오프로 사라진다
+         (2026-08-02 적대 검토 확정: 병동에 공유되는 그림이 틀렸다) */
+      var fs = E.famsOf ? E.famsOf(c) : (E.fam(c) ? [E.fam(c)] : []);
+      var f = fs.length ? fs[0] : null;
+      if (fs.length) fs.forEach(function (ff) { dayCntG[g][d][ff]++; cnt[ff]++; }); else cnt.O++;
       var x = colX(d);
       var bg, tx, disp;
-      if (!f) {
+      if (!fs.length) {
         var isO = c === 'O';
         bg = (isO && w) ? '#fff3d0' : (isO ? '#efede7' : '#fde9c8');
         tx = (isO && w) ? '#8a6d00' : (isO ? '#948e9e' : '#9a6700');
@@ -3426,7 +3432,7 @@ function exportImage() {
       ctx.fillStyle = tx;
       ctx.textAlign = 'center';
       /* 반차(전반·후반)는 두 글자라 칸을 넘치므로 글씨만 줄인다 */
-      ctx.font = ((c === 'HA' || c === 'HP') ? '800 10px ' : '800 15px ') + FF;
+      ctx.font = ((c === 'HA' || c === 'HP' || c === 'DE') ? '800 10px ' : '800 15px ') + FF;
       ctx.fillText(disp, x + cellW / 2, y + cellH / 2 + 1);
     }
     /* 개수 */

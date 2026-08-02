@@ -154,8 +154,17 @@ ok(unk.length === 0, '표의 주요 기호가 미인식으로 새지 않음 (실
   ];
   const a = Importer.analyze(rows, days, '2026-06');
   const RNr = a.rulesByGroup.RN;
-  ok(RNr.wd.M && RNr.wd.M[1] >= 1, 'M 계열이 규칙으로 도출됨 (실제 [' + (RNr.wd.M || []) + '])');
+  /* 2026-08-02 적대 검토로 뒤집음: M 요구는 **저장하지 않는다**.
+     엔진이 아직 M을 자동 배정하지 않아, 규칙만 만들면 생성기가 영원히 못 채워
+     매일 「미드 부족」 위반이 쌓이고 규칙 화면엔 M 칸이 없어 지울 수도 없다.
+     미드 없는 병동엔 [0,0]이 저장돼 하위 호환 가드까지 무력화됐다. */
+  ok(!RNr.wd.M, 'M 요구는 저장하지 않는다 — 자동 배정이 없으면 못 고치는 위반이 된다 (실제 [' + (RNr.wd.M || '없음') + '])');
   ok(RNr.wd.D[1] >= 1 && RNr.wd.E[1] >= 1, 'DE가 D·E 양쪽 관찰에 계상됨 (D[' + RNr.wd.D + '] E[' + RNr.wd.E + '])');
+  /* 미드·하프만 서는 사람은 지원으로 추론 — 없으면 3교대로 굳어 유형 위반이 쏟아진다 */
+  const sup = a.staff.find(s => s.name === '사아자');
+  ok(sup && sup.type === 'support', '미드·하프 전담 → 지원 유형으로 추론 (실제 ' + (sup && sup.type) + ')');
+  const three = a.staff.find(s => s.name === '가나다');
+  ok(three && three.type !== 'support', 'DE·D를 서는 사람은 지원이 아니다 (실제 ' + (three && three.type) + ')');
 }
 
 console.log('\n결과: ' + pass + ' 통과 / ' + fail + ' 실패');
